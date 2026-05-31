@@ -97,7 +97,7 @@ export default function LoginPage() {
           <div className="bg-[#0d1526]/80 backdrop-blur-xl border border-white/[0.08] rounded-2xl p-8 shadow-[0_8px_32px_rgb(0_0_0_/_0.4),inset_0_1px_0_rgb(255_255_255_/_0.05)]">
             <div className="mb-7">
               <h2 className="text-xl font-semibold tracking-tight text-white">Entrar na plataforma</h2>
-              <p className="text-sm text-white/40 mt-1">Use seu e-mail e senha de acesso</p>
+              <p className="text-sm text-white/40 mt-1">Use seu CPF e senha de acesso</p>
             </div>
             <Suspense fallback={<div className="h-48 flex items-center justify-center text-white/40 text-sm">Carregando...</div>}>
               <LoginForm />

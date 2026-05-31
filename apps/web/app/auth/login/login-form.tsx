@@ -1,8 +1,7 @@
 ﻿'use client'
 
 import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useSearchParams } from 'next/navigation'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 
 // CPF: login por CPF + senha
@@ -22,7 +21,6 @@ function formatarCpf(value: string): string {
 }
 
 export function LoginForm() {
-  const router = useRouter()
   const params = useSearchParams()
   const [cpf, setCpf] = useState('')
   const [password, setPassword] = useState('')
@@ -36,51 +34,49 @@ export function LoginForm() {
     setLoading(true)
 
     try {
-      const supabase = createClient()
       const cpfDigits = cpf.replace(/\D/g, '')
-
       if (cpfDigits.length !== 11) {
         setError('CPF inválido. Digite os 11 dígitos.')
         return
       }
 
-      const emailAuth = cpfParaEmail(cpfDigits)
-
-      const { data, error: authErr } = await supabase.auth.signInWithPassword({
-        email: emailAuth,
-        password,
+      // Chama API route do próprio Next.js (servidor → Supabase, sem CORS)
+      const resp = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cpf: cpfDigits, password }),
       })
 
-      if (authErr || !data.user) {
-        setError('CPF ou senha incorretos.')
+      const data = await resp.json()
+
+      if (!resp.ok || !data.access_token) {
+        setError(data.error ?? 'CPF ou senha incorretos.')
         return
       }
 
-      // Busca role real da tabela usuarios
-      const { data: usuario } = await supabase
-        .from('usuarios')
-        .select('role, titular_id, editora_id')
-        .eq('auth_user_id', data.user.id)
-        .single() as { data: { role: string; titular_id: string | null; editora_id: string | null } | null; error: unknown }
-
-      const role = usuario?.role ?? 'autor'
+      // Salva sessão no cliente via supabase-js
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      await supabase.auth.setSession({
+        access_token:  data.access_token,
+        refresh_token: data.refresh_token,
+      })
 
       const redirectTo = params.get('redirectTo')
       const defaultRoutes: Record<string, string> = {
-        master: '/master/dashboard',
-        admin: '/master/dashboard',
+        master:               '/master/dashboard',
+        admin:                '/master/dashboard',
         editora_administrada: '/master/dashboard',
-        financeiro: '/master/dashboard',
-        juridico: '/master/dashboard',
-        atendimento: '/master/dashboard',
-        autor: '/portal/dashboard',
+        financeiro:           '/master/dashboard',
+        juridico:             '/master/dashboard',
+        atendimento:          '/master/dashboard',
+        autor:                '/portal/dashboard',
       }
+      window.location.href = redirectTo ?? defaultRoutes[data.role] ?? '/master/dashboard'
 
-      const dest = redirectTo ?? defaultRoutes[role] ?? '/master/dashboard'
-      router.push(dest)
-      router.refresh()
-    } catch {
-      setError('Erro inesperado. Tente novamente.')
+    } catch (err) {
+      setError('Erro de conexão. Tente novamente.')
+      console.error('[login]', err)
     } finally {
       setLoading(false)
     }

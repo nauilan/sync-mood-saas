@@ -3,32 +3,26 @@
 -- Execute no SQL Editor: https://supabase.com/dashboard/project/tigubwxotanaznqqxogf/editor
 -- ============================================================
 
--- DROP tudo na ordem inversa (seguro para reexecutar)
-DROP TABLE IF EXISTS autorizacao_obras, autorizacoes CASCADE;
-DROP TABLE IF EXISTS prestacao_contas CASCADE;
-DROP TABLE IF EXISTS cc_movimentos, cc_titulares, cc_obras CASCADE;
-DROP TABLE IF EXISTS distribuicao_itens, distribuicoes, periodos_distribuicao CASCADE;
-DROP TABLE IF EXISTS recebimento_itens, importacoes_log, recebimentos CASCADE;
-DROP TABLE IF EXISTS gravacoes, fonogramas CASCADE;
-DROP TABLE IF EXISTS obra_link_titulares, obra_links, obras CASCADE;
-DROP TABLE IF EXISTS clausulas, contrato_obras, contratos, modelos_juridicos CASCADE;
-DROP TABLE IF EXISTS titulares_dados_bancarios, titulares_contatos, titulares_pseudonimos CASCADE;
-DROP TABLE IF EXISTS titulares_pj, titulares_pf, titulares CASCADE;
-DROP TABLE IF EXISTS editoras_configuracoes, editoras CASCADE;
-DROP TABLE IF EXISTS permissoes, perfis, usuarios CASCADE;
-DROP TABLE IF EXISTS tenants CASCADE;
-DROP FUNCTION IF EXISTS set_updated_at() CASCADE;
-DROP FUNCTION IF EXISTS fn_meu_tenant_id() CASCADE;
-DROP FUNCTION IF EXISTS fn_meu_role() CASCADE;
-DROP FUNCTION IF EXISTS fn_meu_titular_id() CASCADE;
-DROP VIEW IF EXISTS v_obras_com_titulares CASCADE;
-DROP VIEW IF EXISTS v_cc_titular_resumo CASCADE;
-DROP TYPE IF EXISTS pessoa_tipo, status_geral, tipo_titular, tipo_conta_bancaria, tipo_contrato CASCADE;
-DROP TYPE IF EXISTS status_contrato, direito_tipo, status_obra, versao_fonograma, funcao_autor CASCADE;
-DROP TYPE IF EXISTS role_usuario, plano_tenant, tipo_link, funcao_link, status_controle CASCADE;
-DROP TYPE IF EXISTS origem_cadastro_obra, status_iswc, tipo_periodo_dist, status_periodo_dist CASCADE;
-DROP TYPE IF EXISTS status_distribuicao, tipo_movimento_obra, tipo_movimento_tit, fonte_recebimento CASCADE;
-DROP TYPE IF EXISTS status_recebimento, formato_importacao, tipo_importacao_log, status_importacao CASCADE;
+-- ============================================================
+-- RESET TOTAL: remove qualquer migration anterior (qualquer nome de tabela)
+-- Seguro para reexecutar infinitas vezes
+-- ============================================================
+DROP SCHEMA IF EXISTS public CASCADE;
+CREATE SCHEMA public;
+GRANT USAGE  ON SCHEMA public TO postgres, anon, authenticated, service_role;
+GRANT CREATE ON SCHEMA public TO postgres, anon, authenticated, service_role;
+GRANT ALL    ON SCHEMA public TO postgres;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT ALL ON TABLES    TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
+
+-- Extensoes necessarias
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 
 -- ============================================================
