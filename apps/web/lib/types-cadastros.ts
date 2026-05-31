@@ -76,6 +76,8 @@ export const FUNCOES_PJ: FuncaoTitular[] = [
 
 // ---- Editoras Administradas -------------------------------
 
+export type TipoEditora = 'master' | 'administrada' | 'externa'
+
 export interface EditoraAdministrada {
   id: string
   codigo: string
@@ -86,6 +88,20 @@ export interface EditoraAdministrada {
   ativa: boolean
   administradora_id: string | null
   created_at: string
+  // Controle editorial
+  /** true = editora está dentro do grupo/tenant e é controlada */
+  controlada?: boolean
+  /** Tipo da editora: master (ex: Top Show), administrada (ex: Edi Music), externa */
+  tipo_editora?: TipoEditora
+  // Rastreabilidade CWR / BackOffice
+  /** Código interno da editora no sistema antigo */
+  codigo_interno_legado?: string | null
+  /** Código do publisher conforme aparece no CWR (SPU submitter_code) */
+  codigo_publisher_cwr?: string | null
+  /** Código sequencial usado dentro da obra no CWR */
+  codigo_sequence_cwr?: string | null
+  /** ID da editora retornado pela BackOffice */
+  backoffice_publisher_id?: string | null
   // KPIs calculados (mock / view)
   _titulares?: number
   _obras?: number
@@ -123,6 +139,17 @@ export interface Titular {
   observacoes: string | null
   created_at: string
   updated_at: string
+  // ── Rastreabilidade CWR / Legado ─────────────────────────
+  /** Código interno do autor no sistema antigo. Ex: HR01 (NÃO é CAE/IPI) */
+  codigo_interno_legado?: string | null
+  /** Código do autor conforme aparece no CWR */
+  codigo_autor_cwr_original?: string | null
+  /** Referência adicional do sistema anterior */
+  codigo_titular_sistema_antigo?: string | null
+  /** Código sequencial usado dentro da obra no CWR para ligar autor, editora e PWR */
+  codigo_sequence_cwr?: string | null
+  /** Origem do cadastro deste titular */
+  origem_importacao?: string | null
   // joins opcionais
   _pf?: TitularPessoaFisica
   _pj?: TitularPessoaJuridica

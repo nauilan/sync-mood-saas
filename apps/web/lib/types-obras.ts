@@ -16,6 +16,28 @@ export type StatusObra =
 // WORK = ativa (uso detectado, validacoes concluidas)
 export type StatusBO = 'SONG' | 'WORK'
 
+export type BackofficeStatus =
+  | 'nao_enviada'
+  | 'enviada'
+  | 'song_passiva'
+  | 'work_ativa'
+  | 'rejeitada'
+  | 'divergente'
+
+export type OrigemImportacao =
+  | 'manual'
+  | 'cwr'
+  | 'swi'
+  | 'backoffice'
+  | 'migracao_legado'
+
+export type FonteControle =
+  | 'contrato'
+  | 'cwr'
+  | 'editora_administrada'
+  | 'manual'
+  | 'sistema_antigo'
+
 export type StatusIswc = 'pendente' | 'aguardando_retorno' | 'recebido'
 export type OrigemCadastro = 'contrato_sistema' | 'manual' | 'migracao'
 
@@ -70,12 +92,52 @@ export interface Obra {
   observacoes?: string | null
   created_at: string
   updated_at: string
+  // ── Rastreabilidade CWR / Legado / BackOffice ──────────────────
+  /** Código interno da obra no sistema antigo. Ex: AFW2 */
+  codigo_interno_legado?: string | null
+  /** Código da obra conforme veio no CWR importado */
+  codigo_obra_cwr_original?: string | null
+  /** Código para cruzar com relatórios BackOffice/B-55 */
+  codigo_publisher_song?: string | null
+  /** ID retornado pela BackOffice quando obra entra como SONG passiva */
+  backoffice_song_id?: string | null
+  /** ID retornado pela BackOffice quando obra é validada como WORK */
+  backoffice_work_id?: string | null
+  /** Status da obra na BackOffice */
+  backoffice_status?: BackofficeStatus | null
+  /** Última sincronização com BackOffice */
+  backoffice_last_sync_at?: string | null
+  /** Origem da criação desta obra */
+  origem_importacao?: OrigemImportacao | null
   // virtual
   _links?: ObraLink[]
   _fonogramas?: Fonograma[]
   _fonogramas_count?: number
   _links_count?: number
   _percentual_controlado?: number  // soma dos links controlados
+}
+
+/** Mapeamento de obra com BackOffice — tabela separada para histórico completo */
+export interface BackofficeObraStatus {
+  id: string
+  tenant_id: string
+  obra_id: string
+  codigo_interno_legado?: string | null
+  codigo_obra_sync_mood?: string | null
+  codigo_obra_cwr_original?: string | null
+  backoffice_song_id?: string | null
+  backoffice_work_id?: string | null
+  backoffice_status: BackofficeStatus
+  statement_song_code?: string | null
+  data_envio?: string | null
+  data_retorno?: string | null
+  mensagem_retorno?: string | null
+  erros?: unknown[]
+  avisos?: unknown[]
+  arquivo_exportacao_id?: string | null
+  arquivo_retorno_id?: string | null
+  created_at: string
+  updated_at: string
 }
 
 /**
@@ -110,20 +172,32 @@ export interface ObraLinkTitular {
   papel: PapelTitularLink
   /**
    * Percentual geral (legado / fallback).
-   * Quando os campos por direito abaixo estiverem preenchidos, este campo
-   * representa a participação total do titular na obra.
    */
   percentual: number
-  /** % Execução Pública (PR — performing right). Se ausente, usa `percentual`. */
   percentual_exec_publica?: number | null
-  /** % Fonomecânico / Digital (MR — mechanical right). Se ausente, usa `percentual`. */
   percentual_fonomecanico?: number | null
-  /** % Sincronização (SR — synchronization right). Se ausente, usa `percentual`. */
   percentual_sincronizacao?: number | null
   sociedade?: string | null
   cae?: string | null
   ipi?: string | null
-  controlado: boolean             // este titular especifico e controlado
+  controlado: boolean
+  // ── Rastreabilidade CWR: sequências e vínculos PWR ─────────────
+  /** Sequência do autor/compositor no SWR (ex: "01", "02") */
+  writer_sequence_code?: string | null
+  /** Sequência da editora no SPU (ex: "01", "02") */
+  publisher_sequence_code?: string | null
+  /** Código do autor no registro PWR */
+  pwr_writer_code?: string | null
+  /** Código da editora no registro PWR */
+  pwr_publisher_code?: string | null
+  /** Código do vínculo como veio no CWR original */
+  codigo_vinculo_cwr_original?: string | null
+  /** Código interno legado do titular (ex: HR01) */
+  codigo_interno_legado_titular?: string | null
+  /** Código interno legado da editora */
+  codigo_interno_legado_editora?: string | null
+  /** Origem do controle deste vínculo */
+  fonte_controle?: FonteControle | null
 }
 
 export interface Fonograma {

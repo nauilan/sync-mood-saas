@@ -14,6 +14,7 @@
 --   009_autorizacoes_prestacao.sql
 --   010_rls.sql
 --   011_seed_primeiro_tenant.sql  ← preencher UUIDs antes
+--   012_rastreabilidade_cwr_backoffice.sql  ← campos legado + BackOffice
 --
 -- COMO EXECUTAR:
 --   1. Acesse https://supabase.com/dashboard

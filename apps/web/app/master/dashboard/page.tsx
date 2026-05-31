@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { BI_AGREGADO, fmtBRL } from '@/lib/mock-bi'
 import { MOCK_INTEGRACOES } from '@/lib/mock-config'
 import { KpiCard } from '@/components/ui/kpi-card'
@@ -9,8 +10,9 @@ import {
   AlertTriangle, Wallet, CreditCard, TrendingUp, Tv,
   CheckCircle2, XCircle, AlertCircle,
 } from 'lucide-react'
+import { getStore, STORE_KEYS } from '@/lib/store'
 
-const obras = BI_AGREGADO.bi_estrategico.obras_mais_rentaveis
+const obras_mock = BI_AGREGADO.bi_estrategico.obras_mais_rentaveis
 const emissoras = BI_AGREGADO.bi_estrategico.emissoras_que_mais_usam
 
 function statusIcon(status: string) {
@@ -25,7 +27,38 @@ function statusBadgeClass(status: string) {
   return 'bg-amber-500/10 border-amber-500/20 text-amber-400'
 }
 
+interface DashKpis {
+  totalObras: number
+  totalTitulares: number
+  totalGravacoes: number
+  obrasControladas: number
+  totalImportacoes: number
+}
+
 export default function MasterDashboardPage() {
+  const [kpis, setKpis] = useState<DashKpis>({
+    totalObras: 0,
+    totalTitulares: 0,
+    totalGravacoes: 0,
+    obrasControladas: 0,
+    totalImportacoes: 0,
+  })
+
+  useEffect(() => {
+    const obras      = getStore<any>(STORE_KEYS.obras)
+    const titulares  = getStore<any>(STORE_KEYS.titulares)
+    const gravacoes  = getStore<any>(STORE_KEYS.gravacoes)
+    const importacoes = getStore<any>(STORE_KEYS.importacoes)
+
+    setKpis({
+      totalObras: obras.length,
+      totalTitulares: titulares.length,
+      totalGravacoes: gravacoes.length,
+      obrasControladas: obras.filter((o: any) => o.tem_editora || o._pct_controlado > 0).length,
+      totalImportacoes: importacoes.length,
+    })
+  }, [])
+
   return (
     <div className="px-6 py-6 space-y-6 animate-[fade-in-up_0.4s_cubic-bezier(0.16,1,0.3,1)_both]">
 
@@ -38,29 +71,29 @@ export default function MasterDashboardPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard
           title="Total Titulares"
-          value={0}
-          subtitle="—"
+          value={kpis.totalTitulares}
+          subtitle={kpis.totalTitulares > 0 ? `${kpis.totalTitulares} cadastrados` : '—'}
           accent="emerald"
           icon={<Users className="w-4 h-4 text-emerald-400" strokeWidth={1.5} />}
         />
         <KpiCard
           title="Total Obras"
-          value={0}
-          subtitle="—"
+          value={kpis.totalObras}
+          subtitle={kpis.obrasControladas > 0 ? `${kpis.obrasControladas} controladas` : '—'}
           accent="violet"
           icon={<Music className="w-4 h-4 text-violet-400" strokeWidth={1.5} />}
         />
         <KpiCard
-          title="Contratos Ativos"
-          value={0}
-          subtitle="—"
+          title="Gravações"
+          value={kpis.totalGravacoes}
+          subtitle={kpis.totalGravacoes > 0 ? `${kpis.totalGravacoes} fonogramas` : '—'}
           accent="sky"
           icon={<FileText className="w-4 h-4 text-sky-400" strokeWidth={1.5} />}
         />
         <KpiCard
-          title="Receita Total"
-          value={fmtBRL(0)}
-          subtitle="—"
+          title="Importações"
+          value={kpis.totalImportacoes}
+          subtitle={kpis.totalImportacoes > 0 ? `${kpis.totalImportacoes} arquivos` : '—'}
           accent="amber"
           icon={<DollarSign className="w-4 h-4 text-amber-400" strokeWidth={1.5} />}
         />
@@ -106,8 +139,8 @@ export default function MasterDashboardPage() {
             <h2 className="text-sm font-semibold text-white/80">Top 5 Obras Mais Rentáveis</h2>
           </div>
           <ul className="space-y-2.5">
-            {obras.length === 0 && <li className="text-xs text-white/30 text-center py-4">Sem dados</li>}
-            {obras.map((item, i) => (
+            {obras_mock.length === 0 && <li className="text-xs text-white/30 text-center py-4">Sem dados</li>}
+            {obras_mock.map((item, i) => (
               <li key={item.obra} className="flex items-center gap-3">
                 <span className="text-[10px] font-bold text-white/20 w-4 shrink-0 tabular-nums">{i + 1}</span>
                 <div className="flex-1 min-w-0">
@@ -116,7 +149,7 @@ export default function MasterDashboardPage() {
                     <div className="flex-1 h-1 rounded-full bg-white/[0.06]">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-violet-500 to-violet-400"
-                        style={{ width: `${Math.round((item.valor / (obras[0]?.valor ?? 1)) * 100)}%` }}
+                        style={{ width: `${Math.round((item.valor / (obras_mock[0]?.valor ?? 1)) * 100)}%` }}
                       />
                     </div>
                   </div>

@@ -74,7 +74,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
 function ObraDrawer({ obra, onClose }: { obra: any; onClose: () => void }) {
   const [tab, setTab] = useState<'info' | 'titulares' | 'fonogramas' | 'letra'>('info')
   const [letraExpanded, setLetraExpanded] = useState(false)
-  const links = normalizarLinksObra(MOCK_OBRAS_LINKS[obra.id] ?? [])
+  const links = normalizarLinksObra(obra._links ?? MOCK_OBRAS_LINKS[obra.id] ?? [])
   const fonogramas = MOCK_OBRAS_FONOGRAMAS?.[obra.id] ?? []
   const editora = MOCK_EDITORAS.find(e => e.id === obra.editora_id)
 
@@ -423,7 +423,7 @@ export default function ObrasPage() {
                   </p>
                 </div>
                 {suggestions.map(obra => {
-                  const links = normalizarLinksObra(MOCK_OBRAS_LINKS[obra.id] ?? [])
+                  const links = normalizarLinksObra(obra._links ?? MOCK_OBRAS_LINKS[obra.id] ?? [])
                   const autores = links.flatMap((l: any) =>
                     l.titulares?.filter((t: any) => ['compositor', 'autor', 'CA'].includes(t.papel)) ?? []
                   )
@@ -502,8 +502,12 @@ export default function ObrasPage() {
             </thead>
             <tbody className="divide-y divide-white/[0.04]">
               {obras.map(obra => {
-                const links = normalizarLinksObra(MOCK_OBRAS_LINKS[obra.id] ?? [])
+                const links = normalizarLinksObra(obra._links ?? MOCK_OBRAS_LINKS[obra.id] ?? [])
                 const editora = MOCK_EDITORAS.find(e => e.id === obra.editora_id)
+                const editoraNome = editora?.nome_fantasia
+                  ?? links.flatMap((l: any) => l.titulares ?? [])
+                      .find((t: any) => ['editora_original', 'administradora'].includes(t.papel))?.nome
+                  ?? null
                 const autores = links.flatMap((l: any) => l.titulares?.filter((t: any) => ['compositor', 'autor', 'CA'].includes(t.papel)) ?? [])
                 const isAtiva = obraAtiva?.id === obra.id
 
@@ -539,7 +543,7 @@ export default function ObrasPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3.5">
-                      <span className="text-xs text-white/50">{editora?.nome_fantasia ?? '—'}</span>
+                      <span className="text-xs text-white/50">{editoraNome ?? '—'}</span>
                     </td>
                     <td className="px-4 py-3.5">
                       <IswcBadge iswc={obra.iswc} />

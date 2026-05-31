@@ -1,7 +1,9 @@
 // ============================================================
 // lib/cwr-parser.ts — Parser CWR 2.1 client-side
-// Inverso do cwr-generator.ts — lê registros de posição fixa
-// Suporta: HDR, NWR, REV, SPU, SPT, SWR, SWT, OWR, PWR, ALT, PER, REC, GRH, GRT, TRL
+// Suporta: HDR, NWR, SPU, SPT, SWR, SWT, OWR, OPU, PWR, ALT, PER, REC, GRH, GRT, TRL
+// Captura sequence codes de SPU/SWR e vínculos completos de PWR
+// O controle editorial (controlado=true/false) é determinado em cwr-to-obra.ts,
+// não aqui, pois depende do cadastro interno de editoras controladas.
 // ============================================================
 
 export type CwrPapel = 'editora_original' | 'administradora' | 'subeditora' | 'autor' | 'compositor' | 'versionista' | 'adaptador' | 'outro'
@@ -16,13 +18,37 @@ export interface CwrTitular {
   papel: CwrPapel
   pr_pct: number           // percentual performance (0-100)
   mr_pct: number           // percentual mechanical (0-100)
-  controlado: boolean      // SPU/SWR = true; OWR/OPU = false
-  publisher_ipi?: string   // PWR link (autor → editora)
+  /**
+   * Controle provisório (baseado apenas no campo pub_unknown do CWR).
+   * O controle definitivo é recalculado em cwr-to-obra.ts usando
+   * o cadastro de editoras controladas do tenant.
+   */
+  controlado: boolean
+  publisher_ipi?: string   // link pelo IPI (legado, mantido como fallback)
+  publisher_seq?: string   // link pelo publisher_sequence_code do PWR (novo)
+  /**
+   * Código sequencial bruto da linha CWR.
+   * Para SPU: pub_seq (pos 27-28).
+   * Para SWR/OWR: writer_seq (pos 27-28).
+   */
+  sequence_code: string
+}
+
+/** Registro PWR bruto — preservado para montagem de links por sequence code */
+export interface CwrPwrLink {
+  pub_ipi: string       // IPI da editora
+  pub_code: string      // Publisher sequence code (pos 38-51, 14 chars)
+  pub_seq: string       // Publisher sequence # (pos 27-28, 2 chars) — alias do SPU seq
+  writer_ipi: string    // IPI do autor
+  writer_seq: string    // Writer sequence # (pos 63-64, 2 chars)
 }
 
 export interface CwrObra {
   tx_seq: number
-  codigo: string           // submitter_code (NWR pos 89-103)
+  /** Código interno da obra (submitter_code do NWR). Ex: AFW2 */
+  codigo: string
+  /** Mesmo que codigo — preservado explicitamente como legado */
+  codigo_interno_legado: string
   titulo: string
   titulo_alternativo?: string
   iswc: string
@@ -30,6 +56,7 @@ export interface CwrObra {
   duracao_seg: number
   version_type: string     // ORI | MOD
   titulares: CwrTitular[]
+  pwr_links: CwrPwrLink[]  // todos os registros PWR da obra
   linhas_raw: string[]     // linhas originais do grupo
   // calculados após parse
   pct_controlado: number   // soma dos % controlados normalizada
@@ -47,6 +74,7 @@ export interface CwrParseResult {
     spu: number
     swr: number
     owr: number
+    pwr: number
     linhas: number
   }
 }
@@ -89,21 +117,46 @@ function papelFromRole(role: string, tipo: 'SPU' | 'SWR' | 'OWR' | 'OPU'): CwrPa
   return 'autor'
 }
 
+// ── Auto-detecção de formato CWR ──────────────────────────────────────────────
+/**
+ * Detecta o offset do conteúdo nas linhas NWR/SPU/SWR.
+ *
+ * Formato Standard CWR 2.1: RecType(3) TxSeq(8) RecSeq(8) → conteúdo em pos 19
+ * Formato Extended (UBEM/BackOffice BR): RecType(3) Extra(8) TxSeq(8) RecSeq(8) → conteúdo em pos 27
+ *
+ * Heurística: se pos 19 é um dígito na primeira linha NWR, é o Record Seq # →
+ * formato extended (off=8). Se for letra, é o início do título → standard (off=0).
+ */
+function detectCwrOffset(lines: string[]): number {
+  for (const line of lines) {
+    if (line.startsWith('NWR') || line.startsWith('REV')) {
+      const ch19 = line[19] ?? ''
+      // Dígito em pos 19 = Record Seq # do extended format → conteúdo em 27
+      if (/\d/.test(ch19)) return 8
+      // Letra/espaço/hífen em pos 19 = início do título → standard, conteúdo em 19
+      return 0
+    }
+  }
+  return 8 // padrão retrocompatível com formato UBEM/BackOffice BR
+}
+
 // ── Record parsers ────────────────────────────────────────────────────────────
 
-function parseNWR(line: string): Omit<CwrObra, 'titulares' | 'linhas_raw' | 'pct_controlado' | 'tem_editora'> {
-  // record_type(3) seq(8) tx_seq(8) record_seq(8) title(60) lang(2) submitter_code(14) iswc(11) copyright_dt(8) copyright_no(12) music_arr(3) lyrics_adp(3) excerpt(3) composite(3) version_type(3) excerpt_type(2) music_arr2(3) duration(6)
-  const tx_seq_raw  = s(line, 11, 8)
-  const titulo      = s(line, 27, 60)
-  const lang        = s(line, 87, 2)
-  const codigo      = s(line, 89, 14)
-  const iswc        = s(line, 103, 11)
-  const version_type= s(line, 149, 3) || 'ORI'
-  const dur_raw     = s(line, 155, 6)
+function parseNWR(line: string, off: number = 8): Omit<CwrObra, 'titulares' | 'pwr_links' | 'linhas_raw' | 'pct_controlado' | 'tem_editora'> {
+  const tx_seq_raw   = s(line, 11, 8)
+  const titulo       = s(line, 19 + off, 60)
+  const lang         = s(line, 79 + off, 2)
+  const codigo       = s(line, 81 + off, 14)
+  const iswc         = s(line, 95 + off, 11)
+  // version_type e duracao: posições podem variar entre implementações;
+  // lemos com o offset mais seguro (off-only, sem extra de sub_len).
+  const version_type = s(line, 142 + off, 3) || 'ORI'
+  const dur_raw      = s(line, 129 + off, 6)
 
   return {
     tx_seq: parseInt(tx_seq_raw, 10) || 0,
     codigo,
+    codigo_interno_legado: codigo,   // preservar explicitamente
     titulo,
     iswc,
     lang,
@@ -112,20 +165,26 @@ function parseNWR(line: string): Omit<CwrObra, 'titulares' | 'linhas_raw' | 'pct
   }
 }
 
-function parseSPU(line: string): CwrTitular {
-  // record_type(3) seq(8) tx_seq(8) record_seq(8) pub_seq(2) ipi_name_no(11) pub_name(45) pub_unknown(1) pub_role(2) submitter_code(14) ipi_base_no(13) pr_soc(3) pr_pct(5) mr_soc(3) mr_pct(5)
-  const seq_raw        = parseInt(s(line, 27, 2), 10) || 0
-  const ipi            = s(line, 29, 11)
-  const nome           = s(line, 40, 45)
-  const pub_unknown    = s(line, 85, 1)
-  const pub_role       = s(line, 86, 2)
-  const submitter_code = s(line, 88, 14)
-  const pr_pct_raw     = s(line, 118, 5)
-  const mr_pct_raw     = s(line, 126, 5)
+function parseSPU(line: string, off: number = 8): CwrTitular {
+  // off=8 (extended UBEM/BR): conteúdo em 27, submitter_code=14 chars
+  // off=0 (standard CWR 2.1): conteúdo em 19, Tax_ID=9 chars
+  // spu_extra: SPU extended tem submitter_code 14 chars vs 9 chars standard → +5 shift nos campos seguintes
+  const spu_extra = off > 0 ? 5 : 0
+  const sequence_code  = s(line, 19 + off, 2)
+  const ipi            = s(line, 21 + off, 11)
+  const nome           = s(line, 32 + off, 45)
+  const pub_unknown    = s(line, 77 + off, 1)
+  const pub_role       = s(line, 78 + off, 2)
+  const sub_len        = 9 + spu_extra                          // 14 extended, 9 standard
+  const submitter_code = s(line, 80 + off, sub_len)
+  const pr_pct_raw     = s(line, 105 + off + spu_extra, 5)
+  const mr_pct_raw     = s(line, 113 + off + spu_extra, 5)
+  // Controle provisório: pub_unknown = 'Y' significa editora desconhecida/externa
+  // O controle definitivo será recalculado em cwr-to-obra.ts
   const controlado     = pub_unknown !== 'Y'
 
   return {
-    seq: seq_raw,
+    seq: parseInt(sequence_code, 10) || 0,
     tipo: 'SPU',
     nome,
     ipi,
@@ -135,25 +194,27 @@ function parseSPU(line: string): CwrTitular {
     pr_pct: pct(pr_pct_raw),
     mr_pct: pct(mr_pct_raw),
     controlado,
+    sequence_code,
   }
 }
 
-function parseSWR(line: string, tipo: 'SWR' | 'OWR' = 'SWR'): CwrTitular {
-  // record_type(3) seq(8) tx_seq(8) record_seq(8) writer_seq(2) ipi_name_no(11) last_name(45) first_name(30) unknown(1) writer_role(2) ipi_base_no(13) pr_soc(3) pr_pct(5) mr_soc(3) mr_pct(5)
-  const seq_raw     = parseInt(s(line, 27, 2), 10) || 0
-  const ipi         = s(line, 29, 11)
-  const last_name   = s(line, 40, 45)
-  const first_name  = s(line, 85, 30)
-  const unknown     = s(line, 115, 1)
-  const writer_role = s(line, 116, 2)
-  const pr_pct_raw  = s(line, 134, 5)
-  const mr_pct_raw  = s(line, 142, 5)
-  const controlado  = tipo === 'SWR' && unknown !== 'Y'
+function parseSWR(line: string, tipo: 'SWR' | 'OWR' = 'SWR', off: number = 8): CwrTitular {
+  // off=8 (extended) ou off=0 (standard)
+  const sequence_code = s(line, 19 + off, 2)
+  const ipi           = s(line, 21 + off, 11)
+  const last_name     = s(line, 32 + off, 45)
+  const first_name    = s(line, 77 + off, 30)
+  const unknown       = s(line, 107 + off, 1)
+  const writer_role   = s(line, 108 + off, 2)
+  const pr_pct_raw    = s(line, 126 + off, 5)
+  const mr_pct_raw    = s(line, 134 + off, 5)
+  // OWR = sempre não controlado; SWR depende do PWR
+  const controlado    = tipo === 'SWR' && unknown !== 'Y'
 
   const nome = first_name ? `${first_name} ${last_name}` : last_name
 
   return {
-    seq: seq_raw,
+    seq: parseInt(sequence_code, 10) || 0,
     tipo,
     nome,
     ipi,
@@ -163,16 +224,18 @@ function parseSWR(line: string, tipo: 'SWR' | 'OWR' = 'SWR'): CwrTitular {
     pr_pct: pct(pr_pct_raw),
     mr_pct: pct(mr_pct_raw),
     controlado,
+    sequence_code,
   }
 }
 
-function parseOPU(line: string): CwrTitular {
-  const seq_raw        = parseInt(s(line, 27, 2), 10) || 0
-  const ipi            = s(line, 29, 11)
-  const nome           = s(line, 40, 45)
-  const submitter_code = s(line, 88, 14)
+function parseOPU(line: string, off: number = 8): CwrTitular {
+  const spu_extra      = off > 0 ? 5 : 0
+  const sequence_code  = s(line, 19 + off, 2)
+  const ipi            = s(line, 21 + off, 11)
+  const nome           = s(line, 32 + off, 45)
+  const submitter_code = s(line, 80 + off, 9 + spu_extra)
   return {
-    seq: seq_raw,
+    seq: parseInt(sequence_code, 10) || 0,
     tipo: 'OPU',
     nome,
     ipi,
@@ -182,33 +245,35 @@ function parseOPU(line: string): CwrTitular {
     pr_pct: 0,
     mr_pct: 0,
     controlado: false,
+    sequence_code,
   }
 }
 
-function parsePWR(line: string): { pub_ipi: string; pub_code: string; writer_ipi: string } {
-  // record_type(3) seq(8) tx_seq(8) record_seq(8) pub_ipi(11) pub_code(14) writer_ipi(11)
-  const pub_ipi    = s(line, 27, 11)
-  const pub_code   = s(line, 38, 14)
-  const writer_ipi = s(line, 52, 11)
-  return { pub_ipi, pub_code, writer_ipi }
+function parsePWR(line: string, off: number = 8): CwrPwrLink {
+  // off=8 (extended): pub_code=14 chars; off=0 (standard): pub_seq=2 chars
+  const pwr_extra  = off > 0 ? 12 : 0
+  const pub_ipi    = s(line, 19 + off, 11)
+  const pub_code   = s(line, 30 + off, 2 + pwr_extra)
+  const writer_ipi = s(line, 32 + off + pwr_extra, 11)
+  const writer_seq = s(line, 43 + off + pwr_extra, 2)
+  // pub_seq: primeiros 2 chars do pub_code (quando pub_code é o seq numérico)
+  // ou derivado do sub-campo; manter pub_code completo + seq 2-char
+  const pub_seq = pub_code.length <= 2 ? pub_code : pub_code.slice(0, 2)
+  return { pub_ipi, pub_code, pub_seq, writer_ipi, writer_seq }
 }
 
-function parseALT(line: string): string {
-  // record_type(3) seq(8) tx_seq(8) record_seq(8) title(60) title_type(2) lang(2)
-  return s(line, 27, 60)
+function parseALT(line: string, off: number = 8): string {
+  return s(line, 19 + off, 60)
 }
 
 // ── Cálculo de percentual controlado ─────────────────────────────────────────
 
 function calcPctControlado(titulares: CwrTitular[]): { pct: number; tem_editora: boolean } {
-  // Lógica: link controlado = tem SPU (editora) + SWR (autores)
-  // Somar apenas os titulares controlados; se todos não controlados → 0
   const controlados = titulares.filter(t => t.controlado)
   const tem_editora = titulares.some(t => t.tipo === 'SPU' && t.controlado)
 
   if (controlados.length === 0) return { pct: 0, tem_editora: false }
 
-  // Usa mr_pct como base (mechanical rights)
   const total = controlados.reduce((sum, t) => sum + (t.mr_pct > 0 ? t.mr_pct : t.pr_pct), 0)
   return { pct: Math.min(100, Math.round(total * 10) / 10), tem_editora }
 }
@@ -217,19 +282,40 @@ function calcPctControlado(titulares: CwrTitular[]): { pct: number; tem_editora:
 
 export function parseCwr(content: string): CwrParseResult {
   const lines  = content.split(/\r?\n/).filter(l => l.length >= 3)
+  // Auto-detectar formato: extended (off=8) ou standard (off=0)
+  const off = detectCwrOffset(lines)
+
   const result: CwrParseResult = {
     sender: '',
     creation_date: '',
     total_obras: 0,
     obras: [],
     erros: [],
-    stats: { nwr: 0, spu: 0, swr: 0, owr: 0, linhas: lines.length },
+    stats: { nwr: 0, spu: 0, swr: 0, owr: 0, pwr: 0, linhas: lines.length },
   }
 
   let current: CwrObra | null = null
 
   const flush = () => {
     if (!current) return
+
+    // Aplicar vínculos PWR: tentar primeiro por sequence_code, fallback por IPI
+    for (const pwr of current.pwr_links) {
+      const writer = current.titulares.find(t =>
+        (t.tipo === 'SWR' || t.tipo === 'OWR') && (
+          // match por sequence code (prioritário)
+          (pwr.writer_seq && t.sequence_code === pwr.writer_seq) ||
+          (pwr.writer_seq && t.sequence_code === pwr.writer_seq.padStart(2, '0')) ||
+          // fallback por IPI
+          (pwr.writer_ipi && t.ipi === pwr.writer_ipi)
+        )
+      )
+      if (writer) {
+        writer.publisher_ipi = pwr.pub_ipi
+        writer.publisher_seq = pwr.pub_code
+      }
+    }
+
     const { pct, tem_editora } = calcPctControlado(current.titulares)
     current.pct_controlado = pct
     current.tem_editora = tem_editora
@@ -249,8 +335,8 @@ export function parseCwr(content: string): CwrParseResult {
 
       if (rec === 'NWR' || rec === 'REV') {
         flush()
-        const nwr = parseNWR(line)
-        current = { ...nwr, titulares: [], linhas_raw: [line], pct_controlado: 0, tem_editora: false }
+        const nwr = parseNWR(line, off)
+        current = { ...nwr, titulares: [], pwr_links: [], linhas_raw: [line], pct_controlado: 0, tem_editora: false }
         result.stats.nwr++
         continue
       }
@@ -260,27 +346,24 @@ export function parseCwr(content: string): CwrParseResult {
       current.linhas_raw.push(line)
 
       if (rec === 'SPU') {
-        current.titulares.push(parseSPU(line))
+        current.titulares.push(parseSPU(line, off))
         result.stats.spu++
       } else if (rec === 'SWR') {
-        current.titulares.push(parseSWR(line, 'SWR'))
+        current.titulares.push(parseSWR(line, 'SWR', off))
         result.stats.swr++
       } else if (rec === 'OWR') {
-        current.titulares.push(parseSWR(line, 'OWR'))
+        current.titulares.push(parseSWR(line, 'OWR', off))
         result.stats.owr++
       } else if (rec === 'OPU') {
-        current.titulares.push(parseOPU(line))
+        current.titulares.push(parseOPU(line, off))
       } else if (rec === 'PWR') {
-        const { pub_ipi, writer_ipi } = parsePWR(line)
-        // Associar editora ao autor pelo IPI
-        const writer = current.titulares.find(t =>
-          (t.tipo === 'SWR' || t.tipo === 'OWR') && t.ipi === writer_ipi
-        )
-        if (writer) writer.publisher_ipi = pub_ipi
+        // Guardar PWR bruto; os links são aplicados no flush()
+        current.pwr_links.push(parsePWR(line, off))
+        result.stats.pwr++
       } else if (rec === 'ALT') {
-        current.titulo_alternativo = parseALT(line)
+        current.titulo_alternativo = parseALT(line, off)
       }
-      // GRH, GRT, SPT, SWT, PER, REC, VER, TRL — ignorados para prévia
+      // GRH, GRT, SPT, SWT, PER, REC, TRL — ignorados para prévia
     } catch (err) {
       result.erros.push(`Linha "${line.slice(0, 20)}…": ${err}`)
     }

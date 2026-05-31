@@ -138,6 +138,25 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
             <><span className="text-xs text-white/30">|</span>
             <span className="text-xs text-white/40">Editora: <span className="text-white/60">{editora.nome_fantasia}</span></span></>
           )}
+          {/* Código legado */}
+          {obra.codigo_interno_legado && obra.codigo_interno_legado !== obra.codigo && (
+            <><span className="text-xs text-white/30">|</span>
+            <span className="text-[10px] font-mono bg-violet-500/10 text-violet-300 rounded px-1.5 py-0.5"
+              title="Código interno legado (CWR/sistema antigo)">
+              {obra.codigo_interno_legado}
+            </span></>
+          )}
+          {/* Status BackOffice */}
+          {obra.backoffice_status && obra.backoffice_status !== 'nao_enviada' && (
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+              obra.backoffice_status === 'work_ativa' ? 'bg-emerald-500/10 text-emerald-300' :
+              obra.backoffice_status === 'song_passiva' ? 'bg-sky-500/10 text-sky-300' :
+              obra.backoffice_status === 'rejeitada' ? 'bg-red-500/10 text-red-400' :
+              'bg-amber-500/10 text-amber-300'
+            }`}>
+              BO: {obra.backoffice_status.replace('_', ' ').toUpperCase()}
+            </span>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <ControleBadge pct={pcControlado} label="Percentual Controlado" color="bg-violet-500/10 border-violet-500/20 text-violet-300" />
@@ -171,21 +190,24 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
             {[
               { label: 'Titulo',           value: obra.titulo },
               { label: 'Titulo Original',  value: obra.titulo_original ?? '—' },
-              { label: 'Codigo',           value: obra.codigo },
+              { label: 'Codigo Sync Mood', value: obra.codigo },
+              { label: 'Codigo Legado',    value: obra.codigo_interno_legado ?? '—', mono: true },
+              { label: 'Codigo CWR Orig.', value: obra.codigo_obra_cwr_original ?? '—', mono: true },
               { label: 'ISWC',             value: obra.iswc ?? 'Pendente SOCINPRO' },
               { label: 'Idioma',           value: obra.idioma },
               { label: 'Genero',           value: obra.genero ?? '—' },
               { label: 'Ano de Criacao',   value: obra.ano_criacao?.toString() ?? '—' },
               { label: 'Duracao',          value: obra.duracao ? `${Math.floor(obra.duracao/60)}:${String(obra.duracao%60).padStart(2,'0')}` : '—' },
+              { label: 'Origem',           value: obra.origem_importacao ?? 'manual' },
             ].map(f => (
               <div key={f.label} className="flex items-center justify-between">
                 <span className="text-xs text-white/35">{f.label}</span>
-                <span className="text-xs text-white/70 font-medium">{f.value}</span>
+                <span className={`text-xs text-white/70 font-medium ${(f as {mono?: boolean}).mono ? 'font-mono bg-white/5 px-1.5 py-0.5 rounded' : ''}`}>{f.value}</span>
               </div>
             ))}
           </div>
           <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-white">Controle & Administracao</h3>
+            <h3 className="text-sm font-semibold text-white">Controle & BackOffice</h3>
             {[
               { label: 'Status',               value: STATUS_OBRA_LABELS[obra.status] },
               { label: 'Editora Responsavel',  value: editora?.nome_fantasia ?? '—' },
@@ -193,11 +215,14 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
               { label: 'Links Controlados',    value: String(links.filter(l => l.controlado).length) },
               { label: '% Controlado',         value: `${pcControlado.toFixed(3)}%` },
               { label: 'Fonogramas',           value: String(fonogramas.length) },
-              { label: 'Autorizacoes Vinculadas', value: String(autorizacoes.length) },
+              { label: 'Autorizacoes',         value: String(autorizacoes.length) },
+              { label: 'BackOffice Song ID',   value: obra.backoffice_song_id ?? '—', mono: true },
+              { label: 'BackOffice Work ID',   value: obra.backoffice_work_id ?? '—', mono: true },
+              { label: 'Status BackOffice',    value: obra.backoffice_status ?? 'nao_enviada' },
             ].map(f => (
               <div key={f.label} className="flex items-center justify-between">
                 <span className="text-xs text-white/35">{f.label}</span>
-                <span className="text-xs text-white/70 font-medium">{f.value}</span>
+                <span className={`text-xs text-white/70 font-medium ${(f as {mono?: boolean}).mono ? 'font-mono bg-white/5 px-1.5 py-0.5 rounded text-[11px]' : ''}`}>{f.value}</span>
               </div>
             ))}
           </div>

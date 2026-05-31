@@ -48,13 +48,24 @@ function TitularRow({ t }: { t: CwrTitular }) {
       </td>
       <td className="py-2 px-2 text-xs text-white/80">{t.nome}</td>
       <td className="py-2 px-2 text-[11px] text-white/40 font-mono">{t.ipi || '—'}</td>
+      <td className="py-2 px-2 text-[11px] font-mono">
+        {/* Sequence code + legado */}
+        <span className="text-sky-400/60" title="Sequence code CWR">{t.sequence_code || '—'}</span>
+        {t.publisher_seq && (
+          <span className="ml-1 text-amber-400/50" title="Vinculado via PWR">
+            ↗{t.publisher_seq.slice(0, 6)}
+          </span>
+        )}
+      </td>
       <td className="py-2 px-2 text-xs text-center tabular-nums">
         <span className={t.controlado ? 'text-white/70' : 'text-white/25'}>{pctFmt(t.mr_pct || t.pr_pct)}</span>
       </td>
       <td className="py-2 pr-4 text-xs text-center">
-        {t.controlado
-          ? <span className="text-emerald-400 text-[10px] font-semibold">CONTROLADO</span>
-          : <span className="text-white/25 text-[10px]">não controlado</span>}
+        {t.tipo === 'OWR' || t.tipo === 'OPU'
+          ? <span className="text-white/20 text-[10px] italic">referência</span>
+          : t.controlado
+            ? <span className="text-emerald-400 text-[10px] font-semibold">CONTROLADO</span>
+            : <span className="text-orange-400/60 text-[10px]">externo</span>}
       </td>
     </tr>
   )
@@ -74,11 +85,20 @@ function ObraRow({ obra }: { obra: CwrObra }) {
       >
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white truncate">{obra.titulo}</p>
-          <div className="flex items-center gap-3 mt-0.5">
-            <span className="text-[10px] font-mono text-white/40">{obra.codigo}</span>
+          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+            {/* Código legado — referência principal CWR */}
+            <span className="text-[10px] font-mono bg-violet-500/10 text-violet-300 rounded px-1.5 py-0.5"
+              title="Código interno legado (preservado do CWR)">
+              {obra.codigo_interno_legado || obra.codigo}
+            </span>
             {obra.iswc && <span className="text-[10px] font-mono text-sky-400/70">{obra.iswc}</span>}
             {obra.titulo_alternativo && (
               <span className="text-[10px] text-white/30">alt: {obra.titulo_alternativo}</span>
+            )}
+            {obra.pwr_links.length > 0 && (
+              <span className="text-[10px] text-amber-400/50" title="Registros PWR desta obra">
+                {obra.pwr_links.length} PWR
+              </span>
             )}
           </div>
         </div>
@@ -111,6 +131,7 @@ function ObraRow({ obra }: { obra: CwrObra }) {
                     <th className="pl-4 pr-2 py-1.5 text-left">Papel</th>
                     <th className="px-2 py-1.5 text-left">Nome</th>
                     <th className="px-2 py-1.5 text-left">IPI</th>
+                    <th className="px-2 py-1.5 text-left">Seq / PWR</th>
                     <th className="px-2 py-1.5 text-center">%</th>
                     <th className="pr-4 py-1.5 text-center">Controle</th>
                   </tr>
@@ -124,13 +145,55 @@ function ObraRow({ obra }: { obra: CwrObra }) {
           {naoControlados.length > 0 && (
             <div className="border-t border-white/5">
               <p className="text-[10px] uppercase tracking-widest text-white/20 px-5 py-2">
-                Não controlados ({naoControlados.length})
+                Externos / Referência ({naoControlados.length})
               </p>
               <table className="w-full">
+                <thead>
+                  <tr className="text-[10px] uppercase tracking-widest text-white/25">
+                    <th className="pl-4 pr-2 py-1.5 text-left">Papel</th>
+                    <th className="px-2 py-1.5 text-left">Nome</th>
+                    <th className="px-2 py-1.5 text-left">IPI</th>
+                    <th className="px-2 py-1.5 text-left">Seq / PWR</th>
+                    <th className="px-2 py-1.5 text-center">%</th>
+                    <th className="pr-4 py-1.5 text-center">Controle</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {naoControlados.map((t, i) => <TitularRow key={i} t={t} />)}
                 </tbody>
               </table>
+            </div>
+          )}
+          {/* Vínculos PWR — cadeia editorial */}
+          {obra.pwr_links.length > 0 && (
+            <div className="border-t border-white/5 bg-amber-500/[0.02]">
+              <p className="text-[10px] uppercase tracking-widest text-amber-400/40 px-5 py-2">
+                Vínculos PWR ({obra.pwr_links.length}) — cadeia editorial
+              </p>
+              <div className="px-5 pb-3 flex flex-wrap gap-2">
+                {obra.pwr_links.map((pwr, i) => {
+                  const pub = obra.titulares.find(t =>
+                    t.tipo === 'SPU' && (t.sequence_code === pwr.pub_seq || t.ipi === pwr.pub_ipi)
+                  )
+                  const aut = obra.titulares.find(t =>
+                    (t.tipo === 'SWR' || t.tipo === 'OWR') && (
+                      t.sequence_code === pwr.writer_seq || t.ipi === pwr.writer_ipi
+                    )
+                  )
+                  return (
+                    <div key={i} className="flex items-center gap-1.5 text-[11px] bg-white/5 rounded-lg px-2.5 py-1.5">
+                      <span className="text-sky-300/70 font-medium">{aut?.nome ?? `Seq ${pwr.writer_seq}`}</span>
+                      <span className="text-white/20">→</span>
+                      <span className={`font-medium ${pub?.controlado ? 'text-emerald-400/70' : 'text-orange-400/50'}`}>
+                        {pub?.nome ?? `Pub ${pwr.pub_code.slice(0, 8)}`}
+                      </span>
+                      {pub?.controlado
+                        ? <span className="text-emerald-400/50 text-[9px]">✓</span>
+                        : <span className="text-white/20 text-[9px]">ext</span>}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -197,7 +260,7 @@ export default function ImportarCwrPage() {
           total_obras: 0,
           obras: [],
           erros: [`Erro ao processar: ${err}`],
-          stats: { nwr: 0, spu: 0, swr: 0, owr: 0, linhas: 0 },
+          stats: { nwr: 0, spu: 0, swr: 0, owr: 0, pwr: 0, linhas: 0 },
         })
       } finally {
         setParsing(false)
@@ -220,7 +283,7 @@ export default function ImportarCwrPage() {
     return true
   })
 
-  const totalControladas = result?.obras.filter(o => o.tem_editora).length ?? 0
+  const totalControladas = result?.obras.filter(o => o.pct_controlado > 0).length ?? 0
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white p-6 space-y-6">
@@ -351,11 +414,12 @@ export default function ImportarCwrPage() {
           )}
 
           {/* KPIs */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <KpiCard label="Total Obras" value={result.total_obras} accent="violet" />
             <KpiCard label="Controladas" value={totalControladas} accent="emerald" />
             <KpiCard label="Reg. SPU" value={result.stats.spu} accent="sky" />
             <KpiCard label="Reg. SWR" value={result.stats.swr} accent="amber" />
+            <KpiCard label="Vínculos PWR" value={result.stats.pwr ?? 0} accent="orange" />
           </div>
 
           {/* Filtros */}
