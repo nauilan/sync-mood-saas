@@ -9,7 +9,7 @@ import { parseCwr, labelPapel, detectarOffsetCwr } from '@/lib/cwr-parser'
 import type { CwrParseResult, CwrObra, CwrTitular } from '@/lib/cwr-parser'
 import { cwrToStore } from '@/lib/cwr-to-obra'
 import { upsertStore, registrarImportacao, STORE_KEYS } from '@/lib/store'
-import { saveObrasToSupabase } from '@/lib/save-obras-supabase'
+import { saveObrasToSupabase, clearObrasFromSupabase } from '@/lib/save-obras-supabase'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -327,15 +327,28 @@ export default function ImportarCwrPage() {
     processar(file)
   }
 
-  // Limpar dados CWR ruins do localStorage
-  const clearCwrData = () => {
+  // Limpar dados CWR ruins — localStorage + Supabase
+  const [limpandoCwr, setLimpandoCwr] = useState(false)
+  const clearCwrData = async () => {
+    if (!confirm('Isso vai APAGAR TODAS as obras e titulares do sistema. Confirma?')) return
+    setLimpandoCwr(true)
     try {
-      // Nuclear: remove TODAS as obras do localStorage (para reimportar limpo)
+      // 1. Limpar localStorage
       localStorage.removeItem(STORE_KEYS.obras)
       localStorage.removeItem(STORE_KEYS.titulares)
       window.dispatchEvent(new Event('storage'))
-    } catch { /* silencioso */ }
-    alert('Todos os dados de obras/titulares removidos do armazenamento local.\nAgora re-importe o arquivo CWR.')
+      // 2. Limpar Supabase
+      const res = await clearObrasFromSupabase()
+      if (!res.ok) {
+        alert(`localStorage limpo. Supabase: ${res.error ?? 'erro desconhecido'}\nVeja o console para detalhes.`)
+      } else {
+        alert('Dados apagados com sucesso!\nAgora re-importe o arquivo CWR.')
+      }
+    } catch (e) {
+      alert('Erro ao limpar: ' + String(e))
+    } finally {
+      setLimpandoCwr(false)
+    }
   }
 
   const obras_filtradas = (result?.obras ?? []).filter(o => {
@@ -361,13 +374,14 @@ export default function ImportarCwrPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          {/* Limpar dados ruins — NUCLEAR: remove todo localStorage de obras */}
+          {/* Limpar dados ruins — NUCLEAR: remove obras do localStorage + Supabase */}
           <button
             onClick={clearCwrData}
-            title="Remove TODAS as obras do armazenamento local para reimportar com dados corretos"
-            className="flex items-center gap-1.5 rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-400/70 hover:bg-red-500/20 hover:text-red-300 transition-colors"
+            disabled={limpandoCwr}
+            title="Apaga TODAS as obras e titulares (localStorage + Supabase) para reimportar limpo"
+            className="flex items-center gap-1.5 rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-400/70 hover:bg-red-500/20 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <X className="w-3.5 h-3.5" /> Zerar obras locais
+            <X className="w-3.5 h-3.5" /> {limpandoCwr ? 'Zerando...' : 'Zerar todas as obras'}
           </button>
           {result && !importResult && (
             <button

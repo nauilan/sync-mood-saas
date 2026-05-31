@@ -299,3 +299,41 @@ export async function saveObrasToSupabase(
 
   return result
 }
+
+/** Remove todas as obras/links/titulares do tenant do usuário atual — operação nuclear */
+export async function clearObrasFromSupabase(): Promise<{ ok: boolean; error?: string }> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
+    return { ok: false, error: 'Supabase não configurado' }
+  }
+  try {
+    const supabase = createClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any
+    const { data: sessionData } = await supabase.auth.getSession()
+    const userId = sessionData?.session?.user?.id
+    if (!userId) return { ok: false, error: 'Usuário não autenticado' }
+
+    let tenantId: string | null = null
+    const { data: userRow } = await sb
+      .from('usuarios').select('tenant_id').eq('auth_user_id', userId).maybeSingle()
+    tenantId = userRow?.tenant_id ?? null
+
+    if (!tenantId) {
+      const { data: tenantRow } = await sb.from('tenants').select('id').limit(1).maybeSingle()
+      tenantId = tenantRow?.id ?? null
+    }
+
+    if (!tenantId) return { ok: false, error: 'Tenant não encontrado' }
+
+    // Deletar em cascata: titulares dos links → links → obras → titulares
+    await sb.from('obras_links_titulares').delete().eq('tenant_id', tenantId)
+    await sb.from('obras_links').delete().eq('tenant_id', tenantId)
+    await sb.from('obras').delete().eq('tenant_id', tenantId)
+    await sb.from('titulares').delete().eq('tenant_id', tenantId)
+
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: String(err) }
+  }
+}
