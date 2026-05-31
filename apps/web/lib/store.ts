@@ -5,11 +5,12 @@
 // ============================================================
 
 export const STORE_KEYS = {
-  obras:      'sm_obras_v1',
-  titulares:  'sm_titulares_v1',
-  gravacoes:  'sm_gravacoes_v1',
-  contratos:  'sm_contratos_v1',
-  cc_obras:   'sm_cc_obras_v1',
+  obras:        'sm_obras_v1',
+  titulares:    'sm_titulares_v1',
+  gravacoes:    'sm_gravacoes_v1',
+  contratos:    'sm_contratos_v1',
+  editoras:     'sm_editoras_v1',
+  cc_obras:     'sm_cc_obras_v1',
   cc_titulares: 'sm_cc_titulares_v1',
   recebimentos: 'sm_recebimentos_v1',
   importacoes:  'sm_importacoes_v1',  // log de arquivos importados

@@ -476,10 +476,10 @@ export default function ImportarCwrPage() {
                   </span>
                 )}
               </div>
-              {/* Override manual — útil quando auto-detecção erra */}
+              {/* Override manual — botões 0-8 + campo livre para qualquer valor */}
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[10px] text-white/30">Forçar offset:</span>
-                {[0, 4, 8].map(off => (
+                {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(off => (
                   <button
                     key={off}
                     onClick={() => { setOffsetOverride(off); reparse(off) }}
@@ -492,6 +492,16 @@ export default function ImportarCwrPage() {
                     {off}
                   </button>
                 ))}
+                <input
+                  type="number"
+                  min={0} max={20}
+                  placeholder="outro…"
+                  className="w-16 text-[11px] font-mono px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-white/60 placeholder:text-white/20 focus:outline-none focus:border-violet-500/40"
+                  onChange={e => {
+                    const v = parseInt(e.target.value, 10)
+                    if (!isNaN(v) && v >= 0 && v <= 20) { setOffsetOverride(v); reparse(v) }
+                  }}
+                />
                 {offsetOverride !== null && (
                   <button
                     onClick={() => { setOffsetOverride(null); reparse(result.offset_detectado) }}
@@ -525,27 +535,30 @@ export default function ImportarCwrPage() {
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {[0, 4, 8].map(off => {
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+                  {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(off => {
                     const line = result.debug_nwr_line!
                     const titulo  = line.slice(19 + off, 79 + off).trim()
                     const lang    = line.slice(79 + off, 81 + off).trim()
                     const codigo  = line.slice(81 + off, 95 + off).trim()
                     const iswc    = line.slice(95 + off, 106 + off).trim()
-                    const isActive = result.offset_detectado === off
+                    const isActive = (offsetOverride ?? result.offset_detectado) === off
+                    const langOk = /^[A-Z]{2}$/.test(lang)
                     return (
-                      <div key={off} className={`rounded-lg p-2.5 space-y-1 ${isActive ? 'border border-emerald-500/40 bg-emerald-500/10' : 'border border-white/10 bg-white/[0.02]'}`}>
-                        <p className={`text-[10px] font-bold ${isActive ? 'text-emerald-300' : 'text-white/40'}`}>
-                          off={off} {off === 0 ? '(Standard)' : off === 4 ? '(Extended+4)' : '(Extended+8)'}
-                          {isActive && ' ← detectado'}
+                      <button key={off}
+                        onClick={() => { setOffsetOverride(off); reparse(off) }}
+                        className={`text-left rounded-lg p-2 space-y-1 transition-all ${isActive ? 'border-2 border-emerald-500/60 bg-emerald-500/10' : 'border border-white/10 bg-white/[0.02] hover:border-white/20'}`}
+                      >
+                        <p className={`text-[10px] font-bold ${isActive ? 'text-emerald-300' : langOk ? 'text-white/50' : 'text-white/25'}`}>
+                          off={off}{isActive && ' ✓'}
                         </p>
-                        <div className="space-y-0.5 font-mono text-[10px]">
-                          <p><span className="text-white/30">titulo: </span><span className="text-white/70">"{titulo.slice(0, 30)}"</span></p>
-                          <p><span className="text-white/30">lang:   </span><span className={/^[A-Z]{2}$/.test(lang) ? 'text-emerald-400' : 'text-red-400'}>{lang || '??'}</span></p>
-                          <p><span className="text-white/30">codigo: </span><span className="text-white/70">"{codigo}"</span></p>
-                          <p><span className="text-white/30">iswc:   </span><span className={/^[Tt]\d{9,10}/.test(iswc) ? 'text-emerald-400' : iswc ? 'text-amber-400' : 'text-white/30'}>{iswc || '(vazio)'}</span></p>
+                        <div className="space-y-0.5 font-mono text-[9px]">
+                          <p className="truncate"><span className="text-white/30">tit: </span><span className={`${titulo ? 'text-white/70' : 'text-white/20'}`}>"{titulo.slice(0, 18) || '(vazio)'}"</span></p>
+                          <p><span className="text-white/30">lang: </span><span className={langOk ? 'text-emerald-400' : 'text-red-400'}>{lang || '??'}</span></p>
+                          <p className="truncate"><span className="text-white/30">cod: </span><span className="text-white/60">{codigo.slice(0,10) || '—'}</span></p>
+                          <p><span className="text-white/30">iswc: </span><span className={/^[Tt]\d/.test(iswc) ? 'text-emerald-400' : iswc ? 'text-amber-400' : 'text-white/20'}>{iswc.slice(0,8) || '—'}</span></p>
                         </div>
-                      </div>
+                      </button>
                     )
                   })}
                 </div>
