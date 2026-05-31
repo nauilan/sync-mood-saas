@@ -9,6 +9,7 @@ import { parseCwr, labelPapel } from '@/lib/cwr-parser'
 import type { CwrParseResult, CwrObra, CwrTitular } from '@/lib/cwr-parser'
 import { cwrToStore } from '@/lib/cwr-to-obra'
 import { upsertStore, registrarImportacao, STORE_KEYS } from '@/lib/store'
+import { saveObrasToSupabase } from '@/lib/save-obras-supabase'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,7 @@ function KpiCard({ label, value, accent }: { label: string; value: string | numb
     emerald: 'border-emerald-500/20 bg-emerald-500/5',
     sky: 'border-sky-500/20 bg-sky-500/5',
     amber: 'border-amber-500/20 bg-amber-500/5',
+    orange: 'border-orange-500/20 bg-orange-500/5',
   }
   return (
     <div className={`rounded-2xl border p-4 ${colors[accent] ?? colors.violet}`}>
@@ -46,10 +48,16 @@ function TitularRow({ t }: { t: CwrTitular }) {
       <td className="py-2 pl-4 pr-2">
         <span className={badgePapel(t)}>{labelPapel(t.papel_cwr)} {t.controlado ? '✓' : '—'}</span>
       </td>
-      <td className="py-2 px-2 text-xs text-white/80">{t.nome}</td>
+      <td className="py-2 px-2">
+        <p className="text-xs text-white/80">{t.nome}</p>
+        {t.submitter_code && t.tipo !== 'SPU' && (
+          <p className="text-[10px] font-mono text-amber-400/60" title="Código legado do titular (ex: HR01)">
+            {t.submitter_code || t.sequence_code}
+          </p>
+        )}
+      </td>
       <td className="py-2 px-2 text-[11px] text-white/40 font-mono">{t.ipi || '—'}</td>
       <td className="py-2 px-2 text-[11px] font-mono">
-        {/* Sequence code + legado */}
         <span className="text-sky-400/60" title="Sequence code CWR">{t.sequence_code || '—'}</span>
         {t.publisher_seq && (
           <span className="ml-1 text-amber-400/50" title="Vinculado via PWR">
@@ -215,10 +223,15 @@ export default function ImportarCwrPage() {
   const [importResult, setImportResult] = useState<{
     obras: number; titulares: number; gravacoes: number
     obras_ctrl: number; tit_ctrl: number; tit_nctrl: number
+    supabase_ok: boolean; supabase_obras: number; supabase_errs: string[]
+    // estatísticas de rastreabilidade
+    com_codigo_legado: number; com_iswc: number; total_pwr: number
   } | null>(null)
+  const [importing, setImporting] = useState(false)
 
-  const processarImport = useCallback(() => {
-    if (!result) return
+  const processarImport = useCallback(async () => {
+    if (!result || importing) return
+    setImporting(true)
     const converted = cwrToStore(result.obras)
     const r1 = upsertStore(STORE_KEYS.obras, converted.obras, 'codigo' as never)
     const r2 = upsertStore(STORE_KEYS.titulares, converted.titulares, 'id' as never)
@@ -231,6 +244,19 @@ export default function ImportarCwrPage() {
       status: result.erros.length === 0 ? 'sucesso' : 'parcial',
       detalhes: `${result.stats.linhas} linhas · ${result.erros.length} avisos`,
     })
+    // Salvar no Supabase em paralelo (falha silenciosa)
+    let sbRes = { obras_saved: 0, titulares_saved: 0, links_saved: 0, errors: [] as string[] }
+    try {
+      sbRes = await saveObrasToSupabase(converted.obras, converted.titulares)
+    } catch { /* silencioso */ }
+
+    // Estatísticas de rastreabilidade
+    const com_codigo_legado = converted.obras.filter(o =>
+      o.codigo_interno_legado && o.codigo_interno_legado !== o.codigo
+    ).length
+    const com_iswc = converted.obras.filter(o => o.iswc).length
+    const total_pwr = result.obras.reduce((sum, o) => sum + o.pwr_links.length, 0)
+
     setImportResult({
       obras: r1.inserted + r1.updated,
       titulares: r2.inserted + r2.updated,
@@ -238,8 +264,15 @@ export default function ImportarCwrPage() {
       obras_ctrl: converted.stats.obras_controladas,
       tit_ctrl: converted.stats.titulares_novos,
       tit_nctrl: converted.stats.titulares_nao_controlados,
+      supabase_ok: sbRes.obras_saved > 0 && sbRes.errors.length === 0,
+      supabase_obras: sbRes.obras_saved,
+      supabase_errs: sbRes.errors,
+      com_codigo_legado,
+      com_iswc,
+      total_pwr,
     })
-  }, [result, fileName])
+    setImporting(false)
+  }, [result, fileName, importing])
 
   const processar = useCallback((file: File) => {
     setFileName(file.name)
@@ -260,6 +293,7 @@ export default function ImportarCwrPage() {
           total_obras: 0,
           obras: [],
           erros: [`Erro ao processar: ${err}`],
+          offset_detectado: 0,
           stats: { nwr: 0, spu: 0, swr: 0, owr: 0, pwr: 0, linhas: 0 },
         })
       } finally {
@@ -299,10 +333,13 @@ export default function ImportarCwrPage() {
         {result && !importResult && (
           <button
             onClick={processarImport}
-            className="flex items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 px-5 py-2.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/30 transition-colors"
+            disabled={importing}
+            className="flex items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 px-5 py-2.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Database className="w-4 h-4" />
-            Importar {result.total_obras} obras para o sistema
+            {importing
+              ? <><div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" /> Importando…</>
+              : <><Database className="w-4 h-4" /> Importar {result.total_obras} obras para o sistema</>
+            }
           </button>
         )}
         {importResult && (
@@ -383,10 +420,11 @@ export default function ImportarCwrPage() {
 
           {/* Painel de resultado da importação */}
           {importResult && (
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5 space-y-3">
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5 space-y-4">
               <p className="text-sm font-bold text-emerald-300 flex items-center gap-2">
                 <CheckCircle className="w-4 h-4" /> Sistema atualizado com sucesso
               </p>
+              {/* Cards principais */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
                   <Music className="w-4 h-4 mx-auto mb-1 text-violet-400" />
@@ -407,8 +445,46 @@ export default function ImportarCwrPage() {
                   <p className="text-[10px] text-amber-400">com duração no CWR</p>
                 </div>
               </div>
+              {/* Rastreabilidade */}
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 space-y-2">
+                <p className="text-[10px] uppercase tracking-widest text-amber-400/70 font-semibold">
+                  Rastreabilidade CWR
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="text-center">
+                    <p className="text-base font-extrabold text-amber-300">{importResult.com_codigo_legado}</p>
+                    <p className="text-[10px] text-white/40">Cód. legado (AFW2)</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-base font-extrabold text-emerald-300">{importResult.com_iswc}</p>
+                    <p className="text-[10px] text-white/40">Com ISWC</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-base font-extrabold text-sky-300">{importResult.total_pwr}</p>
+                    <p className="text-[10px] text-white/40">Vínculos PWR</p>
+                  </div>
+                </div>
+              </div>
+              {/* Status Supabase */}
+              {importResult.supabase_ok ? (
+                <div className="flex items-center gap-2 text-xs text-emerald-400">
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>{importResult.supabase_obras} obras gravadas no banco Supabase</span>
+                </div>
+              ) : importResult.supabase_errs.length > 0 ? (
+                <div className="space-y-1">
+                  <p className="text-[11px] text-amber-400/80 flex items-center gap-1.5">
+                    <Download className="w-3.5 h-3.5" />
+                    Dados salvos em localStorage · Supabase: {importResult.supabase_errs[0]}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-[11px] text-white/30">
+                  Dados salvos em localStorage. Sincronização Supabase em andamento…
+                </p>
+              )}
               <p className="text-[11px] text-white/30">
-                Dados disponíveis em: <span className="text-white/50">Obras · Titulares · Gravações · BackOffice</span>
+                Disponível em: <span className="text-white/50">Obras · Titulares · Gravações · BackOffice</span>
               </p>
             </div>
           )}

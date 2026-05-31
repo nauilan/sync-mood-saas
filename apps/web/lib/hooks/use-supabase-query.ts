@@ -83,10 +83,39 @@ export function useSupabaseQuery<T>(
 
           const { data: rows, error: sbErr } = await query
 
-          // Só usa Supabase se retornou linhas reais.
-          // Se tabela existe mas está vazia, cai pro localStorage (migração em curso).
+          // Supabase retornou dados — mescla com localStorage para não perder
+          // itens importados localmente (ex: CWR importado mas não salvo no Supabase).
           if (!sbErr && rows && rows.length > 0 && !cancelled) {
-            setData(rows as T[])
+            let merged: T[] = rows as T[]
+            if (storeKey) {
+              try {
+                const stored = getStore<T>(storeKey)
+                if (stored.length > 0) {
+                  // Deduplication: prefere Supabase; adiciona itens do store
+                  // que não existam no Supabase (por id OU codigo OU codigo_obra)
+                  const sbKeys = new Set<string>()
+                  for (const r of rows as any[]) {
+                    if (r.id) sbKeys.add(String(r.id))
+                    if (r.codigo) sbKeys.add(String(r.codigo))
+                    if (r.codigo_obra) sbKeys.add(String(r.codigo_obra))
+                  }
+                  const extra = stored.filter((s: any) => {
+                    const sid   = s.id ? String(s.id) : null
+                    const scod  = s.codigo ? String(s.codigo) : null
+                    const scob  = s.codigo_obra ? String(s.codigo_obra) : null
+                    return (
+                      (!sid  || !sbKeys.has(sid)) &&
+                      (!scod || !sbKeys.has(scod)) &&
+                      (!scob || !sbKeys.has(scob))
+                    )
+                  })
+                  if (extra.length > 0) {
+                    merged = [...(rows as T[]), ...extra]
+                  }
+                }
+              } catch { /* silencioso */ }
+            }
+            setData(merged)
             setSource('supabase')
             setLoading(false)
             return

@@ -8,6 +8,7 @@ import {
   AlertCircle, CheckCircle2, Mic2, X, FileCheck2,
   AlignLeft, Link2, Hash, Globe, Calendar, Clock,
   ExternalLink, Edit3, Copy, ChevronDown, ChevronUp,
+  Send, Database, Tag, ShieldCheck, ShieldAlert, Loader2,
 } from 'lucide-react'
 import { MOCK_OBRAS, MOCK_OBRAS_LINKS, MOCK_OBRAS_FONOGRAMAS, KPI_OBRAS } from '@/lib/mock-obras'
 import { STORE_KEYS } from '@/lib/store'
@@ -47,6 +48,25 @@ function PctBadge({ value, color }: { value: number; color: string }) {
   )
 }
 
+const BO_STATUS: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  nao_enviada: { label: 'Não enviada', color: 'text-white/30', icon: <Database className="w-3 h-3" /> },
+  enviada:     { label: 'Enviada',     color: 'text-amber-400', icon: <Send className="w-3 h-3" /> },
+  song:        { label: 'Song',        color: 'text-sky-400',   icon: <Loader2 className="w-3 h-3" /> },
+  work:        { label: 'Work ✓',      color: 'text-emerald-400', icon: <ShieldCheck className="w-3 h-3" /> },
+  divergente:  { label: 'Divergente',  color: 'text-amber-500', icon: <ShieldAlert className="w-3 h-3" /> },
+  rejeitada:   { label: 'Rejeitada',   color: 'text-rose-400',  icon: <ShieldAlert className="w-3 h-3" /> },
+}
+
+function BackOfficeBadge({ status }: { status?: string | null }) {
+  const s = status ?? 'nao_enviada'
+  const bo = BO_STATUS[s] ?? BO_STATUS.nao_enviada
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${bo.color}`}>
+      {bo.icon}{bo.label}
+    </span>
+  )
+}
+
 const STATUS_OPTIONS: { value: StatusObra | ''; label: string }[] = [
   { value: '', label: 'Todos status' },
   { value: 'ativa', label: 'Ativa' },
@@ -77,6 +97,10 @@ function ObraDrawer({ obra, onClose }: { obra: any; onClose: () => void }) {
   const links = normalizarLinksObra(obra._links ?? MOCK_OBRAS_LINKS[obra.id] ?? [])
   const fonogramas = MOCK_OBRAS_FONOGRAMAS?.[obra.id] ?? []
   const editora = MOCK_EDITORAS.find(e => e.id === obra.editora_id)
+  const editoraNome = editora?.nome_fantasia
+    ?? links.flatMap((l: any) => l.titulares ?? [])
+        .find((t: any) => ['editora_original', 'administradora'].includes(t.papel))?.nome
+    ?? null
 
   const TABS = [
     { id: 'info',       label: 'Informações',  icon: Hash },
@@ -98,10 +122,16 @@ function ObraDrawer({ obra, onClose }: { obra: any; onClose: () => void }) {
             <h2 className="text-base font-bold text-white truncate">{obra.titulo}</h2>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               <span className="text-xs font-mono text-white/35">{obra.codigo}</span>
+              {obra.codigo_interno_legado && obra.codigo_interno_legado !== obra.codigo && (
+                <span className="inline-flex items-center gap-0.5 text-[10px] font-mono bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded">
+                  <Tag className="w-2.5 h-2.5" />{obra.codigo_interno_legado}
+                </span>
+              )}
               {obra.iswc && <span className="text-xs font-mono text-emerald-400">{obra.iswc}</span>}
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_OBRA_COLORS[obra.status as StatusObra]}`}>
                 {STATUS_OBRA_LABELS[obra.status as StatusObra]}
               </span>
+              <BackOfficeBadge status={obra.backoffice_status} />
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -134,7 +164,9 @@ function ObraDrawer({ obra, onClose }: { obra: any; onClose: () => void }) {
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { label: 'Título', value: obra.titulo },
-                  { label: 'Código', value: obra.codigo, mono: true },
+                  { label: 'Código Sync Mood', value: obra.codigo, mono: true },
+                  { label: 'Cód. Legado (CWR)', value: obra.codigo_interno_legado || '—', mono: true },
+                  { label: 'Cód. CWR Original', value: obra.codigo_obra_cwr_original || '—', mono: true },
                   { label: 'Título Alternativo', value: obra.titulo_alternativo || '—' },
                   { label: 'Subtítulo', value: obra.subtitulo || '—' },
                   { label: 'Idioma', value: obra.idioma || '—', icon: Globe },
@@ -142,7 +174,9 @@ function ObraDrawer({ obra, onClose }: { obra: any; onClose: () => void }) {
                   { label: 'Ano de Criação', value: obra.ano_criacao || '—', icon: Calendar },
                   { label: 'Duração', value: obra.duracao || '—', icon: Clock },
                   { label: 'ISWC', value: obra.iswc || 'Pendente', mono: true },
-                  { label: 'Editora', value: editora?.nome_fantasia || '—' },
+                  { label: 'Editora', value: editora?.nome_fantasia || editoraNome || '—' },
+                  { label: 'BackOffice Song ID', value: obra.backoffice_song_id || '—', mono: true },
+                  { label: 'BackOffice Work ID', value: obra.backoffice_work_id || '—', mono: true },
                 ].map(item => (
                   <div key={item.label} className="bg-white/[0.03] rounded-xl p-3 space-y-0.5">
                     <p className="text-[10px] text-white/30 uppercase tracking-wide">{item.label}</p>
@@ -519,7 +553,16 @@ export default function ObrasPage() {
                       ${isAtiva ? 'bg-violet-500/10 border-l-2 border-violet-500' : ''}`}
                   >
                     <td className="px-5 py-3.5">
-                      <span className="text-xs font-mono text-white/40">{obra.codigo}</span>
+                      <div>
+                        <span className="text-xs font-mono text-white/40">{obra.codigo}</span>
+                        {obra.codigo_interno_legado && obra.codigo_interno_legado !== obra.codigo && (
+                          <div className="mt-0.5">
+                            <span className="text-[9px] font-mono bg-amber-500/10 text-amber-400 px-1 py-0.5 rounded">
+                              {obra.codigo_interno_legado}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2">

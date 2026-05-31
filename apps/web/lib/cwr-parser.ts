@@ -69,6 +69,8 @@ export interface CwrParseResult {
   total_obras: number
   obras: CwrObra[]
   erros: string[]
+  /** Offset detectado: 0=Standard, 4=Extended+4, 8=Extended UBEM */
+  offset_detectado: number
   stats: {
     nwr: number
     spu: number
@@ -119,25 +121,54 @@ function papelFromRole(role: string, tipo: 'SPU' | 'SWR' | 'OWR' | 'OPU'): CwrPa
 
 // ── Auto-detecção de formato CWR ──────────────────────────────────────────────
 /**
- * Detecta o offset do conteúdo nas linhas NWR/SPU/SWR.
+ * Detecta o offset do conteúdo nas linhas NWR/SPU/SWR usando scoring alfabético.
  *
- * Formato Standard CWR 2.1: RecType(3) TxSeq(8) RecSeq(8) → conteúdo em pos 19
- * Formato Extended (UBEM/BackOffice BR): RecType(3) Extra(8) TxSeq(8) RecSeq(8) → conteúdo em pos 27
+ * Testa os offsets candidatos [0, 4, 8] contra as primeiras linhas NWR/SPU do arquivo.
+ * Para cada offset, extrai o campo "title" (NWR) ou "name" (SPU/SWR) e pontua
+ * quantos caracteres alfabéticos aparecem nos primeiros 12 chars.
+ * O offset com maior pontuação ganha.
  *
- * Heurística: se pos 19 é um dígito na primeira linha NWR, é o Record Seq # →
- * formato extended (off=8). Se for letra, é o início do título → standard (off=0).
+ * Isso torna o parser agnóstico a variações de formato:
+ *   Standard CWR 2.1   → conteúdo em 19 (off=0)
+ *   Extended BR (+4)   → conteúdo em 23 (off=4)
+ *   Extended UBEM (+8) → conteúdo em 27 (off=8)
  */
-function detectCwrOffset(lines: string[]): number {
-  for (const line of lines) {
-    if (line.startsWith('NWR') || line.startsWith('REV')) {
-      const ch19 = line[19] ?? ''
-      // Dígito em pos 19 = Record Seq # do extended format → conteúdo em 27
-      if (/\d/.test(ch19)) return 8
-      // Letra/espaço/hífen em pos 19 = início do título → standard, conteúdo em 19
-      return 0
-    }
+function scoreOffset(line: string, off: number): number {
+  // Para NWR: título começa em 19+off; para SPU/SWR: nome em 32+off
+  const recType = line.slice(0, 3)
+  const start   = (recType === 'NWR' || recType === 'REV') ? 19 + off : 32 + off
+  const sample  = line.slice(start, start + 12)
+  // Pontuação: cada letra A-Z ou char acentuado = +2; espaço entre letras = +1
+  let score = 0
+  for (let i = 0; i < sample.length; i++) {
+    const c = sample[i]
+    if (/[A-Za-zÀ-ÿ]/.test(c)) score += 2
+    else if (c === ' ' && i > 0 && i < sample.length - 1) score += 1
   }
-  return 8 // padrão retrocompatível com formato UBEM/BackOffice BR
+  // Penalizar se começa com dígito (provavelmente ainda é campo sequencial)
+  if (/\d/.test(sample[0] ?? '')) score -= 10
+  return score
+}
+
+function detectCwrOffset(lines: string[]): number {
+  const candidates = [0, 4, 8]
+  const scores: Record<number, number> = { 0: 0, 4: 0, 8: 0 }
+  let samples = 0
+
+  for (const line of lines) {
+    const rec = line.slice(0, 3)
+    if (rec !== 'NWR' && rec !== 'REV' && rec !== 'SPU' && rec !== 'SWR') continue
+    if (samples >= 6) break
+    for (const off of candidates) {
+      scores[off] += scoreOffset(line, off)
+    }
+    samples++
+  }
+
+  if (samples === 0) return 8 // fallback
+
+  // Retorna o offset com maior pontuação acumulada
+  return candidates.reduce((best, off) => scores[off] > scores[best] ? off : best, 8)
 }
 
 // ── Record parsers ────────────────────────────────────────────────────────────
@@ -291,6 +322,7 @@ export function parseCwr(content: string): CwrParseResult {
     total_obras: 0,
     obras: [],
     erros: [],
+    offset_detectado: off,
     stats: { nwr: 0, spu: 0, swr: 0, owr: 0, pwr: 0, linhas: lines.length },
   }
 
