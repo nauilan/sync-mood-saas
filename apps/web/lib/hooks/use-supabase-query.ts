@@ -83,7 +83,9 @@ export function useSupabaseQuery<T>(
 
           const { data: rows, error: sbErr } = await query
 
-          if (!sbErr && rows && !cancelled) {
+          // Só usa Supabase se retornou linhas reais.
+          // Se tabela existe mas está vazia, cai pro localStorage (migração em curso).
+          if (!sbErr && rows && rows.length > 0 && !cancelled) {
             setData(rows as T[])
             setSource('supabase')
             setLoading(false)
