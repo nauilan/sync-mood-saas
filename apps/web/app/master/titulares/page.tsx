@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import {
   Users, Plus, Search, Filter, UserCheck, Building2,
@@ -16,7 +16,8 @@ import { KpiCard } from '@/components/ui/kpi-card'
 import { MOCK_TITULARES, MOCK_EDITORAS } from '@/lib/mock-cadastros'
 import { MOCK_OBRAS, MOCK_OBRAS_LINKS } from '@/lib/mock-obras'
 import { MOCK_CONTRATOS_V2 } from '@/lib/mock-contratos-v2'
-import { getStore, STORE_KEYS } from '@/lib/store'
+import { STORE_KEYS } from '@/lib/store'
+import { useSupabaseQuery } from '@/lib/hooks/use-supabase-query'
 import { FUNCAO_LABEL, nomeTitular, cpfCnpjTitular, nomeArtistico, emailPrincipal } from '@/lib/types-cadastros'
 import type { FuncaoTitular, TipoPessoa, TitularComDados } from '@/lib/types-cadastros'
 
@@ -439,23 +440,14 @@ export default function TitularesPage() {
   const [filterEditora, setFilterEditora] = useState('')
   const [filterStatus, setFilterStatus] = useState<'ativo' | 'inativo' | ''>('')
   const [showFilters, setShowFilters] = useState(false)
-  const [localTitulares, setLocalTitulares] = useState<typeof MOCK_TITULARES>([])
 
-  useEffect(() => {
-    try {
-      // Tenta primeiro o store unificado (alimentado pela importação CWR)
-      const fromStore = getStore(STORE_KEYS.titulares)
-      if (Array.isArray(fromStore) && fromStore.length > 0) {
-        setLocalTitulares(fromStore as typeof MOCK_TITULARES)
-        return
-      }
-      // Fallback: chave legada
-      const saved = JSON.parse(localStorage.getItem('sync_titulares') || '[]')
-      setLocalTitulares(saved)
-    } catch { /* silencioso */ }
-  }, [])
-
-  const allTitulares = useMemo(() => [...MOCK_TITULARES, ...localTitulares], [localTitulares])
+  // Carrega titulares: Supabase → localStorage → mock
+  const { data: allTitulares } = useSupabaseQuery<TitularComDados>({
+    table: 'titulares',
+    storeKey: STORE_KEYS.titulares,
+    fallback: MOCK_TITULARES,
+    orderBy: { column: 'nome_completo', ascending: true },
+  })
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim()

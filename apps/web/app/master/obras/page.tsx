@@ -10,7 +10,8 @@ import {
   ExternalLink, Edit3, Copy, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { MOCK_OBRAS, MOCK_OBRAS_LINKS, MOCK_OBRAS_FONOGRAMAS, KPI_OBRAS } from '@/lib/mock-obras'
-import { getStore, STORE_KEYS } from '@/lib/store'
+import { STORE_KEYS } from '@/lib/store'
+import { useSupabaseQuery } from '@/lib/hooks/use-supabase-query'
 import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
 import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, normalizarLinksObra } from '@/lib/types-obras'
 import type { StatusObra } from '@/lib/types-obras'
@@ -294,27 +295,22 @@ export default function ObrasPage() {
   const [filterIswc, setFilterIswc] = useState<'todos' | 'com' | 'sem'>('todos')
   const [filterFono, setFilterFono] = useState<'todos' | 'com' | 'sem'>('todos')
   const [obraAtiva, setObraAtiva] = useState<any>(null)
-  const [obrasStore, setObrasStore] = useState<any[]>([])
   const searchRef = useRef<HTMLDivElement>(null)
 
-  // Carregar obras importadas do store (CWR / importação)
-  useEffect(() => {
-    try {
-      const stored = getStore(STORE_KEYS.obras)
-      if (Array.isArray(stored) && stored.length > 0) {
-        setObrasStore(stored)
-      }
-    } catch {
-      // silencia erros de localStorage
-    }
-  }, [])
+  // Carrega obras: Supabase → localStorage → mock
+  const { data: obrasData } = useSupabaseQuery<any>({
+    table: 'obras',
+    storeKey: STORE_KEYS.obras,
+    fallback: MOCK_OBRAS,
+    orderBy: { column: 'titulo', ascending: true },
+  })
 
-  // Catálogo unificado: mocks + obras importadas (deduplicado por codigo)
+  // Catálogo unificado: deduplicado por codigo
   const catalogoCompleto = useMemo(() => {
     const map = new Map<string, any>()
-    ;[...MOCK_OBRAS, ...obrasStore].forEach(o => map.set(o.codigo, o))
+    obrasData.forEach(o => map.set(o.codigo ?? o.codigo_obra ?? o.id, o))
     return Array.from(map.values())
-  }, [obrasStore])
+  }, [obrasData])
 
   // Fechar dropdown ao clicar fora
   useEffect(() => {

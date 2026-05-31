@@ -1,4 +1,5 @@
-﻿import { LoginForm } from './login-form'
+﻿import { Suspense } from 'react'
+import { LoginForm } from './login-form'
 import { Music2, Shield, Zap, BarChart3 } from 'lucide-react'
 
 export const metadata = { title: 'Login | Sync Mood' }
@@ -98,7 +99,9 @@ export default function LoginPage() {
               <h2 className="text-xl font-semibold tracking-tight text-white">Entrar na plataforma</h2>
               <p className="text-sm text-white/40 mt-1">Use seu e-mail e senha de acesso</p>
             </div>
-            <LoginForm />
+            <Suspense fallback={<div className="h-48 flex items-center justify-center text-white/40 text-sm">Carregando...</div>}>
+              <LoginForm />
+            </Suspense>
             <p className="text-center text-xs text-white/25 mt-6">
               Problemas? <a href="mailto:suporte@syncmood.com.br" className="text-violet-400/70 hover:text-violet-400 transition-colors">suporte@syncmood.com.br</a>
             </p>
