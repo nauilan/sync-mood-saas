@@ -1,23 +1,30 @@
-﻿@import "tailwindcss";
+@import "tailwindcss";
 
 :root {
-  --bg-base: #0a0e1a;
-  --bg-card: #0d1526;
-  --bg-card-hover: #111d30;
+  --bg-base: #07060f;
+  --bg-sidebar: #0a0916;
+  --bg-card: #11111d;
+  --bg-card-hover: #161624;
   --border: rgba(255, 255, 255, 0.06);
-  --border-strong: rgba(255, 255, 255, 0.1);
-  --text-muted: rgba(255, 255, 255, 0.4);
-  --text-muted-strong: rgba(255, 255, 255, 0.6);
+  --border-strong: rgba(255, 255, 255, 0.10);
+  --text-primary: #f4f4f8;
+  --text-secondary: #8a8a9a;
+  --text-muted: #5a5a6a;
+  --violet-primary: #8b5cf6;
+  --violet-dark: #7c3aed;
+  --violet-darker: #6d28d9;
 }
 
 @theme {
-  --color-bg-base: #0a0e1a;
-  --color-bg-card: #0d1526;
+  --color-bg-base: #07060f;
+  --color-bg-sidebar: #0a0916;
+  --color-bg-card: #11111d;
   --color-border-default: rgba(255, 255, 255, 0.06);
 
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
 
   --color-violet-50: #f5f3ff;
+  --color-violet-300: #c4b5fd;
   --color-violet-400: #a78bfa;
   --color-violet-500: #8b5cf6;
   --color-violet-600: #7c3aed;
@@ -39,15 +46,18 @@
   --color-sky-400: #38bdf8;
   --color-sky-500: #0ea5e9;
 
-  --shadow-glow-violet: 0 0 16px rgb(139 92 246 / 0.3), 0 0 32px rgb(139 92 246 / 0.12);
+  --shadow-glow-violet: 0 0 20px rgb(139 92 246 / 0.35), 0 0 40px rgb(139 92 246 / 0.15);
   --shadow-glow-cyan: 0 0 16px rgb(34 211 238 / 0.25), 0 0 32px rgb(34 211 238 / 0.1);
-  --shadow-glow-brand: 0 0 20px rgb(139 92 246 / 0.25), 0 0 40px rgb(34 211 238 / 0.1);
-  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.3), inset 0 1px 0 rgb(255 255 255 / 0.04);
-  --shadow-card-hover: 0 4px 16px rgb(0 0 0 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.06);
+  --shadow-glow-brand: 0 0 24px rgb(139 92 246 / 0.3), 0 0 48px rgb(139 92 246 / 0.12);
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.04);
+  --shadow-card-hover: 0 4px 16px rgb(0 0 0 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.06);
 
   --animate-fade-in: fade-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-fade-in-up: fade-in-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-pulse-dot: pulse-dot 2s ease-in-out infinite;
+  --animate-pulse-ring: pulse-ring 2s ease-in-out infinite;
+  --animate-orb-breathe: orb-breathe 4s ease-in-out infinite;
+  --animate-sparkline: sparkline 1.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes fade-in {
@@ -56,13 +66,33 @@
 }
 
 @keyframes fade-in-up {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.85); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+@keyframes orb-breathe {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.04); filter: brightness(1.15); }
+}
+
+@keyframes globe-spin {
+  from { transform: rotateY(0deg); }
+  to { transform: rotateY(360deg); }
+}
+
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 * {
@@ -74,8 +104,8 @@ html {
 }
 
 body {
-  background-color: #0a0e1a;
-  color: white;
+  background-color: #07060f;
+  color: #f4f4f8;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -89,10 +119,27 @@ body {
 }
 
 .gradient-brand-text {
-  background: linear-gradient(135deg, #a78bfa, #22d3ee);
+  background: linear-gradient(135deg, #c4b5fd, #a78bfa);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+.gradient-violet {
+  background: linear-gradient(135deg, #a78bfa, #6d28d9);
+}
+
+.sonora-card {
+  background: #11111d;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.03);
+}
+
+.sonora-card-hover:hover {
+  background: #161624;
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.05);
 }
 
 ::-webkit-scrollbar {
@@ -103,14 +150,14 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(139, 92, 246, 0.3);
 }
 
 select option {
-  background: #0d1526;
-  color: white;
+  background: #11111d;
+  color: #f4f4f8;
 }

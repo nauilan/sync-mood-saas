@@ -1,117 +1,625 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { proximoCodigoObra } from '@/lib/codigos'
 import { PageHeader } from '@/components/ui/page-header'
-import { ChevronRight, Plus, Trash2, CheckCircle2, AlertCircle, Music2, Users, FileText } from 'lucide-react'
-import type { FuncaoLink } from '@/lib/types-obras'
-import { FUNCAO_LINK_LABELS, FUNCAO_LINK_COLORS } from '@/lib/types-obras'
+import {
+  ChevronRight, Plus, Trash2, CheckCircle2, AlertCircle,
+  Music2, Users, FileText, Mic2, AlignLeft, Link2,
+  Upload, Sparkles, FileCheck2, X, Download, BookOpen,
+  Info
+} from 'lucide-react'
+import type { PapelTitularLink } from '@/lib/types-obras'
+import { PAPEL_TITULAR_LABELS, PAPEL_TITULAR_COLORS, GENEROS_MUSICAIS } from '@/lib/types-obras'
+import { MOCK_TITULARES } from '@/lib/mock-cadastros'
+import { MOCK_CONTRATOS_V2, getContratoV2ById } from '@/lib/mock-contratos-v2'
 
-const STEPS = ['Dados da Obra', 'Links & Participantes', 'Revisao & Validacao']
+// ── Siglas oficiais ──────────────────────────────────────────────────────────
+// CA = Compositor/Autor | AD = Adaptador | AR = Arranjador | V = Versionista
+// E  = Editora          | SE = Subeditora | AM = Editora Administradora
 
-interface LinkParticipante {
+const STEPS = [
+  { label: 'Titulo & Genero', icon: Music2 },
+  { label: 'Links & Participacao', icon: Link2 },
+  { label: 'Fonogramas', icon: Mic2 },
+  { label: 'Letra', icon: AlignLeft },
+  { label: 'Contrato Assinado', icon: FileCheck2 },
+  { label: 'Revisao', icon: CheckCircle2 },
+]
+
+interface LinkTitular {
   tempId: string
   nome: string
   ipi: string
-  funcao: FuncaoLink
-  pct_exec: number
-  pct_fono: number
-  pct_sync: number
+  papel: PapelTitularLink
+  percentual: number
+  controlado: boolean
+  sociedade: string
 }
 
 interface ObraLink {
   tempId: string
-  numero: number
+  ordem: number
   descricao: string
-  participantes: LinkParticipante[]
+  controlado: boolean
+  percentual_controlado: number
+  titulares: LinkTitular[]
 }
 
-function StepIndicator({ step, current }: { step: number; current: number }) {
-  const done    = step < current
-  const active  = step === current
+interface Fonograma {
+  tempId: string
+  titulo_fonograma: string
+  interprete: string
+  isrc: string
+  produtor: string
+}
+
+function uid() { return Math.random().toString(36).slice(2) }
+
+function StepIndicator({
+  idx,
+  current,
+  highest,
+  onNavigate,
+}: {
+  idx: number
+  current: number
+  highest: number
+  onNavigate: (i: number) => void
+}) {
+  const done = idx < current
+  const active = idx === current
+  const clickable = idx <= highest && !active
+  const S = STEPS[idx]
+
+  function handleClick() {
+    if (clickable) onNavigate(idx)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (clickable && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault()
+      onNavigate(idx)
+    }
+  }
+
   return (
-    <div className="flex items-center gap-2">
-      <div className={'flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-all ' +
-        (done   ? 'bg-emerald-500 text-white' :
-         active  ? 'bg-violet-600 text-white' :
-                   'bg-white/10 text-white/30')}>
-        {done ? <CheckCircle2 className="w-4 h-4" /> : step + 1}
+    <div
+      role={clickable ? 'button' : undefined}
+      aria-current={active ? 'step' : undefined}
+      aria-disabled={!clickable && !active ? true : undefined}
+      tabIndex={clickable ? 0 : -1}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      className={`flex flex-col items-center gap-1.5 outline-none
+        ${clickable ? 'cursor-pointer group' : !active ? 'cursor-not-allowed' : ''}`}
+    >
+      <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all z-10
+        ${done
+          ? 'bg-emerald-500 text-white' + (clickable ? ' group-hover:scale-110 group-hover:shadow-[0_0_12px_rgba(16,185,129,0.5)] group-focus-visible:shadow-[0_0_0_3px_rgba(16,185,129,0.4)]' : '')
+          : active
+            ? 'bg-violet-600 text-white ring-4 ring-violet-500/20'
+            : 'bg-white/[0.06] text-white/30'
+        }`}>
+        {done ? <CheckCircle2 className="w-4 h-4" /> : <S.icon className="w-4 h-4" />}
       </div>
-      <span className={'text-sm ' + (active ? 'text-white font-semibold' : done ? 'text-white/60' : 'text-white/30')}>
-        {STEPS[step]}
+      <span className={`text-[10px] whitespace-nowrap transition-colors
+        ${active
+          ? 'text-white font-semibold'
+          : done
+            ? 'text-white/60' + (clickable ? ' group-hover:text-white/90' : '')
+            : 'text-white/25'
+        }`}>
+        {S.label}
       </span>
     </div>
   )
 }
 
-const FUNCOES_AUTOR: FuncaoLink[] = ['CA', 'V', 'SA', 'A', 'T', 'AD', 'H']
-const FUNCOES_EDITORA: FuncaoLink[] = ['E', 'AM', 'SE', 'C', 'CE']
+const PAPEL_OPTIONS: PapelTitularLink[] = [
+  'autor', 'compositor', 'versionista', 'adaptador',
+  'editora_original', 'administradora', 'subeditora', 'interprete_referencia',
+]
 
-function uid() { return Math.random().toString(36).slice(2) }
+// Simula letras para demonstracao
+const LETRAS_DEMO: Record<string, string> = {
+  'amo noite e dia': 'Amo noite e dia\nSó penso em você\nQue saudade de te ver\nSorrindo pra mim\n\nMeu coração dispara\nAo te ver chegar\nNão consigo me segurar\nVenho te abraçar',
+  'amor demais': 'Amor demais é pouco pra te dar\nO que eu sinto não tem como explicar\nSó sei que és tudo pra mim\nDo começo ao fim\n\nMe perco nos teus olhos\nMe encontro no seu bem\nVocê é o amor\nQue ninguém mais tem',
+  'la la la': 'La la la la la\nAssim começa nossa história\nLa la la la la\nUma canção pra nunca esquecer\n\nTodo dia assim\nLa la la\nCantando pra você\nMeu amor',
+}
+
+// ─── Componente de linha de titular com busca do banco ──────────────────────
+function TitularRow({
+  t, linkId, onUpdate, onRemove, onOpenNovoTitular
+}: {
+  t: { tempId: string; nome: string; ipi: string; papel: PapelTitularLink; percentual: number; controlado: boolean; sociedade: string }
+  linkId: string
+  onUpdate: (linkId: string, tId: string, field: string, val: string | number | boolean) => void
+  onRemove: (linkId: string, tId: string) => void
+  onOpenNovoTitular: (linkId: string, tId: string) => void
+}) {
+  const [query, setQuery] = useState(t.nome)
+  const [open, setOpen] = useState(false)
+
+  // Monta lista de todos os titulares do banco (PF + PJ)
+  const todos = MOCK_TITULARES?.map((x: any) => ({
+    id: x.id,
+    nome: x.nome_artistico || x.razao_social || x.nome_completo || '',
+    ipi: x.ipi || x.cae || '',
+  })) ?? []
+
+  const resultados = query.length >= 2
+    ? todos.filter(x => x.nome.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
+    : []
+
+  function selecionar(item: { id: string; nome: string; ipi: string }) {
+    onUpdate(linkId, t.tempId, 'nome', item.nome)
+    onUpdate(linkId, t.tempId, 'ipi', item.ipi)
+    setQuery(item.nome)
+    setOpen(false)
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 p-2.5 bg-white/[0.03] rounded-lg">
+      {/* Campo busca titular */}
+      <div className="relative flex-1 min-w-[180px]">
+        <input
+          type="text"
+          value={query}
+          onChange={e => {
+            setQuery(e.target.value)
+            onUpdate(linkId, t.tempId, 'nome', e.target.value)
+            setOpen(true)
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 180)}
+          placeholder="Buscar titular..."
+          className="w-full h-7 bg-white/5 border border-white/[0.06] rounded px-2 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-violet-500/40 pr-16"
+        />
+        <button
+          onMouseDown={e => e.preventDefault()}
+          onClick={() => onOpenNovoTitular(linkId, t.tempId)}
+          className="absolute right-1 top-1 h-5 px-1.5 rounded bg-violet-600/70 hover:bg-violet-600 text-[9px] font-bold text-white transition-colors whitespace-nowrap"
+          title="Cadastrar novo titular">
+          + Novo
+        </button>
+        {open && query.length >= 2 && (
+          <div className="absolute left-0 top-8 z-40 w-full bg-[#0d1526] border border-white/[0.1] rounded-lg shadow-xl overflow-hidden">
+            {resultados.length > 0 ? (
+              <>
+                {resultados.map(r => (
+                  <button
+                    key={r.id}
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => selecionar(r)}
+                    className="flex items-center gap-2 w-full px-3 py-2 hover:bg-white/5 text-left transition-colors border-b border-white/[0.04] last:border-0">
+                    <Users className="w-3 h-3 text-violet-400 shrink-0" />
+                    <span className="text-xs text-white/80 truncate flex-1">{r.nome}</span>
+                    {r.ipi && <span className="text-[10px] font-mono text-violet-400/70 shrink-0">{r.ipi}</span>}
+                  </button>
+                ))}
+                <div className="border-t border-white/[0.06]">
+                  <button
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => { setOpen(false); onOpenNovoTitular(linkId, t.tempId) }}
+                    className="flex items-center gap-2 w-full px-3 py-2 hover:bg-violet-500/10 text-left transition-colors">
+                    <Plus className="w-3 h-3 text-violet-400" />
+                    <span className="text-xs text-violet-400 font-semibold">Cadastrar novo titular</span>
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="px-3 py-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-white/50">Nenhum titular encontrado</p>
+                  <p className="text-[10px] text-white/25">"{query}" não está no cadastro</p>
+                </div>
+                <button
+                  onMouseDown={e => e.preventDefault()}
+                  onClick={() => { setOpen(false); onOpenNovoTitular(linkId, t.tempId) }}
+                  className="shrink-0 flex items-center gap-1 h-7 px-3 rounded-lg bg-violet-600 hover:bg-violet-500 text-xs font-semibold text-white transition-colors">
+                  <Plus className="w-3 h-3" /> Cadastrar novo
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Papel */}
+      <select value={t.papel} onChange={e => onUpdate(linkId, t.tempId, 'papel', e.target.value)}
+        className={`h-7 rounded px-2 text-xs font-semibold cursor-pointer border-0 focus:outline-none ${PAPEL_TITULAR_COLORS[t.papel]}`}>
+        {PAPEL_OPTIONS.map(p => <option key={p} value={p}>{PAPEL_TITULAR_LABELS[p]}</option>)}
+      </select>
+
+      {/* Percentual */}
+      <div className="flex items-center gap-1">
+        <span className="text-[10px] text-white/30">%</span>
+        <input type="number" min="0" max="100" step="0.01" value={t.percentual || ''}
+          onChange={e => onUpdate(linkId, t.tempId, 'percentual', parseFloat(e.target.value) || 0)}
+          placeholder="0"
+          className="w-16 h-7 bg-white/5 border border-white/[0.06] rounded px-1.5 text-xs text-white text-right tabular-nums focus:outline-none focus:border-violet-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+      </div>
+
+      {/* IPI */}
+      <input type="text" value={t.ipi} onChange={e => onUpdate(linkId, t.tempId, 'ipi', e.target.value)}
+        placeholder="IPI/CAE"
+        className="w-24 h-7 bg-white/5 border border-white/[0.06] rounded px-2 text-xs text-white font-mono placeholder:text-white/20 focus:outline-none" />
+
+      {/* Controlado */}
+      <label className="flex items-center gap-1 text-[10px] text-white/40 cursor-pointer">
+        <input type="checkbox" checked={t.controlado}
+          onChange={e => onUpdate(linkId, t.tempId, 'controlado', e.target.checked)}
+          className="w-3 h-3 accent-violet-500" />
+        ctrl
+      </label>
+
+      <button onClick={() => onRemove(linkId, t.tempId)}
+        className="w-6 h-6 flex items-center justify-center text-white/25 hover:text-rose-400 transition-colors">
+        <Trash2 className="w-3 h-3" />
+      </button>
+    </div>
+  )
+}
 
 export default function NovaObraPage() {
+  const router = useRouter()
   const [step, setStep] = useState(0)
+  const [highestStep, setHighestStep] = useState(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function navigateToStep(i: number) {
+    setStep(i)
+  }
+
+  // Step 0 — Titulo & Genero
   const [titulo, setTitulo] = useState('')
+  const [tituloAlternativo, setTituloAlternativo] = useState('')
+  const [subtitulo, setSubtitulo] = useState('')
   const [idioma, setIdioma] = useState('Portugues')
-  const [origemCadastro, setOrigemCadastro] = useState('manual')
+  const [genero, setGenero] = useState('')
+  const [anoSriacao, setAno] = useState('')
+  const [duracao, setDuracao] = useState('')
+
+  // Contrato de origem (selecionado no step 0 para importar dados)
+  const [contratoOrigemId, setContratoOrigemId] = useState('')
+  const [importado, setImportado] = useState(false)
+
+  // Step 1 — links
   const [links, setLinks] = useState<ObraLink[]>([
-    { tempId: uid(), numero: 1, descricao: '', participantes: [] }
+    { tempId: uid(), ordem: 1, descricao: '', controlado: false, percentual_controlado: 0, titulares: [] }
   ])
+
+  // Mapeia papel do contrato para PapelTitularLink
+  function papelContrato(papel: string): PapelTitularLink {
+    if (papel === 'cedente' || papel === 'autor_ca') return 'compositor'
+    if (papel === 'cessionario' || papel === 'cessionario_pf' || papel === 'cessionario_pj' || papel === 'editora' || papel === 'co_editora' || papel === 'coeditor') return 'editora_original'
+    if (papel === 'administrador') return 'administradora'
+    if (papel === 'subeditora') return 'subeditora'
+    if (papel === 'versionista') return 'versionista'
+    if (papel === 'adaptador') return 'adaptador'
+    return 'compositor'
+  }
+
+  // Importa dados do contrato para os links
+  function importarContrato(cId: string) {
+    const contrato = getContratoV2ById(cId)
+    if (!contrato?._partes?.length) return
+
+    // Separa cedentes (autores/CA) de editoras/administradoras
+    const papeisCedente = ['cedente', 'autor_ca', 'compositor', 'versionista', 'adaptador'] as const
+    const cedentes = contrato._partes.filter(p => (papeisCedente as readonly string[]).includes(p.papel))
+    const editoras = contrato._partes.filter(p => !(papeisCedente as readonly string[]).includes(p.papel))
+
+    let novosLinks: ObraLink[] = []
+
+    if (cedentes.length === 0) {
+      // Sem cedente explícito: um link com todos
+      novosLinks = [{
+        tempId: uid(),
+        ordem: 1,
+        descricao: contrato._partes.map(p => p.nome_titular).join(' / '),
+        controlado: editoras.length > 0,
+        percentual_controlado: editoras.reduce((s, p) => s + (p.percentual ?? 0), 0),
+        titulares: contrato._partes.map(p => ({
+          tempId: uid(),
+          nome: p.nome_titular,
+          ipi: '',
+          papel: papelContrato(p.papel),
+          percentual: p.percentual ?? 0,
+          controlado: p.papel !== 'cedente',
+          sociedade: '',
+        }))
+      }]
+    } else {
+      // Um link por cedente; editoras vão no mesmo link
+      novosLinks = cedentes.map((cedente, idx) => {
+        const editorasDoLink = editoras
+        return {
+          tempId: uid(),
+          ordem: idx + 1,
+          descricao: cedente.nome_titular + (editorasDoLink.length > 0 ? ' / ' + editorasDoLink.map(e => e.nome_titular).join(' / ') : ''),
+          controlado: editorasDoLink.length > 0,
+          percentual_controlado: editorasDoLink.reduce((s, p) => s + (p.percentual ?? 0), 0),
+          titulares: [
+            {
+              tempId: uid(),
+              nome: cedente.nome_titular,
+              ipi: '',
+              papel: papelContrato(cedente.papel),
+              percentual: cedente.percentual ?? 0,
+              controlado: false,
+              sociedade: '',
+            },
+            ...editorasDoLink.map(e => ({
+              tempId: uid(),
+              nome: e.nome_titular,
+              ipi: '',
+              papel: papelContrato(e.papel),
+              percentual: e.percentual ?? 0,
+              controlado: true,
+              sociedade: '',
+            }))
+          ]
+        }
+      })
+    }
+
+    setLinks(novosLinks)
+    setImportado(true)
+
+    // Preenche título se vazio e contrato tiver obra única
+    if (!titulo && contrato._obras?.length === 1) {
+      setTitulo(contrato._obras[0].titulo_obra)
+    }
+  }
+
+  // Step 2 — fonogramas
+  const [fonogramas, setFonogramas] = useState<Fonograma[]>([])
+
+  // Step 3 — letra
+  const [letra, setLetra] = useState('')
+  const [extracting, setExtracting] = useState(false)
+  const [extractDone, setExtractDone] = useState(false)
+
+  // Step 4 — contrato assinado
+  const [contratoFile, setContratoFile] = useState<File | null>(null)
+  const [contratoVinculadoId, setContratoVinculadoId] = useState('')
+  const [dragOver, setDragOver] = useState(false)
+
+  // Modal: novo titular rápido
+  const [showNovoTitular, setShowNovoTitular] = useState(false)
+  const [novoTitularTarget, setNovoTitularTarget] = useState<{ linkId: string; tId: string } | null>(null)
+  const [novoTitularForm, setNovoTitularForm] = useState<{
+    tipo_pessoa: 'PF' | 'PJ'; nome: string; nome_artistico: string
+    documento: string; ipi: string; sociedade: string; email: string
+  }>({ tipo_pessoa: 'PF', nome: '', nome_artistico: '', documento: '', ipi: '', sociedade: '', email: '' })
+
+  // UI
+  const [saved, setSaved] = useState(false)
+  const [savedCodigo, setSavedCodigo] = useState('')
 
   const inputCls = 'w-full h-9 bg-white/5 border border-white/[0.08] rounded-lg px-3 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 focus:bg-violet-500/5 transition-colors'
 
+  // ── Link helpers ─────────────────────────────────────────────────────────────
+
   function addLink() {
-    setLinks(prev => [...prev, { tempId: uid(), numero: prev.length + 1, descricao: '', participantes: [] }])
+    setLinks(prev => [...prev, { tempId: uid(), ordem: prev.length + 1, descricao: '', controlado: false, percentual_controlado: 0, titulares: [] }])
   }
-
   function removeLink(id: string) {
-    setLinks(prev => prev.filter(l => l.tempId !== id).map((l, i) => ({ ...l, numero: i + 1 })))
+    setLinks(prev => prev.filter(l => l.tempId !== id).map((l, i) => ({ ...l, ordem: i + 1 })))
   }
-
-  function addParticipante(linkId: string) {
+  function updateLink<K extends keyof ObraLink>(id: string, key: K, val: ObraLink[K]) {
+    setLinks(prev => prev.map(l => l.tempId === id ? { ...l, [key]: val } : l))
+  }
+  function addTitular(linkId: string) {
     setLinks(prev => prev.map(l =>
       l.tempId !== linkId ? l : {
         ...l,
-        participantes: [...l.participantes, {
-          tempId: uid(), nome: '', ipi: '', funcao: 'CA',
-          pct_exec: 0, pct_fono: 0, pct_sync: 0,
+        titulares: [...l.titulares, {
+          tempId: uid(), nome: '', ipi: '', papel: 'compositor' as PapelTitularLink,
+          percentual: 0, controlado: false, sociedade: ''
         }]
       }
     ))
   }
-
-  function updateParticipante(linkId: string, partId: string, field: string, value: string | number) {
+  function updateTitular(linkId: string, tId: string, field: string, val: string | number | boolean) {
     setLinks(prev => prev.map(l =>
       l.tempId !== linkId ? l : {
         ...l,
-        participantes: l.participantes.map(p =>
-          p.tempId !== partId ? p : { ...p, [field]: value }
-        )
+        titulares: l.titulares.map(t => t.tempId !== tId ? t : { ...t, [field]: val })
       }
     ))
   }
-
-  function removeParticipante(linkId: string, partId: string) {
+  function removeTitular(linkId: string, tId: string) {
     setLinks(prev => prev.map(l =>
-      l.tempId !== linkId ? l : {
-        ...l,
-        participantes: l.participantes.filter(p => p.tempId !== partId)
-      }
+      l.tempId !== linkId ? l : { ...l, titulares: l.titulares.filter(t => t.tempId !== tId) }
     ))
   }
 
-  const allParticipantes = links.flatMap(l => l.participantes)
-  const sumExec = allParticipantes.reduce((s, p) => s + (p.pct_exec || 0), 0)
-  const sumFono = allParticipantes.reduce((s, p) => s + (p.pct_fono || 0), 0)
-  const sumSync = allParticipantes.reduce((s, p) => s + (p.pct_sync || 0), 0)
+  // ── Fonograma helpers ─────────────────────────────────────────────────────────
 
-  const canNext0 = titulo.trim().length >= 2
-  const canNext1 = links.length > 0 && links.every(l => l.participantes.length > 0) && sumExec === 100
+  function addFonograma() {
+    setFonogramas(prev => [...prev, { tempId: uid(), titulo_fonograma: '', interprete: '', isrc: '', produtor: '' }])
+  }
+  function updateFono(id: string, field: string, val: string) {
+    setFonogramas(prev => prev.map(f => f.tempId !== id ? f : { ...f, [field]: val }))
+  }
+  function removeFono(id: string) {
+    setFonogramas(prev => prev.filter(f => f.tempId !== id))
+  }
+
+  // ── Extração de letra por IA ─────────────────────────────────────────────────
+
+  function extrairLetra() {
+    if (!titulo.trim()) return
+    setExtracting(true)
+    setExtractDone(false)
+    setTimeout(() => {
+      const chave = titulo.toLowerCase().trim()
+      const encontrada = Object.entries(LETRAS_DEMO).find(([k]) => chave.includes(k) || k.includes(chave))
+      if (encontrada) {
+        setLetra(encontrada[1])
+        setExtractDone(true)
+      } else {
+        // Gera placeholder se nao encontrar
+        setLetra(`[Texto poético de "${titulo}" extraído do contrato]\n\n— IA identificou o título mas o texto poético não estava disponível no arquivo.\nInsira manualmente abaixo.`)
+        setExtractDone(true)
+      }
+      setExtracting(false)
+    }, 2200)
+  }
+
+  // ── Upload contrato ─────────────────────────────────────────────────────────
+
+  function handleFileSelect(file: File) {
+    if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+      setContratoFile(file)
+      // IA auto-extrai a letra do contrato assim que o PDF é enviado
+      if (titulo.trim()) {
+        setExtracting(true)
+        setExtractDone(false)
+        setTimeout(() => {
+          const chave = titulo.toLowerCase().trim()
+          const encontrada = Object.entries(LETRAS_DEMO).find(([k]) => chave.includes(k) || k.includes(chave))
+          if (encontrada) {
+            setLetra(encontrada[1])
+          } else {
+            setLetra(`[Letra de "${titulo}" extraída do contrato via IA]\n\n— O texto poético foi identificado no PDF. Revise e edite se necessário.`)
+          }
+          setExtractDone(true)
+          setExtracting(false)
+        }, 2200)
+      }
+    }
+  }
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const f = e.dataTransfer.files[0]
+    if (f) handleFileSelect(f)
+  }, [])
+
+  // ── Validacoes ─────────────────────────────────────────────────────────────
+
+  const allTitulares = links.flatMap(l => l.titulares)
+  const somaPct = allTitulares.reduce((s, t) => s + (t.percentual || 0), 0)
+
+  // Validação por link: cada link deve somar 100%
+  const somasPorLink = links.map(l => ({
+    tempId: l.tempId,
+    soma: l.titulares.reduce((s, t) => s + (t.percentual || 0), 0),
+  }))
+  const todosLinksValidos = somasPorLink.every(l => Math.abs(l.soma - 100) < 0.02)
+
+  const canStep0 = titulo.trim().length >= 2
+  const canStep1 = links.length > 0 && links.every(l => l.titulares.length > 0) && todosLinksValidos
+  const canStep4 = contratoFile !== null
+
+  const pcControlado = links
+    .filter(l => l.controlado)
+    .reduce((s, l) => s + (l.percentual_controlado || 0), 0)
+
+  // ── Salvar obra ─────────────────────────────────────────────────────────────
+
+  function salvarObra() {
+        const savedCodes = (JSON.parse(localStorage.getItem('obras_salvas') ?? '[]') as {codigo:string}[]).map(o => o.codigo)
+    const MOCK_SEQS = ['TSM00001','TSM00002','TSM00003','TSM00004','TSM00005','TSM00006','TSM00007']
+    const novoCodigo = proximoCodigoObra([...MOCK_SEQS, ...savedCodes])
+    const obraData = {
+      codigo: novoCodigo,
+      titulo,
+      titulo_alternativo: tituloAlternativo,
+      subtitulo,
+      idioma,
+      genero,
+      ano_criacao: anoSriacao,
+      duracao,
+      links,
+      fonogramas,
+      letra,
+      contrato_file: contratoFile?.name,
+      contrato_vinculado_id: contratoVinculadoId,
+      status: 'validada',
+      created_at: new Date().toISOString(),
+    }
+    try {
+      const existentes = JSON.parse(localStorage.getItem('obras_salvas') || '[]')
+      localStorage.setItem('obras_salvas', JSON.stringify([...existentes, obraData]))
+    } catch {}
+    setSavedCodigo(novoCodigo)
+    setSaved(true)
+  }
+
+  // ── Tela de sucesso ─────────────────────────────────────────────────────────
+
+  if (saved) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div className="bg-[#0d1526] border border-white/[0.06] rounded-2xl p-10 flex flex-col items-center gap-5 text-center">
+          <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center">
+            <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white mb-1">Obra Validada e no Catálogo!</h2>
+            <p className="text-sm text-white/50">
+              Contrato assinado verificado — a obra foi incluída no catálogo com status <span className="text-emerald-400 font-semibold">Validada</span>.
+            </p>
+          </div>
+
+          <div className="w-full bg-white/5 rounded-xl p-4 text-left space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-white/40">Código da Obra</span>
+              <span className="font-mono font-bold text-violet-400">{savedCodigo}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-white/40">Título</span>
+              <span className="text-sm text-white/80 font-medium">{titulo}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-white/40">Status</span>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
+                Validada
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-white/40">Links</span>
+              <span className="text-sm text-white/70">{links.length}</span>
+            </div>
+            {contratoFile && (
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-white/40">Contrato</span>
+                <span className="text-xs text-emerald-400 flex items-center gap-1">
+                  <FileCheck2 className="w-3 h-3" /> {contratoFile.name}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3 w-full">
+            <button
+              onClick={() => router.push('/master/obras')}
+              className="flex-1 h-10 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2">
+              <BookOpen className="w-4 h-4" /> Ver Catálogo
+            </button>
+            <button
+              onClick={() => { setSaved(false); setStep(0); setHighestStep(0); setTitulo(''); setLinks([{ tempId: uid(), ordem: 1, descricao: '', controlado: false, percentual_controlado: 0, titulares: [] }]); setContratoFile(null); setLetra(''); }}
+              className="h-10 px-5 rounded-xl bg-white/5 border border-white/[0.08] text-sm text-white/60 hover:text-white/80 transition-colors">
+              Nova Obra
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-4xl space-y-6">
       <PageHeader
         title="Nova Obra"
-        description="Cadastre uma obra com estrutura de links e titularidade"
+        description="Cadastro completo — dados, participação, fonogramas, letra, contrato assinado e revisão"
         actions={
           <a href="/master/obras" className="h-8 px-3 rounded-lg bg-white/5 border border-white/[0.06] text-xs text-white/60 hover:text-white/80 transition-colors flex items-center">
             Cancelar
@@ -119,209 +627,606 @@ export default function NovaObraPage() {
         }
       />
 
+      {/* Regra: contrato obrigatório */}
+      <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl px-5 py-3 flex items-start gap-2">
+        <FileCheck2 className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+        <p className="text-xs text-rose-300/80">
+          <span className="font-semibold text-rose-300">Contrato obrigatório:</span> o upload do PDF do contrato assinado é <span className="font-semibold">imprescindível</span> para validar e incluir a obra no catálogo. A IA lê o contrato e extrai automaticamente a letra da obra.
+        </p>
+      </div>
+
       {/* Step indicators */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-start justify-between gap-2 overflow-x-auto pb-1">
         {STEPS.map((_, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <StepIndicator step={i} current={step} />
-            {i < STEPS.length - 1 && <ChevronRight className="w-4 h-4 text-white/20" />}
+          <div key={i} className="flex-1 flex justify-center">
+            <StepIndicator
+              idx={i}
+              current={step}
+              highest={highestStep}
+              onNavigate={navigateToStep}
+            />
           </div>
         ))}
       </div>
 
-      {/* Step 0: Dados da Obra */}
+      {/* ─────────────── Step 0: Titulo & Genero ─────────────── */}
       {step === 0 && (
         <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6 space-y-5">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-1">
             <Music2 className="w-4 h-4 text-violet-400" />
-            <h2 className="text-sm font-semibold text-white">Dados Basicos</h2>
+            <h2 className="text-sm font-semibold text-white">Dados Básicos da Obra</h2>
           </div>
+
+          {/* ── Seletor de contrato de origem ── */}
+          <div className="border border-violet-500/20 bg-violet-500/5 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-violet-400 shrink-0" />
+              <p className="text-sm font-semibold text-white">Vincular a Contrato Existente</p>
+              <span className="ml-auto text-xs text-white/30">Recomendado</span>
+            </div>
+            <p className="text-xs text-white/50">
+              Selecione o contrato já assinado. Os dados do titular, editora, percentuais e vínculos serão importados automaticamente para o passo de Links & Participação.
+            </p>
+            <div className="flex gap-2">
+              <select
+                value={contratoOrigemId}
+                onChange={e => {
+                  setContratoOrigemId(e.target.value)
+                  setImportado(false)
+                }}
+                className={inputCls + ' cursor-pointer flex-1'}
+              >
+                <option value="">Selecione um contrato...</option>
+                {MOCK_CONTRATOS_V2.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.numero} — {c.titular_principal} ({c.tipo.replace(/_/g, ' ')})
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => { if (contratoOrigemId) importarContrato(contratoOrigemId) }}
+                disabled={!contratoOrigemId}
+                className="h-9 px-4 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:pointer-events-none text-sm font-semibold text-white transition-colors flex items-center gap-1.5 shrink-0">
+                <Users className="w-4 h-4" />
+                Importar
+              </button>
+            </div>
+            {importado && contratoOrigemId && (() => {
+              const c = getContratoV2ById(contratoOrigemId)
+              if (!c) return null
+              return (
+                <div className="flex items-start gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-emerald-400">Dados importados com sucesso!</p>
+                    <p className="text-xs text-white/50 mt-0.5">
+                      {c._partes?.length ?? 0} participante(s) carregados para os Links — revise no próximo passo.
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {c._partes?.map(p => (
+                        <span key={p.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 text-[10px] text-white/60">
+                          <span className={`w-1.5 h-1.5 rounded-full ${p.papel === 'cedente' ? 'bg-sky-400' : 'bg-violet-400'}`} />
+                          {p.nome_titular} · {p.percentual}%
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div className="space-y-1.5 lg:col-span-2">
-              <label className="text-xs font-medium text-white/50">Titulo da Obra *</label>
+              <label className="text-xs font-medium text-white/50">Título da Obra *</label>
               <input type="text" value={titulo} onChange={e => setTitulo(e.target.value)}
-                placeholder="Ex: Amo Noite e Dia" className={inputCls} />
+                placeholder="Ex: Amo Noite e Dia" className={inputCls} autoFocus />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/50">Subtitulo</label>
-              <input type="text" placeholder="Opcional" className={inputCls} />
+              <label className="text-xs font-medium text-white/50">Título Alternativo</label>
+              <input type="text" value={tituloAlternativo} onChange={e => setTituloAlternativo(e.target.value)}
+                placeholder="Título alternativo ou na língua original" className={inputCls} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/50">Titulo Alternativo</label>
-              <input type="text" placeholder="Opcional" className={inputCls} />
+              <label className="text-xs font-medium text-white/50">Subtítulo</label>
+              <input type="text" value={subtitulo} onChange={e => setSubtitulo(e.target.value)}
+                placeholder="Subtítulo da obra" className={inputCls} />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-white/50">Idioma</label>
-              <select value={idioma} onChange={e => setIdioma(e.target.value)}
-                className={inputCls + ' cursor-pointer'}>
-                <option>Portugues</option>
-                <option>Ingles</option>
-                <option>Espanhol</option>
-                <option>Outro</option>
+              <select value={idioma} onChange={e => setIdioma(e.target.value)} className={inputCls + ' cursor-pointer'}>
+                <option>Portugues</option><option>Ingles</option><option>Espanhol</option><option>Outro</option>
               </select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/50">Origem do Cadastro</label>
-              <select value={origemCadastro} onChange={e => setOrigemCadastro(e.target.value)}
-                className={inputCls + ' cursor-pointer'}>
-                <option value="manual">Manual</option>
-                <option value="contrato_sistema">Via Contrato do Sistema</option>
-                <option value="migracao">Migracao</option>
+              <label className="text-xs font-medium text-white/50">Gênero Musical</label>
+              <select value={genero} onChange={e => setGenero(e.target.value)} className={inputCls + ' cursor-pointer'}>
+                <option value="">Selecione...</option>
+                {GENEROS_MUSICAIS.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
-            <div className="space-y-1.5 lg:col-span-2">
-              <label className="text-xs font-medium text-white/50">Letra (opcional)</label>
-              <textarea rows={4} placeholder="Letra da obra..." className={inputCls + ' h-auto py-2.5 resize-none'} />
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-white/50">Ano de Criação</label>
+              <input type="number" value={anoSriacao} onChange={e => setAno(e.target.value)}
+                placeholder="Ex: 2024" min="1900" max="2099" className={inputCls} />
             </div>
-            <div className="space-y-1.5 lg:col-span-2">
-              <label className="text-xs font-medium text-white/50">Observacoes</label>
-              <textarea rows={2} placeholder="Observacoes internas..." className={inputCls + ' h-auto py-2.5 resize-none'} />
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-white/50">Duração (segundos)</label>
+              <input type="number" value={duracao} onChange={e => setDuracao(e.target.value)}
+                placeholder="Ex: 214" className={inputCls} />
             </div>
           </div>
         </div>
       )}
 
-      {/* Step 1: Links */}
+      {/* ─────────────── Step 1: Links & Participacao ─────────────── */}
       {step === 1 && (
         <div className="space-y-4">
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-amber-400">Regra dos 100%</p>
-              <p className="text-xs text-white/50 mt-0.5">A soma do percentual autoral (Exec. Publica) de todos os participantes CA/A de todos os links deve ser exatamente 100%.</p>
+              <p className="text-xs font-semibold text-amber-400">Regra de Links</p>
+              <p className="text-xs text-white/50 mt-0.5">
+                Cada link agrupa um autor e sua editora (quando editado). A soma de todos os percentuais deve fechar exatamente 100%.
+                Autor sem contrato de edição fica sozinho no link com 100% CA.
+              </p>
             </div>
           </div>
 
-          {/* Percentual totals */}
           <div className="flex gap-3">
-            {[
-              { label: 'Exec. Publica', sum: sumExec, color: 'text-cyan-400' },
-              { label: 'Fonomecanico',  sum: sumFono, color: 'text-emerald-400' },
-              { label: 'Sincronizacao', sum: sumSync, color: 'text-amber-400' },
-            ].map(col => (
-              <div key={col.label} className={'flex-1 rounded-lg p-3 text-center border ' +
-                (col.sum === 100 ? 'bg-emerald-500/10 border-emerald-500/20' : col.sum > 100 ? 'bg-rose-500/10 border-rose-500/20' : 'bg-white/5 border-white/[0.06]')}>
-                <p className="text-[10px] text-white/40 mb-0.5">{col.label}</p>
-                <p className={'text-lg font-bold ' + (col.sum === 100 ? 'text-emerald-400' : col.sum > 100 ? 'text-rose-400' : col.color)}>
-                  {col.sum.toFixed(2)}%
-                </p>
-              </div>
-            ))}
+            <div className={`flex-1 rounded-xl p-3 text-center border ${todosLinksValidos ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20'}`}>
+              <p className="text-[10px] text-white/40 mb-0.5">Cada link = 100%</p>
+              <p className={`text-xl font-bold ${todosLinksValidos ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {todosLinksValidos ? '✓ OK' : `${somasPorLink.filter(l => Math.abs(l.soma - 100) >= 0.02).length} link(s) inválido(s)`}
+              </p>
+            </div>
+            <div className="flex-1 rounded-xl p-3 text-center border bg-violet-500/10 border-violet-500/20">
+              <p className="text-[10px] text-white/40 mb-0.5">Percentual Controlado</p>
+              <p className="text-xl font-bold text-violet-400">{pcControlado.toFixed(2)}%</p>
+            </div>
           </div>
 
-          {links.map((link, linkIdx) => (
-            <div key={link.tempId} className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
+          {links.map(link => {
+            const somaLink = somasPorLink.find(s => s.tempId === link.tempId)?.soma ?? 0
+            const linkValido = Math.abs(somaLink - 100) < 0.02
+            const linkVazio  = link.titulares.length === 0
+            return (
+            <div key={link.tempId} className={`bg-[#0d1526] rounded-xl overflow-hidden border ${!linkVazio && !linkValido ? 'border-rose-500/40' : 'border-white/[0.06]'}`}>
               <div className="flex items-center gap-3 px-5 py-3 border-b border-white/[0.06] bg-white/[0.02]">
-                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-violet-600 text-[10px] font-bold text-white">
-                  {link.numero}
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-violet-600 text-[10px] font-bold text-white shrink-0">
+                  {link.ordem}
                 </span>
-                <span className="text-sm font-semibold text-white/70">Link {link.numero}</span>
                 <input
-                  type="text"
-                  value={link.descricao}
-                  onChange={e => setLinks(prev => prev.map(l => l.tempId === link.tempId ? { ...l, descricao: e.target.value } : l))}
-                  placeholder="Descricao do link (opcional)"
+                  type="text" value={link.descricao}
+                  onChange={e => updateLink(link.tempId, 'descricao', e.target.value)}
+                  placeholder="Descrição do link..."
                   className="flex-1 h-7 bg-white/5 border border-white/[0.06] rounded px-2 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-violet-500/40"
                 />
+                <label className="flex items-center gap-1.5 text-xs text-white/50 cursor-pointer">
+                  <input type="checkbox" checked={link.controlado}
+                    onChange={e => updateLink(link.tempId, 'controlado', e.target.checked)}
+                    className="w-3 h-3 accent-violet-500" />
+                  Controlado
+                </label>
+                {link.controlado && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-white/40">Ctrl%</span>
+                    <input type="number" min="0" max="100" step="0.01"
+                      value={link.percentual_controlado}
+                      onChange={e => updateLink(link.tempId, 'percentual_controlado', parseFloat(e.target.value) || 0)}
+                      className="w-16 h-6 bg-violet-500/10 border border-violet-500/20 rounded px-1.5 text-xs text-violet-400 text-right tabular-nums focus:outline-none" />
+                  </div>
+                )}
                 {links.length > 1 && (
-                  <button onClick={() => removeLink(link.tempId)} className="w-6 h-6 flex items-center justify-center text-white/25 hover:text-rose-400 transition-colors">
+                  <button onClick={() => removeLink(link.tempId)}
+                    className="w-6 h-6 flex items-center justify-center text-white/25 hover:text-rose-400 transition-colors">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
 
               <div className="p-4 space-y-2">
-                {link.participantes.length === 0 && (
-                  <p className="text-xs text-white/30 text-center py-2">Nenhum participante. Adicione autores e/ou editoras.</p>
+                {link.titulares.length === 0 && (
+                  <p className="text-xs text-white/25 text-center py-3">Nenhum participante. Adicione autores, editoras ou administradoras.</p>
                 )}
-                {link.participantes.map(part => (
-                  <div key={part.tempId} className="flex items-center gap-2 p-2.5 bg-white/[0.03] rounded-lg">
-                    <input type="text" value={part.nome}
-                      onChange={e => updateParticipante(link.tempId, part.tempId, 'nome', e.target.value)}
-                      placeholder="Nome do participante" className="flex-1 h-7 bg-white/5 border border-white/[0.06] rounded px-2 text-xs text-white placeholder:text-white/20 focus:outline-none" />
-                    <input type="text" value={part.ipi}
-                      onChange={e => updateParticipante(link.tempId, part.tempId, 'ipi', e.target.value)}
-                      placeholder="IPI" className="w-20 h-7 bg-white/5 border border-white/[0.06] rounded px-2 text-xs text-white font-mono placeholder:text-white/20 focus:outline-none" />
-                    <select value={part.funcao}
-                      onChange={e => updateParticipante(link.tempId, part.tempId, 'funcao', e.target.value as FuncaoLink)}
-                      className={'w-16 h-7 rounded px-1 text-xs font-bold border-0 focus:outline-none cursor-pointer ' + FUNCAO_LINK_COLORS[part.funcao]}>
-                      <optgroup label="Autores">
-                        {FUNCOES_AUTOR.map(f => <option key={f} value={f}>{f}</option>)}
-                      </optgroup>
-                      <optgroup label="Editoras">
-                        {FUNCOES_EDITORA.map(f => <option key={f} value={f}>{f}</option>)}
-                      </optgroup>
-                    </select>
-                    {['pct_exec','pct_fono','pct_sync'].map((field, fi) => (
-                      <div key={field} className="flex flex-col items-center gap-0.5">
-                        <span className={'text-[8px] ' + ['text-cyan-500','text-emerald-500','text-amber-500'][fi]}>
-                          {['Exec','Fono','Sync'][fi]}
-                        </span>
-                        <input type="number" min="0" max="100" step="0.01"
-                          value={(part as any)[field]}
-                          onChange={e => updateParticipante(link.tempId, part.tempId, field, parseFloat(e.target.value) || 0)}
-                          className={'w-16 h-7 bg-white/5 border border-white/[0.06] rounded px-2 text-xs text-white text-right tabular-nums focus:outline-none ' + ['focus:border-cyan-500/40','focus:border-emerald-500/40','focus:border-amber-500/40'][fi]} />
-                      </div>
-                    ))}
-                    <button onClick={() => removeParticipante(link.tempId, part.tempId)}
-                      className="w-6 h-6 flex items-center justify-center text-white/25 hover:text-rose-400 transition-colors shrink-0">
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
+                {link.titulares.map(t => (
+                  <TitularRow
+                    key={t.tempId}
+                    t={t}
+                    linkId={link.tempId}
+                    onUpdate={updateTitular}
+                    onRemove={removeTitular}
+                    onOpenNovoTitular={(linkId, tId) => {
+                      setNovoTitularTarget({ linkId, tId })
+                      setShowNovoTitular(true)
+                    }}
+                  />
                 ))}
-                <button onClick={() => addParticipante(link.tempId)}
+                <button onClick={() => addTitular(link.tempId)}
                   className="flex items-center gap-1.5 w-full h-7 px-3 rounded-lg border border-dashed border-white/10 text-xs text-white/30 hover:text-white/60 hover:border-white/20 transition-colors">
                   <Plus className="w-3 h-3" /> Adicionar participante
                 </button>
+
+                {/* Alerta soma por link */}
+                {!linkVazio && (
+                  <div className={`flex items-center justify-between rounded-lg px-3 py-2 ${linkValido ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`}>
+                    <div className="flex items-center gap-2">
+                      {linkValido
+                        ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        : <AlertCircle  className="w-3.5 h-3.5 text-rose-400 shrink-0" />}
+                      <span className={`text-xs font-semibold ${linkValido ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {linkValido ? 'Soma OK — 100%' : `Soma ${somaLink.toFixed(2)}% — faltam ${(100 - somaLink).toFixed(2)}% para fechar`}
+                      </span>
+                    </div>
+                    <span className={`text-xs font-bold tabular-nums ${linkValido ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {somaLink.toFixed(2)}%
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
-          ))}
+            )
+          })}
 
           <button onClick={addLink}
-            className="flex items-center gap-2 w-full h-10 px-4 rounded-xl border-2 border-dashed border-white/10 text-sm text-white/40 hover:text-white/70 hover:border-white/20 transition-colors justify-center">
-            <Plus className="w-4 h-4" /> Adicionar Link
+            className="flex items-center justify-center gap-2 w-full h-10 rounded-xl border-2 border-dashed border-white/10 text-sm text-white/40 hover:text-white/70 hover:border-white/20 transition-colors">
+            <Plus className="w-4 h-4" /> Adicionar Link de Participação
           </button>
         </div>
       )}
 
-      {/* Step 2: Revisao */}
+      {/* Modal: Novo Titular rápido */}
+      {showNovoTitular && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#0d1526] border border-white/[0.08] rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-violet-400" />
+                <h3 className="text-sm font-bold text-white">Cadastrar Novo Titular</h3>
+              </div>
+              <button onClick={() => setShowNovoTitular(false)}
+                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/5 text-white/30 hover:text-white/60 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1 col-span-2">
+                <label className="text-xs text-white/40">Tipo de Pessoa *</label>
+                <div className="flex gap-2">
+                  {(['PF', 'PJ'] as const).map(tp => (
+                    <button key={tp} onClick={() => setNovoTitularForm(f => ({ ...f, tipo_pessoa: tp }))}
+                      className={`flex-1 h-8 rounded-lg text-xs font-semibold border transition-colors
+                        ${novoTitularForm.tipo_pessoa === tp ? 'bg-violet-600 border-violet-500 text-white' : 'bg-white/5 border-white/10 text-white/40 hover:text-white/60'}`}>
+                      {tp === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1 col-span-2">
+                <label className="text-xs text-white/40">{novoTitularForm.tipo_pessoa === 'PF' ? 'Nome Completo *' : 'Razão Social *'}</label>
+                <input type="text" value={novoTitularForm.nome}
+                  onChange={e => setNovoTitularForm(f => ({ ...f, nome: e.target.value }))}
+                  placeholder={novoTitularForm.tipo_pessoa === 'PF' ? 'Nome completo' : 'Razão social'}
+                  className={inputCls} autoFocus />
+              </div>
+              {novoTitularForm.tipo_pessoa === 'PF' && (
+                <div className="space-y-1 col-span-2">
+                  <label className="text-xs text-white/40">Nome Artístico</label>
+                  <input type="text" value={novoTitularForm.nome_artistico}
+                    onChange={e => setNovoTitularForm(f => ({ ...f, nome_artistico: e.target.value }))}
+                    placeholder="Nome artístico (opcional)" className={inputCls} />
+                </div>
+              )}
+              <div className="space-y-1">
+                <label className="text-xs text-white/40">{novoTitularForm.tipo_pessoa === 'PF' ? 'CPF' : 'CNPJ'}</label>
+                <input type="text" value={novoTitularForm.documento}
+                  onChange={e => setNovoTitularForm(f => ({ ...f, documento: e.target.value }))}
+                  placeholder={novoTitularForm.tipo_pessoa === 'PF' ? '000.000.000-00' : '00.000.000/0001-00'}
+                  className={inputCls} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-white/40">IPI / CAE</label>
+                <input type="text" value={novoTitularForm.ipi}
+                  onChange={e => setNovoTitularForm(f => ({ ...f, ipi: e.target.value }))}
+                  placeholder="Código IPI ou CAE" className={inputCls} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-white/40">Sociedade Arrecadadora</label>
+                <select value={novoTitularForm.sociedade}
+                  onChange={e => setNovoTitularForm(f => ({ ...f, sociedade: e.target.value }))}
+                  className={inputCls + ' cursor-pointer'}>
+                  <option value="">Selecione...</option>
+                  {['SOCINPRO','UBC','ABRAMUS','AMAR','ASSIM','SBACEM','SICAM'].map(s => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-white/40">Email</label>
+                <input type="email" value={novoTitularForm.email}
+                  onChange={e => setNovoTitularForm(f => ({ ...f, email: e.target.value }))}
+                  placeholder="email@exemplo.com" className={inputCls} />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => setShowNovoTitular(false)}
+                className="flex-1 h-9 rounded-xl bg-white/5 border border-white/[0.06] text-sm text-white/50 hover:text-white/70 transition-colors">
+                Cancelar
+              </button>
+              <button
+                disabled={!novoTitularForm.nome.trim()}
+                onClick={() => {
+                  if (!novoTitularForm.nome.trim()) return
+                  const nomeDisplay = novoTitularForm.nome_artistico || novoTitularForm.nome
+                  if (novoTitularTarget) {
+                    updateTitular(novoTitularTarget.linkId, novoTitularTarget.tId, 'nome', nomeDisplay)
+                    updateTitular(novoTitularTarget.linkId, novoTitularTarget.tId, 'ipi', novoTitularForm.ipi)
+                  }
+                  setShowNovoTitular(false)
+                  setNovoTitularForm({ tipo_pessoa: 'PF', nome: '', nome_artistico: '', documento: '', ipi: '', sociedade: '', email: '' })
+                  setNovoTitularTarget(null)
+                }}
+                className="flex-1 h-9 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-30 text-sm font-semibold text-white transition-colors flex items-center justify-center gap-2">
+                <Plus className="w-4 h-4" /> Cadastrar e Usar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────── Step 2: Fonogramas ─────────────── */}
       {step === 2 && (
         <div className="space-y-4">
-          <div className={'border rounded-xl p-5 ' + (sumExec === 100 && sumFono === 100 && sumSync === 100 ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20')}>
-            <div className="flex items-center gap-2 mb-3">
-              {sumExec === 100 && sumFono === 100 && sumSync === 100 ? (
-                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-              ) : (
-                <AlertCircle className="w-5 h-5 text-rose-400" />
+          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Mic2 className="w-4 h-4 text-sky-400" />
+              <h2 className="text-sm font-semibold text-white">Fonogramas</h2>
+              <span className="text-xs text-white/30 ml-auto">Opcional — pode ser adicionado depois</span>
+            </div>
+            {fonogramas.length === 0 && (
+              <p className="text-xs text-white/30 text-center py-4">Nenhum fonograma cadastrado.</p>
+            )}
+            {fonogramas.map(f => (
+              <div key={f.tempId} className="flex flex-wrap gap-2 p-3 bg-white/[0.03] rounded-lg mb-2">
+                <input type="text" value={f.titulo_fonograma} onChange={e => updateFono(f.tempId, 'titulo_fonograma', e.target.value)}
+                  placeholder="Título do fonograma" className="flex-1 min-w-[160px] h-7 bg-white/5 border border-white/[0.06] rounded px-2 text-xs text-white placeholder:text-white/20 focus:outline-none" />
+                <input type="text" value={f.interprete} onChange={e => updateFono(f.tempId, 'interprete', e.target.value)}
+                  placeholder="Intérprete" className="flex-1 min-w-[120px] h-7 bg-white/5 border border-white/[0.06] rounded px-2 text-xs text-white placeholder:text-white/20 focus:outline-none" />
+                <input type="text" value={f.isrc} onChange={e => updateFono(f.tempId, 'isrc', e.target.value)}
+                  placeholder="ISRC" className="w-28 h-7 bg-white/5 border border-white/[0.06] rounded px-2 text-xs text-white font-mono placeholder:text-white/20 focus:outline-none" />
+                <input type="text" value={f.produtor} onChange={e => updateFono(f.tempId, 'produtor', e.target.value)}
+                  placeholder="Produtor" className="flex-1 min-w-[120px] h-7 bg-white/5 border border-white/[0.06] rounded px-2 text-xs text-white placeholder:text-white/20 focus:outline-none" />
+                <button onClick={() => removeFono(f.tempId)}
+                  className="w-7 h-7 flex items-center justify-center text-white/25 hover:text-rose-400 transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+            <button onClick={addFonograma}
+              className="flex items-center gap-1.5 w-full h-8 px-3 rounded-lg border border-dashed border-white/10 text-xs text-white/30 hover:text-white/60 hover:border-white/20 transition-colors mt-2">
+              <Plus className="w-3 h-3" /> Adicionar Fonograma
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────── Step 3: Letra ─────────────── */}
+      {step === 3 && (
+        <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6 space-y-4">
+          <div className="flex items-center gap-2 mb-1">
+            <AlignLeft className="w-4 h-4 text-amber-400" />
+            <h2 className="text-sm font-semibold text-white">Texto Poético (Letra)</h2>
+            <span className="text-xs text-white/30 ml-auto">Opcional</span>
+          </div>
+
+          {/* Extração por IA */}
+          {contratoFile ? (
+            <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl p-4 flex items-start gap-3">
+              <Sparkles className="w-5 h-5 text-violet-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white mb-0.5">
+                  {extracting ? 'IA extraindo letra do contrato...' : extractDone ? 'Letra extraída pelo contrato' : 'Extrair letra do contrato via IA'}
+                </p>
+                <p className="text-xs text-white/50">
+                  Contrato anexado: <span className="text-emerald-400 font-medium">{contratoFile.name}</span>
+                  {extractDone && ' — revise o texto abaixo e edite se necessário.'}
+                </p>
+              </div>
+              {extracting && (
+                <span className="w-5 h-5 border-2 border-violet-500/30 border-t-violet-400 rounded-full animate-spin shrink-0" />
               )}
-              <span className={'text-sm font-semibold ' + (sumExec === 100 ? 'text-emerald-400' : 'text-rose-400')}>
-                {sumExec === 100 ? 'Percentuais validados — obra pronta para salvar' : 'Percentuais incorretos — corrija antes de salvar'}
+              {!extracting && !extractDone && (
+                <button
+                  onClick={extrairLetra}
+                  disabled={!titulo.trim()}
+                  className="shrink-0 flex items-center gap-1.5 h-8 px-4 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:pointer-events-none text-xs font-semibold text-white transition-colors">
+                  <Sparkles className="w-3 h-3" /> Extrair
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-start gap-3">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-400 mb-0.5">Contrato ainda não anexado</p>
+                <p className="text-xs text-white/50">
+                  A letra será extraída automaticamente pela IA ao fazer o upload do contrato PDF no próximo passo. Você também pode inserir manualmente abaixo.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {extractDone && (
+            <div className="flex items-center gap-2 text-xs text-emerald-400">
+              <CheckCircle2 className="w-4 h-4" />
+              Texto poético extraído com sucesso — revise abaixo se necessário.
+            </div>
+          )}
+
+          <textarea
+            value={letra}
+            onChange={e => { setLetra(e.target.value); setExtractDone(false) }}
+            rows={14}
+            placeholder="A IA preencherá este campo ao ler o contrato. Você também pode digitar ou colar a letra manualmente..."
+            className={inputCls + ' h-auto py-3 font-mono text-sm resize-y'}
+          />
+          {letra.length > 0 && (
+            <p className="text-xs text-white/30">{letra.length} caracteres · {letra.split('\n').length} linhas</p>
+          )}
+        </div>
+      )}
+
+      {/* ─────────────── Step 4: Contrato Assinado ─────────────── */}
+      {step === 4 && (
+        <div className="space-y-4">
+          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6 space-y-5">
+            <div className="flex items-center gap-2">
+              <FileCheck2 className="w-4 h-4 text-emerald-400" />
+              <h2 className="text-sm font-semibold text-white">Contrato Assinado</h2>
+              <span className="ml-auto text-xs font-semibold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full">Obrigatório</span>
+            </div>
+
+            <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-rose-300/80">
+                <span className="font-semibold">Sem o contrato assinado a obra não pode ser validada.</span> Anexe o PDF assinado por todas as partes (autor + responsável da editora + 2 testemunhas). A IA também lerá este arquivo para extrair a letra da obra.
+              </p>
+            </div>
+
+            {/* Zona de upload */}
+            {!contratoFile ? (
+              <div
+                onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-10 flex flex-col items-center gap-3 cursor-pointer transition-all
+                  ${dragOver ? 'border-violet-500/60 bg-violet-500/10' : 'border-rose-500/30 hover:border-rose-500/50 hover:bg-rose-500/5'}`}
+              >
+                <Upload className="w-10 h-10 text-rose-400/40" />
+                <div className="text-center">
+                  <p className="text-sm font-medium text-white/60">Arraste o PDF aqui ou clique para selecionar</p>
+                  <p className="text-xs text-white/30 mt-1">Apenas arquivos .pdf — contrato assinado por todas as partes</p>
+                </div>
+                <input ref={fileInputRef} type="file" accept=".pdf,application/pdf"
+                  className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleFileSelect(f) }} />
+              </div>
+            ) : (
+              <div className="border border-emerald-500/30 bg-emerald-500/10 rounded-xl p-5 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
+                  <FileCheck2 className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{contratoFile.name}</p>
+                  <p className="text-xs text-white/40 mt-0.5">
+                    {(contratoFile.size / 1024).toFixed(1)} KB · PDF · Contrato pronto para validação
+                  </p>
+                  {extracting && (
+                    <p className="text-xs text-violet-400 mt-1 flex items-center gap-1.5">
+                      <span className="w-3 h-3 border-2 border-violet-500/30 border-t-violet-400 rounded-full animate-spin" />
+                      IA extraindo letra da obra...
+                    </p>
+                  )}
+                  {extractDone && !extracting && (
+                    <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3 h-3" /> Letra extraída com sucesso
+                    </p>
+                  )}
+                </div>
+                <button onClick={() => { setContratoFile(null); setExtractDone(false) }}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 text-white/30 hover:text-rose-400 transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Vincular a contrato existente no sistema */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-white/50">Vincular ao Registro de Contrato no Sistema (opcional)</label>
+              <select value={contratoVinculadoId} onChange={e => setContratoVinculadoId(e.target.value)} className={inputCls + ' cursor-pointer'}>
+                <option value="">Nenhum registro vinculado</option>
+                {(MOCK_CONTRATOS_V2 as any[]).map((c: any) => (
+                  <option key={c.id} value={c.id}>
+                    {c.numero_contrato} — {c.contratante_nome ?? c.contratante_razao_social ?? c.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status */}
+            <div className={`rounded-xl p-4 border ${contratoFile ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-white/5 border-white/[0.06]'}`}>
+              <div className="flex items-center gap-2">
+                {contratoFile
+                  ? <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  : <AlertCircle className="w-4 h-4 text-white/20" />
+                }
+                <span className={`text-sm font-semibold ${contratoFile ? 'text-emerald-400' : 'text-white/30'}`}>
+                  {contratoFile ? 'Contrato anexado — obra será validada e incluída no catálogo' : 'Aguardando upload do contrato para prosseguir'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────── Step 5: Revisao ─────────────── */}
+      {step === 5 && (
+        <div className="space-y-4">
+          <div className={`border rounded-xl p-5 ${canStep1 ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20'}`}>
+            <div className="flex items-center gap-2 mb-3">
+              {canStep1
+                ? <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                : <AlertCircle className="w-5 h-5 text-rose-400" />
+              }
+              <span className={`text-sm font-semibold ${canStep1 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {canStep1 ? 'Obra válida — pronta para salvar' : 'Corrija os percentuais antes de salvar'}
               </span>
             </div>
             <div className="grid grid-cols-3 gap-3 text-center">
               {[
-                { label: 'Exec. Publica', value: sumExec, color: 'text-cyan-400' },
-                { label: 'Fonomecanico', value: sumFono, color: 'text-emerald-400' },
-                { label: 'Sincronizacao', value: sumSync, color: 'text-amber-400' },
+                { label: 'Percentual Total', value: `${somaPct.toFixed(2)}%`, ok: Math.abs(somaPct - 100) < 0.01, color: 'text-cyan-400' },
+                { label: 'Controlado', value: `${pcControlado.toFixed(2)}%`, ok: true, color: 'text-violet-400' },
+                { label: 'Fonogramas', value: fonogramas.length, ok: true, color: 'text-sky-400' },
               ].map(col => (
                 <div key={col.label} className="bg-white/5 rounded-lg p-3">
                   <p className="text-xs text-white/40">{col.label}</p>
-                  <p className={'text-xl font-bold ' + (col.value === 100 ? col.color : 'text-rose-400')}>
-                    {col.value.toFixed(2)}%
-                  </p>
+                  <p className={`text-xl font-bold ${col.ok ? col.color : 'text-rose-400'}`}>{col.value}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5 space-y-3">
+          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5 space-y-4">
             <h3 className="text-sm font-semibold text-white">Resumo da Obra</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div><p className="text-xs text-white/30">Titulo</p><p className="text-sm text-white/80 font-medium">{titulo || '—'}</p></div>
-              <div><p className="text-xs text-white/30">Idioma</p><p className="text-sm text-white/80">{idioma}</p></div>
-              <div><p className="text-xs text-white/30">Origem</p><p className="text-sm text-white/80">{origemCadastro.replace(/_/g, ' ')}</p></div>
-              <div><p className="text-xs text-white/30">Total Links</p><p className="text-sm text-white/80">{links.length}</p></div>
-              <div><p className="text-xs text-white/30">Participantes</p><p className="text-sm text-white/80">{allParticipantes.length}</p></div>
+            <div className="grid grid-cols-2 gap-y-3 gap-x-6">
+              {[
+                { label: 'Título', value: titulo || '—' },
+                { label: 'Título Alternativo', value: tituloAlternativo || '—' },
+                { label: 'Idioma', value: idioma },
+                { label: 'Gênero', value: genero || '—' },
+                { label: 'Ano', value: anoSriacao || '—' },
+                { label: 'Links', value: links.length },
+                { label: 'Participantes', value: allTitulares.length },
+                { label: 'Fonogramas', value: fonogramas.length },
+                { label: 'Letra', value: letra.length > 0 ? `${letra.length} chars` : 'Sem letra' },
+              ].map(f => (
+                <div key={f.label}>
+                  <p className="text-xs text-white/30 mb-0.5">{f.label}</p>
+                  <p className="text-sm text-white/70 font-medium">{String(f.value)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Contrato */}
+          <div className="rounded-xl p-4 border bg-emerald-500/10 border-emerald-500/20 flex items-center gap-3">
+            <FileCheck2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-emerald-400">
+                {contratoFile ? `Contrato: ${contratoFile.name}` : 'Contrato anexado'}
+              </p>
+              <p className="text-xs text-white/40 mt-0.5">
+                Status: <span className="font-semibold">Validada — entrará no catálogo</span>
+              </p>
             </div>
           </div>
         </div>
@@ -335,21 +1240,30 @@ export default function NovaObraPage() {
           className="h-9 px-5 rounded-lg bg-white/5 border border-white/[0.06] text-sm text-white/60 hover:text-white/80 disabled:opacity-30 disabled:pointer-events-none transition-colors">
           Anterior
         </button>
-        {step < STEPS.length - 1 ? (
-          <button
-            onClick={() => setStep(s => s + 1)}
-            disabled={step === 0 ? !canNext0 : !canNext1}
-            className="flex items-center gap-1.5 h-9 px-5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:pointer-events-none text-sm text-white font-semibold transition-colors">
-            Proximo <ChevronRight className="w-4 h-4" />
-          </button>
-        ) : (
-          <button
-            disabled={sumExec !== 100 || !titulo}
-            className="flex items-center gap-1.5 h-9 px-6 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 disabled:pointer-events-none text-sm text-white font-semibold transition-colors">
-            <CheckCircle2 className="w-4 h-4" /> Salvar Obra
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-white/30">Passo {step + 1} de {STEPS.length}</span>
+          {step < STEPS.length - 1 ? (
+            <button
+              onClick={() => {
+                const next = step + 1
+                setStep(next)
+                setHighestStep(h => Math.max(h, next))
+              }}
+              disabled={step === 0 ? !canStep0 : (step === 1 ? !canStep1 : (step === 4 ? !canStep4 : false))}
+              className="flex items-center gap-1.5 h-9 px-5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:pointer-events-none text-sm text-white font-semibold transition-colors">
+              Próximo <ChevronRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              onClick={salvarObra}
+              disabled={!canStep1 || !titulo || !canStep4}
+              className="flex items-center gap-1.5 h-9 px-6 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 disabled:pointer-events-none text-sm text-white font-semibold transition-colors">
+              <CheckCircle2 className="w-4 h-4" /> Salvar e Incluir no Catálogo
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
 }
+

@@ -1,215 +1,432 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
-import { FileText, Plus, Search, Filter, CheckCircle2, Clock, AlertTriangle, CalendarX2, ChevronRight } from 'lucide-react'
+import {
+  FileText, Plus, Search, Filter, CheckCircle2, Clock,
+  AlertTriangle, TrendingDown, ChevronRight, Building2, User,
+  Bell, ShieldAlert, DollarSign, Calendar, Download,
+} from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import { KpiCard } from '@/components/ui/kpi-card'
-import type { ContratoRow, StatusContrato, TipoContrato } from '@/lib/types-contratos'
+import type { TipoContratoV2, StatusContratoV2 } from '@/lib/types-contratos-v2'
 import {
-  STATUS_CONTRATO_LABELS, STATUS_CONTRATO_COLORS,
-  TIPO_CONTRATO_LABELS, TIPO_CONTRATO_COLORS,
-} from '@/lib/types-contratos'
+  TIPO_CONTRATO_V2_LABELS, TIPO_CONTRATO_V2_COLORS,
+  STATUS_CONTRATO_V2_LABELS, STATUS_CONTRATO_V2_COLORS,
+} from '@/lib/types-contratos-v2'
+import {
+  MOCK_CONTRATOS_V2, KPI_CONTRATOS_V2, ALERTAS_EXCLUSIVIDADE,
+} from '@/lib/mock-contratos-v2'
 
-const MOCK_CONTRATOS: ContratoRow[] = [
-  {
-    id: 'c1', tenant_id: 't1', numero: 'TSM-2024-001', tipo: 'cessao', status: 'em_vigor',
-    vigencia_inicio: '2024-01-10', vigencia_fim: '2026-01-10', renovacao_automatica: true,
-    created_at: '2024-01-10T10:00:00Z', updated_at: '2024-01-10T10:00:00Z',
-    titular_principal: 'Nauilan Barbosa Silva', _obras_count: 8, _assinaturas_pendentes: 0,
-  },
-  {
-    id: 'c2', tenant_id: 't1', numero: 'TSM-2024-015', tipo: 'administracao', status: 'em_vigor',
-    vigencia_inicio: '2024-03-01', vigencia_fim: '2027-03-01', renovacao_automatica: false,
-    created_at: '2024-03-01T10:00:00Z', updated_at: '2024-03-01T10:00:00Z',
-    titular_principal: 'Giovani Alves Rodrigues', _obras_count: 4, _assinaturas_pendentes: 0,
-  },
-  {
-    id: 'c3', tenant_id: 't1', numero: 'TSM-2024-032', tipo: 'edicao', status: 'aguardando_assinatura',
-    vigencia_inicio: '2024-05-20', vigencia_fim: '2027-05-20', renovacao_automatica: true,
-    created_at: '2024-05-20T10:00:00Z', updated_at: '2024-05-20T10:00:00Z',
-    titular_principal: 'Marcelo Costa Ferreira', _obras_count: 5, _assinaturas_pendentes: 2,
-  },
-  {
-    id: 'c4', tenant_id: 't1', numero: 'TSM-2024-047', tipo: 'cessao', status: 'vencendo',
-    vigencia_inicio: '2022-06-01', vigencia_fim: '2024-07-15', renovacao_automatica: false,
-    created_at: '2022-06-01T10:00:00Z', updated_at: '2022-06-01T10:00:00Z',
-    titular_principal: 'Ana Paula Santos', _obras_count: 2, _assinaturas_pendentes: 0,
-  },
-  {
-    id: 'c5', tenant_id: 't1', numero: 'TSM-2023-008', tipo: 'coedicao', status: 'revogado',
-    vigencia_inicio: '2023-01-15', vigencia_fim: '2025-01-15', renovacao_automatica: false,
-    created_at: '2023-01-15T10:00:00Z', updated_at: '2023-09-10T10:00:00Z',
-    titular_principal: 'Edi Music Editora Ltda', _obras_count: 3, _assinaturas_pendentes: 0,
-  },
-  {
-    id: 'c6', tenant_id: 't1', numero: 'TSM-2024-060', tipo: 'licenca', status: 'em_vigor',
-    vigencia_inicio: '2024-07-01', vigencia_fim: '2025-07-01', renovacao_automatica: true,
-    created_at: '2024-07-01T10:00:00Z', updated_at: '2024-07-01T10:00:00Z',
-    titular_principal: 'Joao Pedro Moraes Lima', _obras_count: 1, _assinaturas_pendentes: 0,
-  },
-  {
-    id: 'c7', tenant_id: 't1', numero: 'TSM-2024-071', tipo: 'representacao', status: 'rascunho',
-    vigencia_inicio: '2024-08-01', renovacao_automatica: false,
-    created_at: '2024-08-01T10:00:00Z', updated_at: '2024-08-01T10:00:00Z',
-    titular_principal: 'Marcelo Costa Ferreira', _obras_count: 0, _assinaturas_pendentes: 0,
-  },
-]
-
-const kpis = {
-  total: MOCK_CONTRATOS.length,
-  em_vigor: MOCK_CONTRATOS.filter(c => c.status === 'em_vigor').length,
-  pendentes: MOCK_CONTRATOS.filter(c => c.status === 'aguardando_assinatura').length,
-  vencendo: MOCK_CONTRATOS.filter(c => c.status === 'vencendo').length,
-}
-
-function formatDate(d?: string) {
+function formatDate(d?: string | null) {
   if (!d) return '—'
   return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR')
 }
 
+function formatCurrency(v: number) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+}
+
+type FilterTipo = TipoContratoV2 | 'todos'
+type FilterStatus = StatusContratoV2 | 'todos'
+type FilterEditora = string
+
+const TIPOS_FILTER: { value: FilterTipo; label: string }[] = [
+  { value: 'todos', label: 'Todos os tipos' },
+  { value: 'administracao_editorial', label: 'Adm. Editorial' },
+  { value: 'cessao_parcial', label: 'Cessao Parcial' },
+  { value: 'cessao_total', label: 'Cessao Total' },
+  { value: 'cessao_internacional', label: 'Cessao Internacional' },
+  { value: 'cessionario_pf', label: 'Cessionario PF' },
+  { value: 'cessionario_pj', label: 'Cessionario PJ' },
+  { value: 'coedicao', label: 'Coedicao' },
+  { value: 'licenciamento', label: 'Licenciamento' },
+  { value: 'exclusividade_autor_editora', label: 'Exclusividade' },
+  { value: 'licenciamento_licenciante_pf', label: 'Licenciante PF' },
+  { value: 'licenciamento_licenciante_pj', label: 'Licenciante PJ' },
+  { value: 'subedicao', label: 'Subedicao' },
+]
+
+const STATUS_FILTER: { value: FilterStatus; label: string }[] = [
+  { value: 'todos', label: 'Todos os status' },
+  { value: 'em_vigor', label: 'Em Vigor' },
+  { value: 'aguardando_assinatura', label: 'Ag. Assinatura' },
+  { value: 'vencendo', label: 'Vencendo' },
+  { value: 'rascunho', label: 'Rascunho' },
+  { value: 'vencido', label: 'Vencido' },
+  { value: 'rescindido', label: 'Rescindido' },
+]
+
 export default function ContratosPage() {
   const [search, setSearch] = useState('')
-  const [filterStatus, setFilterStatus] = useState<StatusContrato | ''>('')
-  const [filterTipo, setFilterTipo] = useState<TipoContrato | ''>('')
+  const [filterTipo, setFilterTipo] = useState<FilterTipo>('todos')
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>('todos')
+  const [filterEditora, setFilterEditora] = useState<FilterEditora>('todos')
+  const [contratosObras, setContratosObras] = useState<any[]>([])
 
-  const filtered = MOCK_CONTRATOS.filter(c => {
-    const q = search.toLowerCase()
-    const matchSearch = !q || c.numero.toLowerCase().includes(q) || c.titular_principal.toLowerCase().includes(q)
-    const matchStatus = !filterStatus || c.status === filterStatus
-    const matchTipo = !filterTipo || c.tipo === filterTipo
-    return matchSearch && matchStatus && matchTipo
-  })
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('sync_contratos_obras_v1')
+      if (raw) setContratosObras(JSON.parse(raw))
+    } catch { /* ignore */ }
+  }, [])
+
+  function downloadContratoObra(c: any, modo: 'rascunho' | 'assinado') {
+    const tipoNomes: Record<string, string> = {
+      cessao_parcial: 'Cessão Parcial', cessao_total: 'Cessão Total', coedicao: 'Coedição',
+    }
+    const partes = [
+      `Cedente: ${c.titular_nome || '—'}`,
+      ...(c.obras?.flatMap((o: any) => o.co_autores?.filter((ca: any) => ca.nome)
+        .map((ca: any) => `Co-autor: ${ca.nome}`)) || []),
+      `Responsável Editora: ${c.responsavel_editora_id || 'TOP SHOW MUSIC'}`,
+      `Testemunha 1: ${c.testemunha1_id || '—'}`,
+      `Testemunha 2: ${c.testemunha2_id || '—'}`,
+    ]
+    const obras = (c.obras || []).map((o: any, i: number) =>
+      `OBRA ${i + 1}: ${o.titulo}  |  ${c.titular_nome}: ${o.pct_autor}%` +
+      (o.co_autores?.length ? '\n  Co-autores: ' + o.co_autores.map((ca: any) => `${ca.nome} ${ca.pct}%`).join(', ') : '')
+    )
+    const txt = [
+      '='.repeat(56),
+      `  CONTRATO DE ${(tipoNomes[c.tipo] || c.tipo || '').toUpperCase()}`,
+      modo === 'assinado' ? '  *** ASSINADO PELAS PARTES ***' : '  *** RASCUNHO ***',
+      '='.repeat(56),
+      `Número       : ${c.numero}`,
+      `Data Emissão : ${c.data_emissao || '—'}`,
+      `Provedor     : ${(c.provedor_assinatura || '').toUpperCase()}`,
+      '',
+      '── OBRAS ───────────────────────────────────────────',
+      ...obras,
+      '',
+      '── PARTES ──────────────────────────────────────────',
+      ...partes.map(p => modo === 'assinado' ? p + '\n  ✓ Assinado digitalmente' : p + '\n  _________________________________'),
+      '',
+      '='.repeat(56),
+    ].join('\n')
+    const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${c.numero}_${modo}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function marcarAssinado(id: string) {
+    const updated = contratosObras.map(c => c.id === id ? { ...c, status: 'assinado' } : c)
+    setContratosObras(updated)
+    localStorage.setItem('sync_contratos_obras_v1', JSON.stringify(updated))
+  }
+
+  const editoras = useMemo(() => {
+    const nomes = [...new Set(MOCK_CONTRATOS_V2.map(c => c.editora_nome))]
+    return ['todos', ...nomes]
+  }, [])
+
+  const contratos = useMemo(() => {
+    return MOCK_CONTRATOS_V2.filter(c => {
+      if (filterTipo !== 'todos' && c.tipo !== filterTipo) return false
+      if (filterStatus !== 'todos' && c.status !== filterStatus) return false
+      if (filterEditora !== 'todos' && c.editora_nome !== filterEditora) return false
+      if (search) {
+        const q = search.toLowerCase()
+        return (
+          c.numero.toLowerCase().includes(q) ||
+          (c.titular_principal ?? '').toLowerCase().includes(q) ||
+          c.editora_nome.toLowerCase().includes(q)
+        )
+      }
+      return true
+    })
+  }, [search, filterTipo, filterStatus, filterEditora])
 
   return (
     <div className="space-y-6">
+      {/* Alerta exclusividade vencendo */}
+      {ALERTAS_EXCLUSIVIDADE.length > 0 && (
+        <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+          <ShieldAlert className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-amber-300 mb-0.5">
+              Alertas de Exclusividade
+            </p>
+            <p className="text-xs text-amber-400/80">
+              {ALERTAS_EXCLUSIVIDADE.length} contrato(s) com exclusividade autoral vencendo em menos de 90 dias.{' '}
+              <Link href="/master/contratos/alertas" className="underline hover:text-amber-300">
+                Ver alertas
+              </Link>
+            </p>
+          </div>
+        </div>
+      )}
+
       <PageHeader
-        title="Gestao de Contratos"
-        description="Contratos autorais, de cessao e administracao de direitos"
+        title="Contratos"
+        description="Motor de contratos autorais — cessoes, licencas, administracao e coedicao"
         actions={
-          <Link href="/master/contratos/novo">
-            <button className="flex items-center gap-1.5 h-9 px-4 rounded-lg bg-violet-600 hover:bg-violet-500 text-sm text-white font-semibold transition-colors">
-              <Plus className="w-4 h-4" /> Novo Contrato
-            </button>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/master/contratos/novo/obras">
+              <button className="flex items-center gap-1.5 h-9 px-4 rounded-lg bg-teal-600 hover:bg-teal-500 text-sm text-white font-semibold transition-colors">
+                <Plus className="w-4 h-4" /> Contrato de Obras
+              </button>
+            </Link>
+            <Link href="/master/contratos/novo">
+              <button className="flex items-center gap-1.5 h-9 px-4 rounded-lg bg-violet-600 hover:bg-violet-500 text-sm text-white font-semibold transition-colors">
+                <Plus className="w-4 h-4" /> Outros Contratos
+              </button>
+            </Link>
+          </div>
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard title="Total de Contratos" value={kpis.total} subtitle="todos os status" accent="violet" icon={<FileText className="w-4 h-4 text-violet-400" />} />
-        <KpiCard title="Em Vigor" value={kpis.em_vigor} subtitle="contratos ativos" accent="emerald" icon={<CheckCircle2 className="w-4 h-4 text-emerald-400" />} />
-        <KpiCard title="Pend. Assinatura" value={kpis.pendentes} subtitle="aguardando partes" accent="amber" icon={<Clock className="w-4 h-4 text-amber-400" />} />
-        <KpiCard title="Vencendo em 90d" value={kpis.vencendo} subtitle="requer renovacao" accent="rose" icon={<CalendarX2 className="w-4 h-4 text-rose-400" />} />
+      {/* KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KpiCard
+          title="Contratos Ativos"
+          value={KPI_CONTRATOS_V2.ativos}
+          subtitle={`de ${KPI_CONTRATOS_V2.total} total`}
+          accent="emerald"
+          icon={<CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+        />
+        <KpiCard
+          title="Vencendo em 90d"
+          value={KPI_CONTRATOS_V2.vencendo_90d}
+          subtitle="requerem renovacao"
+          accent="amber"
+          icon={<AlertTriangle className="w-4 h-4 text-amber-400" />}
+        />
+        <KpiCard
+          title="Recoupment Aberto"
+          value={KPI_CONTRATOS_V2.recoupment_aberto}
+          subtitle="contratos com saldo"
+          accent="rose"
+          icon={<TrendingDown className="w-4 h-4 text-rose-400" />}
+        />
+        <KpiCard
+          title="Valor Total"
+          value={formatCurrency(KPI_CONTRATOS_V2.valor_total)}
+          subtitle="em contratos ativos"
+          accent="violet"
+          icon={<DollarSign className="w-4 h-4 text-violet-400" />}
+        />
       </div>
 
-      <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4 space-y-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-48">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+      {/* Contratos de Obras (localStorage) */}
+      {contratosObras.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-bold text-white/60 uppercase tracking-wider">Contratos de Obras</p>
+            <span className="text-xs bg-teal-500/10 text-teal-400 px-2 py-0.5 rounded border border-teal-500/20">{contratosObras.length}</span>
+          </div>
+          {contratosObras.map(c => {
+            const assinado = c.status === 'assinado'
+            const tipoNomes: Record<string, string> = {
+              cessao_parcial: 'Cessão Parcial', cessao_total: 'Cessão Total', coedicao: 'Coedição',
+            }
+            return (
+              <div key={c.id} className="bg-[#0d1526] border border-teal-500/20 rounded-xl px-5 py-4">
+                <div className="flex items-start gap-4">
+                  <div className="w-9 h-9 rounded-lg bg-teal-500/10 flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-4 h-4 text-teal-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="text-sm font-semibold text-white/90">{c.numero}</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/20">
+                        {tipoNomes[c.tipo] || c.tipo}
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        assinado
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      }`}>
+                        {assinado ? '✓ Assinado' : 'Rascunho'}
+                      </span>
+                    </div>
+                    <div className="flex gap-3 text-xs text-white/40 flex-wrap">
+                      <span><User className="w-3 h-3 inline mr-1" />{c.titular_nome}</span>
+                      <span><Calendar className="w-3 h-3 inline mr-1" />{c.data_emissao}</span>
+                      <span>{(c.obras || []).length} obra(s)</span>
+                    </div>
+                  </div>
+                  {/* Ações */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => downloadContratoObra(c, 'rascunho')}
+                      title="Baixar rascunho"
+                      className="h-8 px-3 flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80 border border-white/[0.08] hover:border-white/15 rounded-lg transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Rascunho
+                    </button>
+                    {assinado ? (
+                      <button
+                        onClick={() => downloadContratoObra(c, 'assinado')}
+                        title="Baixar contrato assinado"
+                        className="h-8 px-3 flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/50 rounded-lg transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5" /> Assinado
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => marcarAssinado(c.id)}
+                        title="Marcar como assinado por todas as partes"
+                        className="h-8 px-3 flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 border border-amber-500/30 hover:border-amber-500/50 rounded-lg transition-colors"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Marcar Assinado
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Filtros */}
+      <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
             <input
-              className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-violet-500/50 transition-colors"
-              placeholder="Buscar por numero ou titular..."
+              type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
+              placeholder="Buscar por numero, titular ou editora..."
+              className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg pl-9 pr-3 text-sm text-white placeholder:text-white/30 outline-none focus:border-violet-500/40"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-white/30" />
+          <div className="flex gap-2 flex-wrap">
             <select
-              className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white/70 outline-none focus:border-violet-500/50 transition-colors"
-              value={filterStatus}
-              onChange={e => setFilterStatus(e.target.value as StatusContrato | '')}
+              value={filterTipo}
+              onChange={e => setFilterTipo(e.target.value as FilterTipo)}
+              className="h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-xs text-white/70 outline-none focus:border-violet-500/40"
             >
-              <option value="">Todos os status</option>
-              {(Object.keys(STATUS_CONTRATO_LABELS) as StatusContrato[]).map(k => (
-                <option key={k} value={k}>{STATUS_CONTRATO_LABELS[k]}</option>
+              {TIPOS_FILTER.map(t => (
+                <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
             <select
-              className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white/70 outline-none"
-              value={filterTipo}
-              onChange={e => setFilterTipo(e.target.value as TipoContrato | '')}
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value as FilterStatus)}
+              className="h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-xs text-white/70 outline-none focus:border-violet-500/40"
             >
-              <option value="">Todos os tipos</option>
-              {(Object.keys(TIPO_CONTRATO_LABELS) as TipoContrato[]).map(k => (
-                <option key={k} value={k}>{TIPO_CONTRATO_LABELS[k]}</option>
+              {STATUS_FILTER.map(s => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+            <select
+              value={filterEditora}
+              onChange={e => setFilterEditora(e.target.value)}
+              className="h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-xs text-white/70 outline-none focus:border-violet-500/40"
+            >
+              {editoras.map(e => (
+                <option key={e} value={e}>{e === 'todos' ? 'Todas as editoras' : e}</option>
               ))}
             </select>
           </div>
         </div>
-        <p className="text-xs text-white/30">{filtered.length} contrato{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}</p>
+
+        <p className="text-xs text-white/30 mt-3">
+          {contratos.length} contrato(s) encontrado(s)
+        </p>
       </div>
 
-      <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-white/[0.05]">
-              <th className="text-left px-4 py-3 text-xs font-semibold text-white/40 uppercase tracking-wider">Numero</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-white/40 uppercase tracking-wider hidden md:table-cell">Titular Principal</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-white/40 uppercase tracking-wider hidden lg:table-cell">Tipo</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-white/40 uppercase tracking-wider hidden lg:table-cell">Vigencia</th>
-              <th className="text-left px-4 py-3 text-xs font-semibold text-white/40 uppercase tracking-wider">Status</th>
-              <th className="text-center px-4 py-3 text-xs font-semibold text-white/40 uppercase tracking-wider hidden lg:table-cell">Obras</th>
-              <th className="text-right px-4 py-3 text-xs font-semibold text-white/40 uppercase tracking-wider">Acao</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/[0.04]">
-            {filtered.map(c => (
-              <tr key={c.id} className="hover:bg-white/[0.02] transition-colors group">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
-                      <FileText className="w-3.5 h-3.5 text-violet-400" />
+      {/* Lista */}
+      <div className="space-y-2">
+        {contratos.length === 0 ? (
+          <div className="text-center py-16 text-white/30 text-sm">
+            Nenhum contrato encontrado com os filtros atuais.
+          </div>
+        ) : (
+          contratos.map(c => (
+            <Link key={c.id} href={`/master/contratos/${c.id}`}>
+              <div className="group bg-[#0d1526] border border-white/[0.06] hover:border-white/10 rounded-xl px-5 py-4 transition-all cursor-pointer">
+                <div className="flex items-center gap-4">
+                  {/* Icon */}
+                  <div className="w-9 h-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-4 h-4 text-violet-400" />
+                  </div>
+
+                  {/* Main */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="text-sm font-semibold text-white/90">{c.numero}</span>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${TIPO_CONTRATO_V2_COLORS[c.tipo]}`}>
+                        {TIPO_CONTRATO_V2_LABELS[c.tipo]}
+                      </span>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_CONTRATO_V2_COLORS[c.status]}`}>
+                        {STATUS_CONTRATO_V2_LABELS[c.status]}
+                      </span>
+                      {c.exclusividade && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 font-medium">
+                          Exclusividade
+                        </span>
+                      )}
+                      {c.status === 'vencendo' && (
+                        <span className="flex items-center gap-1 text-xs text-amber-400">
+                          <Bell className="w-3 h-3" /> Vencendo em {c._dias_para_vencer}d
+                        </span>
+                      )}
                     </div>
-                    <span className="text-sm font-mono font-medium text-white">{c.numero}</span>
+                    <div className="flex items-center gap-3 text-xs text-white/40 flex-wrap">
+                      <span className="flex items-center gap-1">
+                        {c.titular_tipo_pessoa === 'PJ' ? <Building2 className="w-3 h-3" /> : <User className="w-3 h-3" />}
+                        {c.titular_principal ?? '—'}
+                      </span>
+                      <span className="text-white/20">·</span>
+                      <span className="flex items-center gap-1">
+                        <Building2 className="w-3 h-3" />
+                        {c.editora_nome}
+                      </span>
+                      <span className="text-white/20">·</span>
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        {formatDate(c.vigencia_inicio)} – {c.prazo_indeterminado ? 'Indeterminado' : formatDate(c.vigencia_fim)}
+                      </span>
+                    </div>
                   </div>
-                </td>
-                <td className="px-4 py-3 hidden md:table-cell">
-                  <span className="text-sm text-white/70">{c.titular_principal}</span>
-                </td>
-                <td className="px-4 py-3 hidden lg:table-cell">
-                  <span className={'text-xs font-semibold px-2 py-0.5 rounded-full ' + TIPO_CONTRATO_COLORS[c.tipo]}>
-                    {TIPO_CONTRATO_LABELS[c.tipo]}
-                  </span>
-                </td>
-                <td className="px-4 py-3 hidden lg:table-cell">
-                  <div className="text-xs text-white/50">
-                    <span>{formatDate(c.vigencia_inicio)}</span>
-                    {c.vigencia_fim && <span> — {formatDate(c.vigencia_fim)}</span>}
-                  </div>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className={'text-xs font-semibold px-2 py-0.5 rounded-full ' + STATUS_CONTRATO_COLORS[c.status]}>
-                      {STATUS_CONTRATO_LABELS[c.status]}
-                    </span>
-                    {c._assinaturas_pendentes > 0 && (
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+
+                  {/* Right KPIs */}
+                  <div className="hidden lg:flex items-center gap-6 text-xs text-white/40">
+                    <div className="text-right">
+                      <div className="text-white/70 font-semibold text-sm">{c._obras_count ?? 0}</div>
+                      <div>obras</div>
+                    </div>
+                    {(c._recoupment_aberto ?? 0) > 0 && (
+                      <div className="text-right">
+                        <div className="text-rose-400 font-semibold text-sm">
+                          {formatCurrency(c._recoupment_aberto!)}
+                        </div>
+                        <div>recoupment</div>
+                      </div>
+                    )}
+                    {(c._assinaturas_pendentes ?? 0) > 0 && (
+                      <div className="text-right">
+                        <div className="text-amber-400 font-semibold text-sm">{c._assinaturas_pendentes}</div>
+                        <div>pend. assinar</div>
+                      </div>
                     )}
                   </div>
-                </td>
-                <td className="px-4 py-3 text-center hidden lg:table-cell">
-                  <span className="text-sm text-white/60">{c._obras_count}</span>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <Link
-                    href={'/master/contratos/' + c.id}
-                    className="flex items-center justify-end gap-1 text-xs text-white/30 hover:text-violet-400 transition-colors group-hover:text-white/60"
-                  >
-                    Ver <ChevronRight className="w-3 h-3" />
-                  </Link>
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-white/30 text-sm">
-                  Nenhum contrato encontrado com os filtros atuais.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+
+                  <ChevronRight className="w-4 h-4 text-white/20 group-hover:text-violet-400 transition-colors flex-shrink-0" />
+                </div>
+              </div>
+            </Link>
+          ))
+        )}
+      </div>
+
+      {/* Quick links */}
+      <div className="flex gap-3 text-xs text-white/40 pt-2">
+        <Link href="/master/contratos/modelos" className="hover:text-violet-400 transition-colors">
+          Biblioteca de Modelos Juridicos
+        </Link>
+        <span>·</span>
+        <Link href="/master/contratos/alertas" className="hover:text-amber-400 transition-colors">
+          Alertas de Exclusividade
+        </Link>
       </div>
     </div>
   )

@@ -1,12 +1,13 @@
 ﻿'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 
 export function LoginForm() {
   const router = useRouter()
+  const params = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
@@ -17,16 +18,50 @@ export function LoginForm() {
     e.preventDefault()
     setError(null)
     setLoading(true)
+
     try {
       const supabase = createClient()
-      const { data, error: authErr } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-      if (authErr) { setError('E-mail ou senha incorretos.'); return }
-      const role = data.user?.user_metadata?.user_role ?? 'editora'
-      const routes: Record<string, string> = { master: '/master/dashboard', editora: '/editora/dashboard', titular: '/titular/dashboard' }
-      router.push(routes[role] ?? '/editora/dashboard')
+
+      const { data, error: authErr } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      })
+
+      if (authErr || !data.user) {
+        setError('E-mail ou senha incorretos.')
+        return
+      }
+
+      // Busca role real da tabela usuarios
+      const { data: usuario } = await supabase
+        .from('usuarios')
+        .select('role, titular_id, editora_id')
+        .eq('auth_user_id', data.user.id)
+        .single() as { data: { role: string; titular_id: string | null; editora_id: string | null } | null; error: unknown }
+
+      const role = usuario?.role ?? 'autor'
+
+      // Redireciona baseado no role real (ou redirectTo da URL)
+      const redirectTo = params.get('redirectTo')
+
+      const defaultRoutes: Record<string, string> = {
+        master: '/master/dashboard',
+        admin: '/master/dashboard',
+        editora_administrada: '/master/dashboard',
+        financeiro: '/master/dashboard',
+        juridico: '/master/dashboard',
+        atendimento: '/master/dashboard',
+        autor: '/portal/dashboard',
+      }
+
+      const dest = redirectTo ?? defaultRoutes[role] ?? '/master/dashboard'
+      router.push(dest)
       router.refresh()
-    } catch { setError('Erro inesperado. Tente novamente.') }
-    finally { setLoading(false) }
+    } catch {
+      setError('Erro inesperado. Tente novamente.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const inputCls = [
@@ -73,14 +108,18 @@ export function LoginForm() {
           </button>
         </div>
         <div className="flex justify-end">
-          <a href="/auth/reset-password" className="text-xs text-white/25 hover:text-violet-400 transition-colors">Esqueceu a senha?</a>
+          <a href="/auth/reset-password" className="text-xs text-white/25 hover:text-violet-400 transition-colors">
+            Esqueceu a senha?
+          </a>
         </div>
       </div>
+
       {error && (
         <div className="flex items-start gap-2 p-3 bg-rose-500/8 border border-rose-500/20 rounded-xl">
           <p className="text-xs text-rose-400">{error}</p>
         </div>
       )}
+
       <button
         type="submit"
         disabled={loading}

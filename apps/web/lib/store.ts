@@ -1,0 +1,120 @@
+// ============================================================
+// lib/store.ts — Camada de persistência client-side (localStorage)
+// Alimentada pelas importações (CWR, DSP TXT, etc.)
+// Lida por todos os módulos como fonte de dados primária
+// ============================================================
+
+export const STORE_KEYS = {
+  obras:      'sm_obras_v1',
+  titulares:  'sm_titulares_v1',
+  gravacoes:  'sm_gravacoes_v1',
+  contratos:  'sm_contratos_v1',
+  cc_obras:   'sm_cc_obras_v1',
+  cc_titulares: 'sm_cc_titulares_v1',
+  recebimentos: 'sm_recebimentos_v1',
+  importacoes:  'sm_importacoes_v1',  // log de arquivos importados
+} as const
+
+export type StoreKey = keyof typeof STORE_KEYS
+
+// ── Leitura ───────────────────────────────────────────────────────────────────
+
+export function getStore<T>(key: string, fallback: T[] = []): T[] {
+  if (typeof window === 'undefined') return fallback
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return fallback
+    return JSON.parse(raw) as T[]
+  } catch {
+    return fallback
+  }
+}
+
+export function getStoreObj<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return fallback
+    return JSON.parse(raw) as T
+  } catch {
+    return fallback
+  }
+}
+
+// ── Escrita ───────────────────────────────────────────────────────────────────
+
+export function setStore<T>(key: string, data: T[]): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(key, JSON.stringify(data))
+  } catch {
+    console.warn('store: localStorage write failed for', key)
+  }
+}
+
+export function setStoreObj<T>(key: string, data: T): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(key, JSON.stringify(data))
+  } catch {
+    console.warn('store: localStorage write failed for', key)
+  }
+}
+
+// ── Merge (upsert por id/codigo) ──────────────────────────────────────────────
+
+export function upsertStore<T extends { id?: string; codigo?: string }>(
+  key: string,
+  incoming: T[],
+  idField: keyof T = 'id' as keyof T
+): { inserted: number; updated: number } {
+  const existing = getStore<T>(key)
+  const map = new Map<unknown, T>()
+  for (const item of existing) map.set(item[idField], item)
+
+  let inserted = 0, updated = 0
+  for (const item of incoming) {
+    if (map.has(item[idField])) updated++
+    else inserted++
+    map.set(item[idField], item)
+  }
+
+  setStore(key, Array.from(map.values()))
+  return { inserted, updated }
+}
+
+// ── Limpar ────────────────────────────────────────────────────────────────────
+
+export function clearStore(key: string): void {
+  if (typeof window === 'undefined') return
+  localStorage.removeItem(key)
+}
+
+export function clearAllStores(): void {
+  if (typeof window === 'undefined') return
+  Object.values(STORE_KEYS).forEach(k => localStorage.removeItem(k))
+}
+
+// ── Log de importações ────────────────────────────────────────────────────────
+
+export interface ImportacaoLog {
+  id: string
+  arquivo: string
+  tipo: 'CWR' | 'DSP_TXT' | 'XLSX' | 'outro'
+  data: string
+  obras_importadas: number
+  titulares_importados: number
+  total_valor?: number
+  status: 'sucesso' | 'parcial' | 'erro'
+  detalhes?: string
+}
+
+export function registrarImportacao(log: Omit<ImportacaoLog, 'id' | 'data'>): void {
+  const logs = getStore<ImportacaoLog>(STORE_KEYS.importacoes)
+  const novo: ImportacaoLog = {
+    ...log,
+    id: `imp-${Date.now()}`,
+    data: new Date().toISOString(),
+  }
+  setStore(STORE_KEYS.importacoes, [novo, ...logs])
+}

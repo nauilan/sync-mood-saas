@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup — Alertas de Vencimento de Contratos</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0d0d14; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #fff; padding: 32px; }
+
+  h1 { font-size: 13px; font-weight: 700; color: #a78bfa; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 6px; }
+  .sub { font-size: 11px; color: rgba(255,255,255,.3); margin-bottom: 32px; }
+
+  .section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; color: rgba(255,255,255,.2); margin-bottom: 12px; margin-top: 32px; }
+
+  /* ── Banner inline no card ── */
+  .card { background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07); border-radius: 16px; overflow: hidden; margin-bottom: 10px; }
+  .card.vencido { border-color: rgba(239,68,68,.35); }
+  .card.alerta  { border-color: rgba(245,158,11,.35); }
+  .card.vigente { border-color: rgba(16,185,129,.2); }
+
+  .banner { display: flex; align-items: flex-start; gap: 10px; padding: 10px 16px; font-size: 11px; font-weight: 500; }
+  .banner.vencido { background: rgba(239,68,68,.08); border-bottom: 1px solid rgba(239,68,68,.2); color: #fca5a5; }
+  .banner.alerta  { background: rgba(245,158,11,.08); border-bottom: 1px solid rgba(245,158,11,.2); color: #fcd34d; }
+  .banner.info    { background: rgba(99,102,241,.08); border-bottom: 1px solid rgba(99,102,241,.2); color: #a5b4fc; }
+  .banner svg { flex-shrink: 0; margin-top: 1px; }
+  .banner strong { font-weight: 700; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 20px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-left: 6px; }
+  .tag.vencido { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.25); }
+  .tag.alerta  { background: rgba(245,158,11,.15); color: #fbbf24; border: 1px solid rgba(245,158,11,.25); }
+  .tag.renovar { background: rgba(99,102,241,.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,.25); }
+
+  .card-body { padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+  .tipo-badge { width: 44px; height: 44px; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0; gap: 2px; }
+  .tipo-badge .nome { font-size: 9px; font-weight: 700; text-align: center; line-height: 1.2; }
+  .tipo-badge .sigla { font-size: 8px; font-family: monospace; opacity: .5; }
+  .lpj { background: rgba(20,184,166,.1); border: 1px solid rgba(20,184,166,.2); color: #5eead4; }
+  .cpf { background: rgba(244,63,94,.1); border: 1px solid rgba(244,63,94,.2); color: #fb7185; }
+  .exc { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); color: rgba(255,255,255,.4); }
+  .cdp { background: rgba(139,92,246,.1); border: 1px solid rgba(139,92,246,.2); color: #c4b5fd; }
+
+  .card-info { flex: 1; }
+  .card-info .codigo { font-size: 10px; color: rgba(255,255,255,.25); font-family: monospace; }
+  .card-info .titulo { font-size: 13px; font-weight: 600; color: #fff; margin: 2px 0; }
+  .card-info .meta { font-size: 11px; color: rgba(255,255,255,.3); display: flex; gap: 14px; flex-wrap: wrap; margin-top: 4px; }
+  .status-pill { padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+  .pill-vencido { background: rgba(239,68,68,.1); color: #f87171; border: 1px solid rgba(239,68,68,.2); }
+  .pill-alerta  { background: rgba(245,158,11,.1); color: #fbbf24; border: 1px solid rgba(245,158,11,.2); }
+  .pill-vigente { background: rgba(16,185,129,.1); color: #34d399; border: 1px solid rgba(16,185,129,.2); }
+
+  /* ── Painel central de alertas ── */
+  .painel { background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.06); border-radius: 16px; overflow: hidden; }
+  .painel-header { padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,.06); display: flex; align-items: center; gap: 8px; }
+  .painel-header .titulo { font-size: 12px; font-weight: 700; color: #fff; }
+  .painel-header .count { font-size: 10px; padding: 1px 7px; border-radius: 20px; }
+  .painel-row { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.04); display: flex; align-items: center; gap: 12px; }
+  .painel-row:last-child { border-bottom: none; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot-red    { background: #ef4444; box-shadow: 0 0 6px rgba(239,68,68,.6); }
+  .dot-amber  { background: #f59e0b; box-shadow: 0 0 6px rgba(245,158,11,.6); }
+  .dot-indigo { background: #6366f1; box-shadow: 0 0 6px rgba(99,102,241,.6); }
+  .row-info { flex: 1; }
+  .row-info .nome { font-size: 12px; font-weight: 600; color: rgba(255,255,255,.8); }
+  .row-info .detalhe { font-size: 10px; color: rgba(255,255,255,.3); margin-top: 2px; }
+  .row-data { text-align: right; }
+  .row-data .data { font-size: 11px; font-weight: 600; color: rgba(255,255,255,.6); }
+  .row-data .dias { font-size: 10px; margin-top: 1px; }
+  .dias-venc  { color: #f87171; }
+  .dias-alerta{ color: #fbbf24; }
+  .dias-ok    { color: #a5b4fc; }
+
+  .icon { display: inline-flex; }
+</style>
+</head>
+<body>
+
+<h1>Sync Mood — Alertas de Vencimento de Contratos</h1>
+<p class="sub">Mockup visual das formas de exibição de alertas no sistema</p>
+
+<!-- ─── 1. Banner inline no card ─────────────────────── -->
+<div class="section-label">1 · Banner inline no card do contrato</div>
+
+<!-- Vencido -->
+<div class="card vencido">
+  <div class="banner vencido">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <span>
+      <strong>CONTRATO VENCIDO</strong> em <strong>10/03/2025</strong> — os direitos retornaram ao cedente.
+      Novos pagamentos ao licenciante estão <strong>bloqueados</strong>. Regularize ou encerre o contrato.
+      <span class="tag vencido">Vencido</span>
+    </span>
+  </div>
+  <div class="card-body">
+    <div class="tipo-badge lpj"><span class="nome">Lic. Licenciante PJ</span><span class="sigla">LPJ</span></div>
+    <div class="card-info">
+      <div class="codigo">LPJ001</div>
+      <div class="titulo">LICENCIAMENTO EDITORA TOP SHOW — EMPRESA X</div>
+      <div class="meta">
+        <span>📍 Brasil · 0% autor / 100% editora</span>
+        <span>🕐 Determinado · 24m · até 10/03/2025</span>
+        <span>PF e PJ</span>
+      </div>
+    </div>
+    <span class="status-pill pill-vencido">Vencido</span>
+  </div>
+</div>
+
+<!-- Alerta próximo -->
+<div class="card alerta">
+  <div class="banner alerta">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <span>
+      Vence em <strong>23 dias</strong> (15/06/2026). Ao vencer, os direitos retornam ao cedente.
+      Considere renovar ou encerrar. <span class="tag alerta">23 dias</span>
+    </span>
+  </div>
+  <div class="card-body">
+    <div class="tipo-badge cpf"><span class="nome">Cessão Cession. PF</span><span class="sigla">CPF</span></div>
+    <div class="card-info">
+      <div class="codigo">CPF002</div>
+      <div class="titulo">CESSÃO PARA CESSIONÁRIO PF — NAUILAN</div>
+      <div class="meta">
+        <span>📍 Brasil</span>
+        <span>🕐 Determinado · 36m · até 15/06/2026</span>
+        <span>Incide IRPF</span>
+      </div>
+    </div>
+    <span class="status-pill pill-alerta">23 dias</span>
+  </div>
+</div>
+
+<!-- Renovação automática próxima -->
+<div class="card alerta">
+  <div class="banner info">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span>
+      Renovação automática em <strong>45 dias</strong> (07/07/2026). O contrato será renovado por mais <strong>36 meses</strong> automaticamente.
+      <span class="tag renovar">Renova auto</span>
+    </span>
+  </div>
+  <div class="card-body">
+    <div class="tipo-badge cdp"><span class="nome">Cessão Parcial</span><span class="sigla">CDP</span></div>
+    <div class="card-info">
+      <div class="codigo">CDP001</div>
+      <div class="titulo">CESSÃO PARCIAL PADRÃO — PESSOA FÍSICA</div>
+      <div class="meta">
+        <span>📍 Brasil · 75% autor / 25% editora</span>
+        <span>🕐 Determinado · 36m · renova auto</span>
+      </div>
+    </div>
+    <span class="status-pill pill-vigente">Vigente</span>
+  </div>
+</div>
+
+<!-- ─── 2. Painel central de alertas ──────────────────── -->
+<div class="section-label">2 · Painel central de alertas (dashboard / menu)</div>
+
+<div class="painel">
+  <div class="painel-header">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+    <span class="titulo">Alertas de Contratos</span>
+    <span class="count" style="background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.2)">2 vencidos</span>
+    <span class="count" style="background:rgba(245,158,11,.1);color:#fbbf24;border:1px solid rgba(245,158,11,.2);margin-left:4px">3 próximos</span>
+  </div>
+
+  <div class="painel-row">
+    <div class="dot dot-red"></div>
+    <div class="row-info">
+      <div class="nome">LPJ001 — Licenciamento Empresa X</div>
+      <div class="detalhe">Licenciamento Licenciante PJ · Obra: Amo Noite e Dia · Titular: Nauilan</div>
+    </div>
+    <div class="row-data">
+      <div class="data">10/03/2025</div>
+      <div class="dias dias-venc">VENCIDO há 74 dias</div>
+    </div>
+  </div>
+
+  <div class="painel-row">
+    <div class="dot dot-red"></div>
+    <div class="row-info">
+      <div class="nome">LPF003 — Licenciamento João Silva</div>
+      <div class="detalhe">Licenciamento Licenciante PF · Obra: Saudade Demais · Titular: Carlos</div>
+    </div>
+    <div class="row-data">
+      <div class="data">01/04/2025</div>
+      <div class="dias dias-venc">VENCIDO há 52 dias</div>
+    </div>
+  </div>
+
+  <div class="painel-row">
+    <div class="dot dot-amber"></div>
+    <div class="row-info">
+      <div class="nome">CPF002 — Cessão PF Nauilan</div>
+      <div class="detalhe">Cessão Cessionário PF · Obra: Coração Partido · Incide IRPF</div>
+    </div>
+    <div class="row-data">
+      <div class="data">15/06/2026</div>
+      <div class="dias dias-alerta">Vence em 23 dias</div>
+    </div>
+  </div>
+
+  <div class="painel-row">
+    <div class="dot dot-amber"></div>
+    <div class="row-info">
+      <div class="nome">EXC001 — Exclusividade Autor × Editora</div>
+      <div class="detalhe">Exclusividade · Titular: Maria Oliveira · Bloqueio de novas obras</div>
+    </div>
+    <div class="row-data">
+      <div class="data">30/06/2026</div>
+      <div class="dias dias-alerta">Vence em 38 dias</div>
+    </div>
+  </div>
+
+  <div class="painel-row">
+    <div class="dot dot-amber"></div>
+    <div class="row-info">
+      <div class="nome">CDP001 — Cessão Parcial PF</div>
+      <div class="detalhe">Cessão Parcial · 75% autor / 25% editora · Renovação automática</div>
+    </div>
+    <div class="row-data">
+      <div class="data">07/07/2026</div>
+      <div class="dias dias-ok">Renova auto em 45 dias</div>
+    </div>
+  </div>
+</div>
+
+<p style="font-size:10px;color:rgba(255,255,255,.15);margin-top:24px;text-align:center">
+  Sync Mood — Mockup de Alertas de Vencimento de Contratos
+</p>
+
+</body>
+</html>

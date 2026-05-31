@@ -1,0 +1,599 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - link "sync.mood Gestão Inteligente" [ref=e5] [cursor=pointer]:
+        - /url: /
+        - img [ref=e7]
+        - generic [ref=e11]:
+          - generic [ref=e12]: sync.mood
+          - generic [ref=e13]: Gestão Inteligente
+      - navigation [ref=e14]:
+        - list [ref=e16]:
+          - listitem [ref=e17]:
+            - link "Visao Geral" [ref=e18] [cursor=pointer]:
+              - /url: /master/dashboard
+              - img [ref=e19]
+              - generic [ref=e24]: Visao Geral
+        - generic [ref=e25]:
+          - paragraph [ref=e26]: M1 Cadastros
+          - list [ref=e27]:
+            - listitem [ref=e28]:
+              - link "Titulares" [ref=e29] [cursor=pointer]:
+                - /url: /master/titulares
+                - img [ref=e30]
+                - generic [ref=e35]: Titulares
+            - listitem [ref=e36]:
+              - link "Editoras Administradas" [ref=e37] [cursor=pointer]:
+                - /url: /master/editoras
+                - img [ref=e38]
+                - generic [ref=e42]: Editoras Administradas
+            - listitem [ref=e43]:
+              - link "Editoras / Master" [ref=e44] [cursor=pointer]:
+                - /url: /master/editora
+                - img [ref=e45]
+                - generic [ref=e48]: Editoras / Master
+            - listitem [ref=e49]:
+              - link "Contratos-Tipo" [ref=e50] [cursor=pointer]:
+                - /url: /master/contratos-tipo
+                - img [ref=e51]
+                - generic [ref=e54]: Contratos-Tipo
+        - generic [ref=e55]:
+          - paragraph [ref=e56]: M2 Contratos
+          - list [ref=e57]:
+            - listitem [ref=e58]:
+              - link "Contratos" [ref=e59] [cursor=pointer]:
+                - /url: /master/contratos
+                - img [ref=e60]
+                - generic [ref=e63]: Contratos
+            - listitem [ref=e64]:
+              - link "Modelos Juridicos" [ref=e65] [cursor=pointer]:
+                - /url: /master/contratos/modelos
+                - img [ref=e66]
+                - generic [ref=e68]: Modelos Juridicos
+            - listitem [ref=e69]:
+              - link "Alertas Exclusividade" [ref=e70] [cursor=pointer]:
+                - /url: /master/contratos/alertas
+                - img [ref=e71]
+                - generic [ref=e73]: Alertas Exclusividade
+        - generic [ref=e74]:
+          - paragraph [ref=e75]: M3 Obras
+          - list [ref=e76]:
+            - listitem [ref=e77]:
+              - link "Obras" [ref=e78] [cursor=pointer]:
+                - /url: /master/obras
+                - img [ref=e79]
+                - generic [ref=e83]: Obras
+            - listitem [ref=e84]:
+              - link "Catalogo (Nova Obra)" [ref=e85] [cursor=pointer]:
+                - /url: /master/obras/nova
+                - img [ref=e86]
+                - generic [ref=e88]: Catalogo (Nova Obra)
+        - generic [ref=e89]:
+          - paragraph [ref=e90]: M4 Autorizacoes
+          - list [ref=e91]:
+            - listitem [ref=e92]:
+              - link "Autorizacoes" [ref=e93] [cursor=pointer]:
+                - /url: /master/autorizacoes
+                - img [ref=e94]
+                - generic [ref=e96]: Autorizacoes
+            - listitem [ref=e97]:
+              - link "Orcamentos" [ref=e98] [cursor=pointer]:
+                - /url: /master/autorizacoes/orcamentos
+                - img [ref=e99]
+                - generic [ref=e104]: Orcamentos
+            - listitem [ref=e105]:
+              - link "Tipos de Uso" [ref=e106] [cursor=pointer]:
+                - /url: /master/autorizacoes/tipos-uso
+                - img [ref=e107]
+                - generic [ref=e111]: Tipos de Uso
+            - listitem [ref=e112]:
+              - link "Precificacao" [ref=e113] [cursor=pointer]:
+                - /url: /master/autorizacoes/precificacao
+                - img [ref=e114]
+                - generic [ref=e116]: Precificacao
+            - listitem [ref=e117]:
+              - link "Nova Autorizacao" [ref=e118] [cursor=pointer]:
+                - /url: /master/autorizacoes/nova
+                - img [ref=e119]
+                - generic [ref=e122]: Nova Autorizacao
+        - generic [ref=e123]:
+          - paragraph [ref=e124]: M5 BACKOFFICE
+          - list [ref=e125]:
+            - listitem [ref=e126]:
+              - link "BACKOFFICE" [ref=e127] [cursor=pointer]:
+                - /url: /master/backoffice
+                - img [ref=e128]
+                - generic [ref=e132]: BACKOFFICE
+            - listitem [ref=e133]:
+              - link "Importacao" [ref=e134] [cursor=pointer]:
+                - /url: /master/backoffice/importacao
+                - img [ref=e135]
+                - generic [ref=e138]: Importacao
+            - listitem [ref=e139]:
+              - link "Matching de Obras" [ref=e140] [cursor=pointer]:
+                - /url: /master/backoffice/matching
+                - img [ref=e141]
+                - generic [ref=e146]: Matching de Obras
+            - listitem [ref=e147]:
+              - link "Match Lista ONI" [ref=e148] [cursor=pointer]:
+                - /url: /master/backoffice/match-lista-oni
+                - img [ref=e149]
+                - generic [ref=e153]: Match Lista ONI
+            - listitem [ref=e154]:
+              - link "Relatorios BO" [ref=e155] [cursor=pointer]:
+                - /url: /master/backoffice/relatorios
+                - img [ref=e156]
+                - generic [ref=e158]: Relatorios BO
+            - listitem [ref=e159]:
+              - link "Exportacoes (CWR)" [ref=e160] [cursor=pointer]:
+                - /url: /master/backoffice/exportacoes
+                - img [ref=e161]
+                - generic [ref=e164]: Exportacoes (CWR)
+            - listitem [ref=e165]:
+              - link "Config BackOffice" [ref=e166] [cursor=pointer]:
+                - /url: /master/backoffice/configuracoes
+                - img [ref=e167]
+                - generic [ref=e170]: Config BackOffice
+        - generic [ref=e171]:
+          - paragraph [ref=e172]: M6 Recebimentos
+          - list [ref=e173]:
+            - listitem [ref=e174]:
+              - link "Recebimentos" [ref=e175] [cursor=pointer]:
+                - /url: /master/recebimentos
+                - img [ref=e176]
+                - generic [ref=e178]: Recebimentos
+            - listitem [ref=e179]:
+              - link "Importar" [ref=e180] [cursor=pointer]:
+                - /url: /master/recebimentos/importar
+                - img [ref=e181]
+                - generic [ref=e184]: Importar
+            - listitem [ref=e185]:
+              - link "SOCINPRO / ECAD" [ref=e186] [cursor=pointer]:
+                - /url: /master/recebimentos/socinpro
+                - img [ref=e187]
+                - generic [ref=e192]: SOCINPRO / ECAD
+            - listitem [ref=e193]:
+              - link "Divergencias" [ref=e194] [cursor=pointer]:
+                - /url: /master/recebimentos/divergencias
+                - img [ref=e195]
+                - generic [ref=e197]: Divergencias
+            - listitem [ref=e198]:
+              - link "Fontes" [ref=e199] [cursor=pointer]:
+                - /url: /master/recebimentos/fontes
+                - img [ref=e200]
+                - generic [ref=e203]: Fontes
+        - generic [ref=e204]:
+          - paragraph [ref=e205]: M6 TV Audiovisual
+          - list [ref=e206]:
+            - listitem [ref=e207]:
+              - link "TV Dashboard" [ref=e208] [cursor=pointer]:
+                - /url: /master/tv/dashboard
+                - img [ref=e209]
+                - generic [ref=e211]: TV Dashboard
+            - listitem [ref=e212]:
+              - link "TV Importacoes" [ref=e213] [cursor=pointer]:
+                - /url: /master/tv/importacoes
+                - img [ref=e214]
+                - generic [ref=e217]: TV Importacoes
+            - listitem [ref=e218]:
+              - link "Execucoes TV" [ref=e219] [cursor=pointer]:
+                - /url: /master/tv/execucoes
+                - img [ref=e220]
+                - generic [ref=e223]: Execucoes TV
+            - listitem [ref=e224]:
+              - link "Divergencias TV" [ref=e225] [cursor=pointer]:
+                - /url: /master/tv/divergencias
+                - img [ref=e226]
+                - generic [ref=e228]: Divergencias TV
+            - listitem [ref=e229]:
+              - link "Precificacao TV" [ref=e230] [cursor=pointer]:
+                - /url: /master/tv/precificacao
+                - img [ref=e231]
+                - generic [ref=e233]: Precificacao TV
+            - listitem [ref=e234]:
+              - link "Autorizacoes TV" [ref=e235] [cursor=pointer]:
+                - /url: /master/tv/autorizacoes
+                - img [ref=e236]
+                - generic [ref=e238]: Autorizacoes TV
+            - listitem [ref=e239]:
+              - link "Cobranca TV" [ref=e240] [cursor=pointer]:
+                - /url: /master/tv/cobranca
+                - img [ref=e241]
+                - generic [ref=e244]: Cobranca TV
+            - listitem [ref=e245]:
+              - link "TV Home" [ref=e246] [cursor=pointer]:
+                - /url: /master/tv
+                - img [ref=e247]
+                - generic [ref=e250]: TV Home
+        - generic [ref=e251]:
+          - paragraph [ref=e252]: M7 Conciliacao
+          - list [ref=e253]:
+            - listitem [ref=e254]:
+              - link "Conciliacoes" [ref=e255] [cursor=pointer]:
+                - /url: /master/conciliacao
+                - img [ref=e256]
+                - generic [ref=e258]: Conciliacoes
+            - listitem [ref=e259]:
+              - link "Divergencias Conc." [ref=e260] [cursor=pointer]:
+                - /url: /master/conciliacao/divergencias
+                - img [ref=e261]
+                - generic [ref=e263]: Divergencias Conc.
+        - generic [ref=e264]:
+          - paragraph [ref=e265]: M8 Distribuicao
+          - list [ref=e266]:
+            - listitem [ref=e267]:
+              - link "Distribuicoes" [ref=e268] [cursor=pointer]:
+                - /url: /master/distribuicao
+                - img [ref=e269]
+                - generic [ref=e272]: Distribuicoes
+            - listitem [ref=e273]:
+              - link "Nova Distribuicao" [ref=e274] [cursor=pointer]:
+                - /url: /master/distribuicao/nova
+                - img [ref=e275]
+                - generic [ref=e278]: Nova Distribuicao
+            - listitem [ref=e279]:
+              - link "Recoupment" [ref=e280] [cursor=pointer]:
+                - /url: /master/distribuicao/recoupment
+                - img [ref=e281]
+                - generic [ref=e284]: Recoupment
+        - generic [ref=e285]:
+          - paragraph [ref=e286]: M9 Conta Corrente
+          - list [ref=e287]:
+            - listitem [ref=e288]:
+              - link "CC Obras" [ref=e289] [cursor=pointer]:
+                - /url: /master/cc-obra
+                - img [ref=e290]
+                - generic [ref=e294]: CC Obras
+            - listitem [ref=e295]:
+              - link "CC Titulares" [ref=e296] [cursor=pointer]:
+                - /url: /master/cc-titular
+                - img [ref=e297]
+                - generic [ref=e302]: CC Titulares
+            - listitem [ref=e303]:
+              - link "Dashboard Obras" [ref=e304] [cursor=pointer]:
+                - /url: /master/cc-obra/dashboard
+                - img [ref=e305]
+                - generic [ref=e307]: Dashboard Obras
+            - listitem [ref=e308]:
+              - link "Dashboard Titulares" [ref=e309] [cursor=pointer]:
+                - /url: /master/cc-titular/dashboard
+                - img [ref=e310]
+                - generic [ref=e312]: Dashboard Titulares
+        - generic [ref=e313]:
+          - paragraph [ref=e314]: M10 Prestacao de Contas
+          - list [ref=e315]:
+            - listitem [ref=e316]:
+              - link "Prestacoes" [ref=e317] [cursor=pointer]:
+                - /url: /master/prestacao-contas
+                - img [ref=e318]
+                - generic [ref=e321]: Prestacoes
+            - listitem [ref=e322]:
+              - link "Nova Prestacao" [ref=e323] [cursor=pointer]:
+                - /url: /master/prestacao-contas/nova
+                - img [ref=e324]
+                - generic [ref=e329]: Nova Prestacao
+            - listitem [ref=e330]:
+              - link "Contestacoes" [ref=e331] [cursor=pointer]:
+                - /url: /master/prestacao-contas/contestacoes
+                - img [ref=e332]
+                - generic [ref=e334]: Contestacoes
+            - listitem [ref=e335]:
+              - link "Automacao" [ref=e336] [cursor=pointer]:
+                - /url: /master/prestacao-contas/automacao
+                - img [ref=e337]
+                - generic [ref=e340]: Automacao
+        - generic [ref=e341]:
+          - paragraph [ref=e342]: M11 Financeiro
+          - list [ref=e343]:
+            - listitem [ref=e344]:
+              - link "Dashboard Financeiro" [ref=e345] [cursor=pointer]:
+                - /url: /master/financeiro-m11
+                - img [ref=e346]
+                - generic [ref=e348]: Dashboard Financeiro
+            - listitem [ref=e349]:
+              - link "Contas a Pagar" [ref=e350] [cursor=pointer]:
+                - /url: /master/financeiro-m11/contas-pagar
+                - img [ref=e351]
+                - generic [ref=e356]: Contas a Pagar
+            - listitem [ref=e357]:
+              - link "Contas a Receber" [ref=e358] [cursor=pointer]:
+                - /url: /master/financeiro-m11/contas-receber
+                - img [ref=e359]
+                - generic [ref=e362]: Contas a Receber
+            - listitem [ref=e363]:
+              - link "Fluxo de Caixa" [ref=e364] [cursor=pointer]:
+                - /url: /master/financeiro-m11/fluxo-caixa
+                - img [ref=e365]
+                - generic [ref=e367]: Fluxo de Caixa
+            - listitem [ref=e368]:
+              - link "Conciliacao Bancaria" [ref=e369] [cursor=pointer]:
+                - /url: /master/financeiro-m11/conciliacao-bancaria
+                - img [ref=e370]
+                - generic [ref=e372]: Conciliacao Bancaria
+            - listitem [ref=e373]:
+              - link "Contas Bancarias" [ref=e374] [cursor=pointer]:
+                - /url: /master/financeiro-m11/contas-bancarias
+                - img [ref=e375]
+                - generic [ref=e380]: Contas Bancarias
+        - generic [ref=e381]:
+          - paragraph [ref=e382]: M12-13 Relatorios & BI
+          - list [ref=e383]:
+            - listitem [ref=e384]:
+              - link "Relatorios" [ref=e385] [cursor=pointer]:
+                - /url: /master/relatorios
+                - img [ref=e386]
+                - generic [ref=e388]: Relatorios
+            - listitem [ref=e389]:
+              - link "Obras" [ref=e390] [cursor=pointer]:
+                - /url: /master/relatorios/obras
+                - img [ref=e391]
+                - generic [ref=e395]: Obras
+            - listitem [ref=e396]:
+              - link "Obras Gravadas" [ref=e397] [cursor=pointer]:
+                - /url: /master/relatorios/obras-gravadas
+                - img [ref=e398]
+                - generic [ref=e402]: Obras Gravadas
+            - listitem [ref=e403]:
+              - link "Titulares" [ref=e404] [cursor=pointer]:
+                - /url: /master/relatorios/titulares
+                - img [ref=e405]
+                - generic [ref=e410]: Titulares
+            - listitem [ref=e411]:
+              - link "Contratos" [ref=e412] [cursor=pointer]:
+                - /url: /master/relatorios/contratos
+                - img [ref=e413]
+                - generic [ref=e416]: Contratos
+            - listitem [ref=e417]:
+              - link "Autorizacoes" [ref=e418] [cursor=pointer]:
+                - /url: /master/relatorios/autorizacoes
+                - img [ref=e419]
+                - generic [ref=e421]: Autorizacoes
+            - listitem [ref=e422]:
+              - link "Recebimentos" [ref=e423] [cursor=pointer]:
+                - /url: /master/relatorios/recebimentos
+                - img [ref=e424]
+                - generic [ref=e427]: Recebimentos
+            - listitem [ref=e428]:
+              - link "CC Obras" [ref=e429] [cursor=pointer]:
+                - /url: /master/relatorios/cc-obras
+                - img [ref=e430]
+                - generic [ref=e434]: CC Obras
+            - listitem [ref=e435]:
+              - link "CC Titulares" [ref=e436] [cursor=pointer]:
+                - /url: /master/relatorios/cc-titulares
+                - img [ref=e437]
+                - generic [ref=e442]: CC Titulares
+            - listitem [ref=e443]:
+              - link "Financeiros" [ref=e444] [cursor=pointer]:
+                - /url: /master/relatorios/financeiros
+                - img [ref=e445]
+                - generic [ref=e447]: Financeiros
+            - listitem [ref=e448]:
+              - link "Royalties Futuros" [ref=e449] [cursor=pointer]:
+                - /url: /master/relatorios/royalties-futuros
+                - img [ref=e450]
+                - generic [ref=e453]: Royalties Futuros
+            - listitem [ref=e454]:
+              - link "BI Estrategico" [ref=e455] [cursor=pointer]:
+                - /url: /master/relatorios/bi-estrategico
+                - img [ref=e456]
+                - generic [ref=e459]: BI Estrategico
+            - listitem [ref=e460]:
+              - link "Auditoria" [ref=e461] [cursor=pointer]:
+                - /url: /master/relatorios/auditoria
+                - img [ref=e462]
+                - generic [ref=e464]: Auditoria
+        - generic [ref=e465]:
+          - paragraph [ref=e466]: M14 Configuracoes
+          - list [ref=e467]:
+            - listitem [ref=e468]:
+              - link "Configuracoes" [ref=e469] [cursor=pointer]:
+                - /url: /master/configuracoes
+                - img [ref=e470]
+                - generic [ref=e473]: Configuracoes
+            - listitem [ref=e474]:
+              - link "Usuarios" [ref=e475] [cursor=pointer]:
+                - /url: /master/configuracoes/usuarios
+                - img [ref=e476]
+                - generic [ref=e481]: Usuarios
+            - listitem [ref=e482]:
+              - link "Perfis" [ref=e483] [cursor=pointer]:
+                - /url: /master/configuracoes/perfis
+                - img [ref=e484]
+                - generic [ref=e486]: Perfis
+            - listitem [ref=e487]:
+              - link "Permissoes" [ref=e488] [cursor=pointer]:
+                - /url: /master/configuracoes/permissoes
+                - img [ref=e489]
+                - generic [ref=e491]: Permissoes
+            - listitem [ref=e492]:
+              - link "Modelos Contrato" [ref=e493] [cursor=pointer]:
+                - /url: /master/configuracoes/modelos-contrato
+                - img [ref=e494]
+                - generic [ref=e497]: Modelos Contrato
+            - listitem [ref=e498]:
+              - link "Modelos Autorizacao" [ref=e499] [cursor=pointer]:
+                - /url: /master/configuracoes/modelos-autorizacao
+                - img [ref=e500]
+                - generic [ref=e502]: Modelos Autorizacao
+            - listitem [ref=e503]:
+              - link "Parametros" [ref=e504] [cursor=pointer]:
+                - /url: /master/configuracoes/parametros
+                - img [ref=e505]
+                - generic [ref=e508]: Parametros
+            - listitem [ref=e509]:
+              - link "Tipos Direitos" [ref=e510] [cursor=pointer]:
+                - /url: /master/configuracoes/tipos-direitos
+                - img [ref=e511]
+                - generic [ref=e515]: Tipos Direitos
+            - listitem [ref=e516]:
+              - link "Integracoes" [ref=e517] [cursor=pointer]:
+                - /url: /master/configuracoes/integracoes
+                - img [ref=e518]
+                - generic [ref=e520]: Integracoes
+            - listitem [ref=e521]:
+              - link "Auditoria Config" [ref=e522] [cursor=pointer]:
+                - /url: /master/configuracoes/auditoria
+                - img [ref=e523]
+                - generic [ref=e525]: Auditoria Config
+      - generic [ref=e526]:
+        - generic [ref=e527]:
+          - img [ref=e529]
+          - generic [ref=e533]:
+            - paragraph [ref=e534]: Sol de Janeiro
+            - paragraph [ref=e535]: Ana Silva, Joao Marques
+        - generic [ref=e536]:
+          - generic [ref=e537]:
+            - generic [ref=e538]: 1:23
+            - generic [ref=e542]: 3:47
+          - generic [ref=e543]:
+            - button [ref=e544]:
+              - img [ref=e545]
+            - button [ref=e547]:
+              - img [ref=e548]
+            - button [ref=e550]:
+              - img [ref=e551]
+      - button "ML Marina Lopes Editora Top Show" [ref=e554]:
+        - generic [ref=e555]: ML
+        - generic [ref=e556]:
+          - paragraph [ref=e557]: Marina Lopes
+          - paragraph [ref=e558]: Editora Top Show
+        - img [ref=e559]
+      - button "Marina Lopes master" [ref=e563]:
+        - img [ref=e565]
+        - generic [ref=e567]:
+          - paragraph [ref=e568]: Marina Lopes
+          - paragraph [ref=e569]: master
+        - img [ref=e570]
+    - generic [ref=e572]:
+      - banner [ref=e573]:
+        - generic [ref=e575]:
+          - img
+          - textbox "Buscar obras, autores, ISWC, gravacoes, contratos..." [ref=e576]
+          - generic [ref=e578]: ⌘K
+        - generic [ref=e579]:
+          - button [ref=e580]:
+            - img [ref=e581]
+          - button "3" [ref=e584]:
+            - img [ref=e585]
+            - generic [ref=e588]: "3"
+          - button [ref=e589]:
+            - img [ref=e590]
+          - button "ML Marina Lopes" [ref=e594]:
+            - generic [ref=e595]: ML
+            - generic [ref=e596]: Marina Lopes
+            - img [ref=e597]
+      - main [ref=e599]:
+        - generic [ref=e600]:
+          - generic [ref=e602]:
+            - heading "Matching de Obras" [level=1] [ref=e603]
+            - paragraph [ref=e604]: Cruze automaticamente as linhas de royalties recebidos com o catálogo da editora. Valide ou corrija os matches manualmente.
+          - generic [ref=e605]:
+            - generic [ref=e606]:
+              - paragraph [ref=e607]: "2"
+              - paragraph [ref=e608]: Validados
+            - generic [ref=e609]:
+              - paragraph [ref=e610]: "0"
+              - paragraph [ref=e611]: Identificados
+            - generic [ref=e612]:
+              - paragraph [ref=e613]: "1"
+              - paragraph [ref=e614]: Possível Match
+            - generic [ref=e615]:
+              - paragraph [ref=e616]: "2"
+              - paragraph [ref=e617]: Não Identificados
+          - generic [ref=e618]:
+            - generic [ref=e619]:
+              - img [ref=e620]
+              - textbox "Buscar por título ou autor..." [ref=e623]
+            - combobox [ref=e624]:
+              - option "Todos Status" [selected]
+              - option "Identificado"
+              - option "Possível"
+              - option "Não Identificado"
+              - option "Validado"
+              - option "Rejeitado"
+            - button "Enviar para Conta Corrente" [ref=e625]:
+              - img [ref=e626]
+              - text: Enviar para Conta Corrente
+          - generic [ref=e629]:
+            - generic [ref=e630]:
+              - paragraph [ref=e631]: Obra (BackOffice)
+              - paragraph [ref=e632]: Obra no Catálogo
+              - paragraph [ref=e633]: Tipo
+              - paragraph [ref=e634]: Royalty Líq.
+              - paragraph [ref=e635]: Score
+              - paragraph [ref=e636]: Status
+              - paragraph [ref=e637]: Ações
+            - generic [ref=e638]:
+              - generic [ref=e639]:
+                - paragraph [ref=e640]: AMOR DE VERDADE
+                - paragraph [ref=e641]: NAUILAN / FERNANDO SILVA
+                - paragraph [ref=e642]: "Interp: NAUILAN"
+              - paragraph [ref=e644]: AMOR DE VERDADE
+              - generic [ref=e645]: Mecânico
+              - paragraph [ref=e646]: R$ 1.125,72
+              - generic [ref=e651]: 100%
+              - generic [ref=e652]: Validado
+              - button "Editar" [ref=e654]:
+                - img [ref=e655]
+            - generic [ref=e657]:
+              - generic [ref=e658]:
+                - paragraph [ref=e659]: SAUDADE DO NORTE
+                - paragraph [ref=e660]: JOAQUIM FERREIRA / MARIA COSTA
+                - paragraph [ref=e661]: "Interp: JOAQUIM FERREIRA"
+              - paragraph [ref=e663]: SAUDADE DO NORTE
+              - generic [ref=e664]: Performance
+              - paragraph [ref=e665]: R$ 801,36
+              - generic [ref=e670]: 95%
+              - generic [ref=e671]: Validado
+              - button "Editar" [ref=e679]:
+                - img [ref=e680]
+            - generic [ref=e682]:
+              - generic [ref=e683]:
+                - paragraph [ref=e684]: CORAÇÃO PARTIDO
+                - paragraph [ref=e685]: ROBERTO ALVES
+                - paragraph [ref=e686]: "Interp: ROBERTO ALVES"
+              - paragraph [ref=e688]: CORACAO PARTIDO
+              - generic [ref=e689]: Mecânico
+              - paragraph [ref=e690]: R$ 432,00
+              - generic [ref=e695]: 72%
+              - generic [ref=e696]: Possível
+              - generic [ref=e697]:
+                - button "Validar" [ref=e698]:
+                  - img [ref=e699]
+                - button "Rejeitar" [ref=e701]:
+                  - img [ref=e702]
+                - button "Editar" [ref=e704]:
+                  - img [ref=e705]
+            - generic [ref=e707]:
+              - generic [ref=e708]:
+                - paragraph [ref=e709]: MINHA LUZ
+                - paragraph [ref=e710]: AUTORIA DESCONHECIDA
+              - paragraph [ref=e712]: —
+              - generic [ref=e713]: Mecânico
+              - paragraph [ref=e714]: R$ 288,45
+              - generic [ref=e718]: 0%
+              - generic [ref=e719]: Não Identificado
+              - button "Editar" [ref=e721]:
+                - img [ref=e722]
+            - generic [ref=e724]:
+              - generic [ref=e725]:
+                - paragraph [ref=e726]: TERRA NATAL
+                - paragraph [ref=e727]: CARLOS DRUMMOND
+              - paragraph [ref=e729]: —
+              - generic [ref=e730]: Sincronia
+              - paragraph [ref=e731]: R$ 4.950,00
+              - generic [ref=e736]: 18%
+              - generic [ref=e737]: Não Identificado
+              - button "Editar" [ref=e739]:
+                - img [ref=e740]
+          - generic [ref=e742]:
+            - paragraph [ref=e743]: Regras de Matching Automático
+            - list [ref=e744]:
+              - listitem [ref=e745]: "Score ≥ 90%: Match por ISWC, ISRC ou título + autor exato → Identificado"
+              - listitem [ref=e746]: "Score 60-89%: Match por similaridade de título + autor → Possível Match (requer validação manual)"
+              - listitem [ref=e747]: "Score < 60%: Obra não reconhecida → Não Identificado (ONI)"
+              - listitem [ref=e748]: "Validado manualmente: liberado para lançamento em Conta Corrente"
+  - button "Open Next.js Dev Tools" [ref=e754] [cursor=pointer]:
+    - img [ref=e755]
+  - alert [ref=e758]

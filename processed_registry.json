@@ -1,0 +1,78 @@
+{
+  "statements": {
+    "ST505168": {
+      "arquivo": "TOP SHOW MUSIC LIMIT - IMUSICA S.A. - DIST - 2026-04-17 - - ST505168.TXT",
+      "caminho": "C:\\Users\\Usuário\\Downloads\\aquivos de pgto backoffice\\TOP SHOW MUSIC LIMIT - IMUSICA S.A. - DIST - 2026-04-17 - - ST505168.TXT",
+      "source": "IMUSICA",
+      "processado_em": "2026-05-27 10:10:02",
+      "hash": "ebef852a1f92472f6e7c5008cef4a1bc5bc1d38bd3961d7f6b6a2e4092f805c1"
+    },
+    "ST492348": {
+      "arquivo": "EDI MUSIC - SPOTIFY - DIST - 2026-03-25 - - ST492348.TXT",
+      "caminho": "C:\\Users\\Usuário\\Downloads\\aquivos de pgto backoffice\\EDI MUSIC - SPOTIFY - DIST - 2026-03-25 - - ST492348.TXT",
+      "source": "SPOTIFY",
+      "processado_em": "2026-05-27 10:10:02",
+      "hash": "c460f76be6d72cf9e0d7e1d568e6ef09f974c08c59254ede604473bffd64c94d"
+    },
+    "ST492347": {
+      "arquivo": "TOP SHOW MUSIC LIMIT - SPOTIFY - DIST - 2026-03-25 - - ST492347.TXT",
+      "caminho": "C:\\Users\\Usuário\\Downloads\\aquivos de pgto backoffice\\TOP SHOW MUSIC LIMIT - SPOTIFY - DIST - 2026-03-25 - - ST492347.TXT",
+      "source": "SPOTIFY",
+      "processado_em": "2026-05-27 10:10:02",
+      "hash": "fb103c91093e67715b383cd2eae93538c303cb4783164490e9a1de626aaa30d5"
+    },
+    "ST514893": {
+      "arquivo": "TOP SHOW MUSIC LIMIT - YOUTUBE - DIST - 2026-05-20 - - ST514893.TXT",
+      "caminho": "C:\\Users\\Usuário\\Downloads\\aquivos de pgto backoffice\\TOP SHOW MUSIC LIMIT - YOUTUBE - DIST - 2026-05-20 - - ST514893.TXT",
+      "source": "YOUTUBE",
+      "processado_em": "2026-05-27 10:10:02",
+      "hash": "59ad5a84125cb48736f9f71a2465fa4c58ddc67bf5a58ff2357f4e31c8b30ee6"
+    },
+    "ST516090": {
+      "arquivo": "EDI MUSIC - YOUTUBE - DIST - 2026-05-20 - - ST516090.TXT",
+      "caminho": "C:\\Users\\Usuário\\Downloads\\aquivos de pgto backoffice\\EDI MUSIC - YOUTUBE - DIST - 2026-05-20 - - ST516090.TXT",
+      "source": "YOUTUBE",
+      "processado_em": "2026-05-27 10:10:02",
+      "hash": "ff99bdaa1682de30a86c8d29f8f9828e60c7ef6cc383298ef18f59c36c022e09"
+    },
+    "ST516089": {
+      "arquivo": "TOP SHOW MUSIC LIMIT - YOUTUBE - DIST - 2026-05-20 - - ST516089.TXT",
+      "caminho": "C:\\Users\\Usuário\\Downloads\\aquivos de pgto backoffice\\TOP SHOW MUSIC LIMIT - YOUTUBE - DIST - 2026-05-20 - - ST516089.TXT",
+      "source": "YOUTUBE",
+      "processado_em": "2026-05-27 10:10:02",
+      "hash": "38febe6f4606456431fcdc4de23d0e8268da8b7fe3a5f433b7f2c03503038bd0"
+    },
+    "ST510639": {
+      "arquivo": "LR EDICOES MUSICAIS - YOUTUBE - DIST - 2026-05-12 - - ST510639.TXT",
+      "caminho": "C:\\Users\\Usuário\\Downloads\\aquivos de pgto backoffice\\LR EDICOES MUSICAIS - YOUTUBE - DIST - 2026-05-12 - - ST510639.TXT",
+      "source": "YOUTUBE",
+      "processado_em": "2026-05-27 10:10:02",
+      "hash": "4728647162b94a6381e6de7ce7777fbb807f608547187122ba07d888308425ff"
+    },
+    "ST510633": {
+      "arquivo": "EDI MUSIC - YOUTUBE - DIST - 2026-05-12 - - ST510633.TXT",
+      "caminho": "C:\\Users\\Usuário\\Downloads\\aquivos de pgto backoffice\\EDI MUSIC - YOUTUBE - DIST - 2026-05-12 - - ST510633.TXT",
+      "source": "YOUTUBE",
+      "processado_em": "2026-05-27 10:10:02",
+      "hash": "463d7e2ab1857eea44e49f980f90ddb37ce3f501f67de1fe8f3c7b295c9a6142"
+    },
+    "ST510632": {
+      "arquivo": "TOP SHOW MUSIC LIMIT - YOUTUBE - DIST - 2026-05-12 - - ST510632.TXT",
+      "caminho": "C:\\Users\\Usuário\\Downloads\\aquivos de pgto backoffice\\TOP SHOW MUSIC LIMIT - YOUTUBE - DIST - 2026-05-12 - - ST510632.TXT",
+      "source": "YOUTUBE",
+      "processado_em": "2026-05-27 10:10:02",
+      "hash": "619977097c9ab01f1215aefbaadcb054e59c314c3b8b116249b25da09ad1d72f"
+    }
+  },
+  "file_hashes": {
+    "ebef852a1f92472f6e7c5008cef4a1bc5bc1d38bd3961d7f6b6a2e4092f805c1": "ST505168",
+    "c460f76be6d72cf9e0d7e1d568e6ef09f974c08c59254ede604473bffd64c94d": "ST492348",
+    "fb103c91093e67715b383cd2eae93538c303cb4783164490e9a1de626aaa30d5": "ST492347",
+    "59ad5a84125cb48736f9f71a2465fa4c58ddc67bf5a58ff2357f4e31c8b30ee6": "ST514893",
+    "ff99bdaa1682de30a86c8d29f8f9828e60c7ef6cc383298ef18f59c36c022e09": "ST516090",
+    "38febe6f4606456431fcdc4de23d0e8268da8b7fe3a5f433b7f2c03503038bd0": "ST516089",
+    "4728647162b94a6381e6de7ce7777fbb807f608547187122ba07d888308425ff": "ST510639",
+    "463d7e2ab1857eea44e49f980f90ddb37ce3f501f67de1fe8f3c7b295c9a6142": "ST510633",
+    "619977097c9ab01f1215aefbaadcb054e59c314c3b8b116249b25da09ad1d72f": "ST510632"
+  }
+}

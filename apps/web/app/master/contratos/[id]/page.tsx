@@ -1,350 +1,482 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  ChevronLeft, FileText, Users, Music, Shield, AlignLeft, Activity,
-  CheckCircle2, Clock, XCircle, Printer, Download, AlertOctagon,
+  FileText, ChevronLeft, Users, ShieldCheck, Music, Pen,
+  TrendingDown, GitBranch, Clock, Info, Building2, User,
+  CheckCircle2, AlertCircle, Download, Plus, RefreshCw,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
-import { Badge } from '@/components/ui/badge'
-import type { ContratoRow, AssinaturaContrato, ContratoObra, EventoAuditoria, StatusAssinatura } from '@/lib/types-contratos'
 import {
-  STATUS_CONTRATO_LABELS, STATUS_CONTRATO_COLORS,
-  TIPO_CONTRATO_LABELS, TIPO_CONTRATO_COLORS,
-  STATUS_ASSINATURA_LABELS, STATUS_ASSINATURA_COLORS,
-  DIREITO_LABELS,
-} from '@/lib/types-contratos'
-import type { DireitoCedido } from '@/lib/types-contratos'
+  TIPO_CONTRATO_V2_LABELS, TIPO_CONTRATO_V2_COLORS,
+  STATUS_CONTRATO_V2_LABELS, STATUS_CONTRATO_V2_COLORS,
+  CODIGO_DIREITO_LABELS, PAPEL_PARTE_LABELS, PROVEDOR_ASSINATURA_LABELS,
+} from '@/lib/types-contratos-v2'
+import { CONTRATOS_V2_MAP } from '@/lib/mock-contratos-v2'
+import { MODELOS_JURIDICOS_V2, renderTemplate } from '@/lib/modelos-juridicos-v2'
 
-// ─── Mock data ─────────────────────────────────────────────────────────────────
-
-const MOCK_CONTRATOS: Record<string, ContratoRow> = {
-  c1: {
-    id: 'c1', tenant_id: 't1', numero: 'TSM-2024-001', tipo: 'cessao', status: 'em_vigor',
-    vigencia_inicio: '2024-01-10', vigencia_fim: '2026-01-10', renovacao_automatica: true,
-    clausulas_extras: 'O cedente autoriza o uso em plataformas de streaming sem remuneracao adicional pelo periodo inicial de 12 meses.',
-    observacoes: 'Contrato principal do catalogo Nauilan 2024.',
-    created_at: '2024-01-10T10:00:00Z', updated_at: '2024-01-10T10:00:00Z',
-    titular_principal: 'Nauilan Barbosa Silva', _obras_count: 8, _assinaturas_pendentes: 0,
-  },
-  c3: {
-    id: 'c3', tenant_id: 't1', numero: 'TSM-2024-032', tipo: 'edicao', status: 'aguardando_assinatura',
-    vigencia_inicio: '2024-05-20', vigencia_fim: '2027-05-20', renovacao_automatica: true,
-    created_at: '2024-05-20T10:00:00Z', updated_at: '2024-05-20T10:00:00Z',
-    titular_principal: 'Marcelo Costa Ferreira', _obras_count: 5, _assinaturas_pendentes: 2,
-  },
-}
-
-const MOCK_ASSINATURAS: Record<string, AssinaturaContrato[]> = {
-  c1: [
-    { id: 'a1', contrato_id: 'c1', parte_id: 'p1', nome_parte: 'Nauilan Barbosa Silva', tipo_parte: 'cedente', status: 'assinado', data_assinatura: '2024-01-10T14:32:00Z', ip_origem: '187.32.x.x', hash_documento: 'sha256:ab12cd34ef56' },
-    { id: 'a2', contrato_id: 'c1', parte_id: 'p3', nome_parte: 'Edi Music Editora Ltda', tipo_parte: 'cessionario', status: 'assinado', data_assinatura: '2024-01-10T15:10:00Z', ip_origem: '200.45.x.x', hash_documento: 'sha256:ab12cd34ef56' },
-  ],
-  c3: [
-    { id: 'a3', contrato_id: 'c3', parte_id: 'p4', nome_parte: 'Marcelo Costa Ferreira', tipo_parte: 'cedente', status: 'pendente' },
-    { id: 'a4', contrato_id: 'c3', parte_id: 'p3', nome_parte: 'Edi Music Editora Ltda', tipo_parte: 'cessionario', status: 'pendente' },
-  ],
-}
-
-const MOCK_OBRAS_VINC: Record<string, ContratoObra[]> = {
-  c1: [
-    { id: 'co1', contrato_id: 'c1', obra_id: 'o1', titulo_obra: 'Amo Noite e Dia', codigo_obra: 'OBR-001', percentual: 50, vigencia_inicio: '2024-01-10', vigencia_fim: '2026-01-10', direitos_cedidos: ['exec_publica', 'fonomecanico', 'sincronizacao'] },
-    { id: 'co2', contrato_id: 'c1', obra_id: 'o2', titulo_obra: 'Deixa eu Te Amar', codigo_obra: 'OBR-006', percentual: 37.5, vigencia_inicio: '2024-01-10', vigencia_fim: '2026-01-10', direitos_cedidos: ['exec_publica', 'fonomecanico'] },
-    { id: 'co3', contrato_id: 'c1', obra_id: 'o3', titulo_obra: 'Sol da Manha', codigo_obra: 'OBR-003', percentual: 100, vigencia_inicio: '2024-01-10', direitos_cedidos: ['todos'] },
-  ],
-  c3: [
-    { id: 'co4', contrato_id: 'c3', obra_id: 'o4', titulo_obra: 'Tempo de Amar', codigo_obra: 'OBR-004', percentual: 50, direitos_cedidos: ['exec_publica'] },
-  ],
-}
-
-const MOCK_AUDITORIA: Record<string, EventoAuditoria[]> = {
-  c1: [
-    { id: 'ev1', contrato_id: 'c1', tipo_evento: 'criacao', descricao: 'Contrato criado pelo usuario admin@syncmood.com.br', usuario: 'admin@syncmood.com.br', ip: '10.0.0.1', created_at: '2024-01-10T10:00:00Z' },
-    { id: 'ev2', contrato_id: 'c1', tipo_evento: 'assinatura', descricao: 'Assinatura recebida de Nauilan Barbosa Silva (cedente)', usuario: 'nauilan@email.com', ip: '187.32.x.x', created_at: '2024-01-10T14:32:00Z' },
-    { id: 'ev3', contrato_id: 'c1', tipo_evento: 'assinatura', descricao: 'Assinatura recebida de Edi Music Editora Ltda (cessionario)', usuario: 'contato@edimusic.com', ip: '200.45.x.x', created_at: '2024-01-10T15:10:00Z' },
-    { id: 'ev4', contrato_id: 'c1', tipo_evento: 'status', descricao: 'Status alterado para Em Vigor', usuario: 'sistema', created_at: '2024-01-10T15:10:01Z' },
-  ],
-  c3: [
-    { id: 'ev5', contrato_id: 'c3', tipo_evento: 'criacao', descricao: 'Contrato criado pelo usuario admin@syncmood.com.br', usuario: 'admin@syncmood.com.br', created_at: '2024-05-20T10:00:00Z' },
-    { id: 'ev6', contrato_id: 'c3', tipo_evento: 'notificacao', descricao: 'Notificacao de assinatura enviada para as partes', usuario: 'sistema', created_at: '2024-05-20T10:01:00Z' },
-  ],
-}
-
-const CLAUSULAS_PADRAO = `CONTRATO DE CESSAO DE DIREITOS AUTORAIS
-
-Pelo presente instrumento particular, as partes abaixo qualificadas celebram o presente Contrato de Cessao de Direitos Autorais, que se regerá pelas seguintes clausulas e condicoes:
-
-CLAUSULA PRIMEIRA - DO OBJETO
-O CEDENTE cede ao CESSIONARIO, em carater exclusivo e definitivo, os direitos patrimoniais de autor sobre as obras musicais listadas no Anexo I deste instrumento, incluindo os direitos de execucao publica, reproducao fonomecanica e sincronizacao audiovisual.
-
-CLAUSULA SEGUNDA - DA VIGENCIA
-O presente contrato vigorara pelo prazo estabelecido no preambulo, podendo ser renovado por igual periodo mediante acordo expresso das partes.
-
-CLAUSULA TERCEIRA - DA REMUNERACAO
-O CESSIONARIO pagara ao CEDENTE royalties na forma e periodicidade estabelecidos no Anexo II, calculados sobre os valores efetivamente arrecadados pelas sociedades autorais competentes.
-
-CLAUSULA QUARTA - DAS OBRIGACOES DO CESSIONARIO
-a) Registrar as obras cedidas nas sociedades autorais competentes;
-b) Prestar contas mensalmente ao CEDENTE;
-c) Defender os direitos autorais cedidos contra quaisquer violacoes.
-
-CLAUSULA QUINTA - DO FORO
-As partes elegem o foro da comarca de Sao Paulo/SP para dirimir quaisquer controversias oriundas deste contrato.`
-
-// ─── Helpers ───────────────────────────────────────────────────────────────────
-
-function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex items-start justify-between py-2.5 border-b border-white/[0.04] last:border-0">
-      <span className="text-xs text-white/40 w-40 flex-shrink-0">{label}</span>
-      <span className="text-sm text-white/80 text-right">{value || <span className="text-white/20">—</span>}</span>
-    </div>
-  )
-}
-
-function AssinaturaIcon({ status }: { status: StatusAssinatura }) {
-  if (status === 'assinado') return <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-  if (status === 'recusado') return <XCircle className="w-4 h-4 text-rose-400" />
-  return <Clock className="w-4 h-4 text-amber-400" />
-}
-
-function formatDt(d?: string) {
-  if (!d) return '—'
-  return new Date(d).toLocaleString('pt-BR')
-}
-
-// ─── Page ──────────────────────────────────────────────────────────────────────
-
-type Tab = 'informacoes' | 'obras' | 'assinaturas' | 'clausulas' | 'auditoria'
-
-const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'informacoes', label: 'Informacoes', icon: <FileText className="w-4 h-4" /> },
-  { id: 'obras',       label: 'Obras',       icon: <Music className="w-4 h-4" /> },
-  { id: 'assinaturas', label: 'Assinaturas', icon: <Shield className="w-4 h-4" /> },
-  { id: 'clausulas',   label: 'Clausulas',   icon: <AlignLeft className="w-4 h-4" /> },
-  { id: 'auditoria',   label: 'Auditoria',   icon: <Activity className="w-4 h-4" /> },
+const TABS = [
+  { id: 'resumo',     label: 'Resumo',    icon: Info },
+  { id: 'partes',     label: 'Partes',    icon: Users },
+  { id: 'direitos',   label: 'Direitos',  icon: ShieldCheck },
+  { id: 'obras',      label: 'Obras & Links', icon: Music },
+  { id: 'assinaturas',label: 'Assinaturas', icon: Pen },
+  { id: 'recoupment', label: 'Recoupment', icon: TrendingDown },
+  { id: 'aditivos',   label: 'Aditivos',  icon: GitBranch },
+  { id: 'historico',  label: 'Historico', icon: Clock },
+  { id: 'pdf',        label: 'PDF',       icon: FileText },
 ]
 
-export default function ContratoDetalhePage() {
+function formatDate(d?: string | null) {
+  if (!d) return '—'
+  return new Date(d).toLocaleDateString('pt-BR')
+}
+
+function formatCurrency(v: number) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+export default function ContratoDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const [tab, setTab] = useState<Tab>('informacoes')
+  const [tab, setTab] = useState('resumo')
 
-  const contrato = MOCK_CONTRATOS[id] ?? MOCK_CONTRATOS['c1']
-  const assinaturas = MOCK_ASSINATURAS[id] ?? []
-  const obras = MOCK_OBRAS_VINC[id] ?? []
-  const auditoria = MOCK_AUDITORIA[id] ?? []
+  const contrato = CONTRATOS_V2_MAP[id]
+
+  if (!contrato) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <FileText className="w-12 h-12 text-white/20" />
+        <p className="text-white/40">Contrato nao encontrado</p>
+        <Link href="/master/contratos" className="text-violet-400 hover:text-violet-300 text-sm">
+          Voltar para Contratos
+        </Link>
+      </div>
+    )
+  }
+
+  const modelo = MODELOS_JURIDICOS_V2.find(m => m.id === contrato.modelo_juridico_id)
+
+  // ── Tab: Resumo ──────────────────────────────────────────────────────────
+  const tabResumo = () => (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <p className="text-xs text-white/40 mb-1">Numero</p>
+          <p className="text-base font-bold text-white/90">{contrato.numero}</p>
+        </div>
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <p className="text-xs text-white/40 mb-1">Tipo</p>
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${TIPO_CONTRATO_V2_COLORS[contrato.tipo]}`}>
+            {TIPO_CONTRATO_V2_LABELS[contrato.tipo]}
+          </span>
+        </div>
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <p className="text-xs text-white/40 mb-1">Status</p>
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_CONTRATO_V2_COLORS[contrato.status]}`}>
+            {STATUS_CONTRATO_V2_LABELS[contrato.status]}
+          </span>
+        </div>
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <p className="text-xs text-white/40 mb-1">Editora</p>
+          <p className="text-sm text-white/80">{contrato.editora_nome}</p>
+        </div>
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <p className="text-xs text-white/40 mb-1">Titular Principal</p>
+          <p className="text-sm text-white/80 flex items-center gap-1.5">
+            {contrato.titular_tipo_pessoa === 'PJ' ? <Building2 className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
+            {contrato.titular_principal ?? '—'}
+          </p>
+        </div>
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <p className="text-xs text-white/40 mb-1">Territorio</p>
+          <p className="text-sm text-white/80">{contrato.territorio_principal}</p>
+        </div>
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <p className="text-xs text-white/40 mb-1">Vigencia Inicio</p>
+          <p className="text-sm text-white/80">{formatDate(contrato.vigencia_inicio)}</p>
+        </div>
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <p className="text-xs text-white/40 mb-1">Vigencia Fim</p>
+          <p className="text-sm text-white/80">
+            {contrato.prazo_indeterminado ? 'Indeterminado' : formatDate(contrato.vigencia_fim)}
+          </p>
+        </div>
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <p className="text-xs text-white/40 mb-1">Modelo Juridico</p>
+          <p className="text-sm text-white/80">{modelo?.nome ?? '—'}</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className={`bg-white/[0.03] border rounded-xl p-3 ${contrato.exclusividade ? 'border-rose-500/20' : 'border-white/[0.06]'}`}>
+          <p className="text-xs text-white/40 mb-1">Exclusividade</p>
+          <p className={`text-sm font-semibold ${contrato.exclusividade ? 'text-rose-400' : 'text-white/50'}`}>
+            {contrato.exclusividade ? 'Sim' : 'Nao'}
+          </p>
+        </div>
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
+          <p className="text-xs text-white/40 mb-1">Clausula Reversao</p>
+          <p className="text-sm font-semibold text-white/70">
+            {contrato.clausula_reversao ? `Sim (${contrato.prazo_reversao_anos}a)` : 'Nao'}
+          </p>
+        </div>
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
+          <p className="text-xs text-white/40 mb-1">Obras Vinculadas</p>
+          <p className="text-sm font-bold text-violet-400">{contrato._obras_count ?? 0}</p>
+        </div>
+        {(contrato._recoupment_aberto ?? 0) > 0 && (
+          <div className="bg-rose-500/[0.05] border border-rose-500/15 rounded-xl p-3">
+            <p className="text-xs text-rose-400/70 mb-1">Recoupment Aberto</p>
+            <p className="text-sm font-bold text-rose-400">{formatCurrency(contrato._recoupment_aberto!)}</p>
+          </div>
+        )}
+      </div>
+      {contrato.observacoes && (
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <p className="text-xs text-white/40 mb-2">Observacoes</p>
+          <p className="text-sm text-white/70 leading-relaxed">{contrato.observacoes}</p>
+        </div>
+      )}
+    </div>
+  )
+
+  // ── Tab: Partes ──────────────────────────────────────────────────────────
+  const tabPartes = () => (
+    <div className="space-y-3">
+      {(contrato._partes ?? []).map(p => (
+        <div key={p.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 flex items-center gap-4">
+          <div className="w-9 h-9 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0">
+            {p.tipo_pessoa === 'PJ' ? <Building2 className="w-4 h-4 text-violet-400" /> : <User className="w-4 h-4 text-violet-400" />}
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-white/90">{p.nome_titular}</p>
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              <span className="text-xs bg-white/[0.06] text-white/50 px-1.5 py-0.5 rounded">
+                {PAPEL_PARTE_LABELS[p.papel]}
+              </span>
+              <span className="text-xs text-white/40">{p.tipo_pessoa}</span>
+              {p.irpf_incide && (
+                <span className="text-xs bg-orange-500/10 text-orange-400 px-1.5 py-0.5 rounded">IRPF</span>
+              )}
+            </div>
+          </div>
+          {p.percentual != null && (
+            <div className="text-right">
+              <p className="text-lg font-bold text-violet-400">{p.percentual}%</p>
+            </div>
+          )}
+        </div>
+      ))}
+      {/* Validacao soma percentuais */}
+      {contrato._partes && (
+        <div className="text-xs text-white/40 px-1">
+          Soma: {contrato._partes.reduce((s, p) => s + (p.percentual ?? 0), 0)}%
+          {contrato._partes.reduce((s, p) => s + (p.percentual ?? 0), 0) !== 100 && (
+            <span className="text-amber-400 ml-1">(deve somar 100%)</span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+
+  // ── Tab: Direitos ────────────────────────────────────────────────────────
+  const tabDireitos = () => {
+    const dirs = contrato._direitos ?? []
+    const br = dirs.filter(d => d.codigo.startsWith('BR_'))
+    const ext = dirs.filter(d => d.codigo.startsWith('EXT_'))
+    return (
+      <div className="space-y-5">
+        {br.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-violet-400 mb-3">Brasil (BR) — {br.filter(d => d.ativo).length} ativos</p>
+            <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl overflow-hidden">
+              {br.map((d, i) => (
+                <div key={d.id} className={`flex items-center gap-4 px-4 py-3 ${i < br.length - 1 ? 'border-b border-white/[0.04]' : ''} ${!d.ativo ? 'opacity-40' : ''}`}>
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${d.ativo ? 'bg-violet-400' : 'bg-white/20'}`} />
+                  <span className="text-xs text-white/70 flex-1">{CODIGO_DIREITO_LABELS[d.codigo as keyof typeof CODIGO_DIREITO_LABELS]}</span>
+                  <span className="text-xs font-semibold text-violet-300">{d.pct_titular}% / {d.pct_editora}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {ext.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-sky-400 mb-3">Exterior (EXT) — {ext.filter(d => d.ativo).length} ativos</p>
+            <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl overflow-hidden">
+              {ext.map((d, i) => (
+                <div key={d.id} className={`flex items-center gap-4 px-4 py-3 ${i < ext.length - 1 ? 'border-b border-white/[0.04]' : ''} ${!d.ativo ? 'opacity-40' : ''}`}>
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${d.ativo ? 'bg-sky-400' : 'bg-white/20'}`} />
+                  <span className="text-xs text-white/70 flex-1">{CODIGO_DIREITO_LABELS[d.codigo as keyof typeof CODIGO_DIREITO_LABELS]}</span>
+                  <span className="text-xs font-semibold text-sky-300">{d.pct_titular}% / {d.pct_editora}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <p className="text-xs text-white/30">Formato: % Titular / % Editora por direito</p>
+      </div>
+    )
+  }
+
+  // ── Tab: Obras & Links ───────────────────────────────────────────────────
+  const tabObras = () => (
+    <div className="space-y-3">
+      {(contrato._obras ?? []).map(o => (
+        <div key={o.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+          <div className="flex items-start justify-between mb-2">
+            <div>
+              <p className="text-sm font-semibold text-white/90">{o.titulo_obra}</p>
+              <p className="text-xs text-white/40 mt-0.5">{o.codigo_obra}</p>
+            </div>
+            <span className="text-xs text-violet-400 font-semibold">{o.percentual_autor}% autor</span>
+          </div>
+          <div className="flex items-center gap-4 text-xs text-white/40">
+            <span>Inicio: {formatDate(o.vigencia_inicio)}</span>
+            <span>Fim: {formatDate(o.vigencia_fim)}</span>
+            {o.iswc && <span>ISWC: {o.iswc}</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+
+  // ── Tab: Assinaturas ─────────────────────────────────────────────────────
+  const tabAssinaturas = () => (
+    <div className="space-y-3">
+      {(contrato._assinaturas ?? []).map(a => {
+        const statusColor = a.status === 'assinado' ? 'text-emerald-400' :
+          a.status === 'pendente' ? 'text-amber-400' :
+          a.status === 'recusado' ? 'text-rose-400' : 'text-white/40'
+        return (
+          <div key={a.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 flex items-center gap-4">
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-white/90">{a.nome_parte}</p>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap text-xs text-white/40">
+                <span>{PAPEL_PARTE_LABELS[a.tipo_parte]}</span>
+                <span>·</span>
+                <span>{PROVEDOR_ASSINATURA_LABELS[a.provedor]}</span>
+                {a.data_assinatura && <span>· Ass: {formatDate(a.data_assinatura)}</span>}
+              </div>
+            </div>
+            <div className={`flex items-center gap-1.5 text-xs font-semibold ${statusColor}`}>
+              {a.status === 'assinado' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+              {a.status.charAt(0).toUpperCase() + a.status.slice(1)}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+
+  // ── Tab: Recoupment ──────────────────────────────────────────────────────
+  const tabRecoupment = () => (
+    <div className="space-y-3">
+      {(contrato._recoupment ?? []).length === 0 ? (
+        <div className="text-center py-12 text-white/30 text-sm">Nenhum recoupment registrado.</div>
+      ) : (
+        (contrato._recoupment ?? []).map(r => (
+          <div key={r.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-5">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <p className="text-sm font-semibold text-white/90">{r.descricao}</p>
+                <p className="text-xs text-white/40 mt-0.5">{r.nome_titular} · {formatDate(r.data_adiantamento)}</p>
+              </div>
+              {r.quitado ? (
+                <span className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full">Quitado</span>
+              ) : (
+                <span className="text-xs bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full">Aberto</span>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-xs text-white/40 mb-1">Adiantado</p>
+                <p className="text-sm font-bold text-white/80">{formatCurrency(r.valor_adiantamento)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-white/40 mb-1">Abatido</p>
+                <p className="text-sm font-bold text-emerald-400">{formatCurrency(r.valor_abatido)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-white/40 mb-1">Saldo</p>
+                <p className={`text-sm font-bold ${r.saldo_aberto > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  {formatCurrency(r.saldo_aberto)}
+                </p>
+              </div>
+            </div>
+            {r.valor_adiantamento > 0 && (
+              <div className="mt-3">
+                <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full transition-all"
+                    style={{ width: `${Math.min(100, (r.valor_abatido / r.valor_adiantamento) * 100)}%` }}
+                  />
+                </div>
+                <p className="text-xs text-white/30 mt-1">
+                  {((r.valor_abatido / r.valor_adiantamento) * 100).toFixed(1)}% abatido
+                </p>
+              </div>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  )
+
+  // ── Tab: Aditivos ────────────────────────────────────────────────────────
+  const tabAditivos = () => (
+    <div className="space-y-3">
+      {(contrato._aditivos ?? []).length === 0 ? (
+        <div className="text-center py-12 text-white/30 text-sm">Nenhum aditivo registrado.</div>
+      ) : (
+        (contrato._aditivos ?? []).map(a => (
+          <div key={a.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+            <div className="flex items-start justify-between mb-2">
+              <div>
+                <p className="text-sm font-semibold text-white/90">{a.numero_aditivo}</p>
+                <p className="text-xs text-white/60 mt-0.5">{a.descricao}</p>
+              </div>
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_CONTRATO_V2_COLORS[a.status]}`}>
+                {STATUS_CONTRATO_V2_LABELS[a.status]}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-xs text-white/40">
+              <span>Criado: {formatDate(a.data_criacao)}</span>
+              {a.assinado_em && <span>Assinado: {formatDate(a.assinado_em)}</span>}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  )
+
+  // ── Tab: Historico ───────────────────────────────────────────────────────
+  const tabHistorico = () => (
+    <div className="space-y-2">
+      {(contrato._historico ?? []).map(h => (
+        <div key={h.id} className="flex items-start gap-3 py-3 border-b border-white/[0.04] last:border-0">
+          <div className="w-1.5 h-1.5 rounded-full bg-violet-400 mt-1.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm text-white/80">{h.descricao}</p>
+            <div className="flex items-center gap-2 mt-0.5 text-xs text-white/30">
+              {h.usuario_nome && <span>{h.usuario_nome}</span>}
+              <span>·</span>
+              <span>{formatDate(h.created_at)}</span>
+            </div>
+          </div>
+          <span className="text-xs bg-white/[0.06] text-white/40 px-1.5 py-0.5 rounded">{h.tipo_evento}</span>
+        </div>
+      ))}
+    </div>
+  )
+
+  // ── Tab: PDF ─────────────────────────────────────────────────────────────
+  const tabPDF = () => {
+    const templateText = modelo?.template_texto ?? ''
+    const rendered = renderTemplate(templateText, {
+      titular_nome: contrato.titular_principal ?? 'TITULAR',
+      cpf: '000.000.000-00',
+      cnpj: '00.000.000/0001-00',
+      rg: '00.000.000-0',
+      endereco_completo: 'Rua Exemplo, 123, Cidade, Estado',
+      editora_nome: contrato.editora_nome,
+      editora_cnpj: '00.000.000/0001-00',
+      obra_titulo: contrato._obras?.[0]?.titulo_obra ?? 'OBRAS VINCULADAS',
+      obra_codigo: contrato._obras?.[0]?.codigo_obra ?? '—',
+      vigencia_inicio: contrato.vigencia_inicio,
+      vigencia_fim: contrato.vigencia_fim ?? 'indeterminado',
+      percentual_titular: String(contrato._direitos?.[0]?.pct_titular ?? 75),
+      percentual_editora: String(contrato._direitos?.[0]?.pct_editora ?? 25),
+      territorio: contrato.territorio_principal,
+      moeda: 'BRL',
+      comissao: '20',
+      administradora_nome: '—',
+      cessionario_nome: contrato._partes?.find(p => p.papel === 'cessionario')?.nome_titular ?? '—',
+      obras_lista: (contrato._obras ?? []).map(o => o.titulo_obra).join(', '),
+      data_assinatura: new Date().toLocaleDateString('pt-BR'),
+    })
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-white/60">Pre-visualizacao do contrato baseado no modelo: <strong className="text-white/80">{modelo?.nome ?? '—'}</strong></p>
+          <button className="flex items-center gap-1.5 h-8 px-3 text-xs bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/20 text-violet-300 rounded-lg transition-colors">
+            <Download className="w-3.5 h-3.5" /> Exportar PDF
+          </button>
+        </div>
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-6">
+          <pre className="text-xs text-white/60 whitespace-pre-wrap leading-relaxed font-mono">
+            {rendered || 'Modelo nao disponivel para este tipo de contrato.'}
+          </pre>
+        </div>
+      </div>
+    )
+  }
+
+  const tabContent: Record<string, () => React.ReactElement> = {
+    resumo: tabResumo,
+    partes: tabPartes,
+    direitos: tabDireitos,
+    obras: tabObras,
+    assinaturas: tabAssinaturas,
+    recoupment: tabRecoupment,
+    aditivos: tabAditivos,
+    historico: tabHistorico,
+    pdf: tabPDF,
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start gap-3">
-        <button onClick={() => router.back()} className="mt-1 text-white/40 hover:text-white/70 transition-colors">
-          <ChevronLeft className="w-5 h-5" />
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => router.push('/master/contratos')}
+          className="flex items-center gap-1.5 text-sm text-white/40 hover:text-white/70 transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" /> Contratos
         </button>
-        <div className="flex-1">
-          <PageHeader
-            title={contrato.numero}
-            description={TIPO_CONTRATO_LABELS[contrato.tipo] + ' · ' + contrato.titular_principal}
-            actions={
-              <div className="flex items-center gap-2">
-                <button className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/5 border border-white/[0.08] text-xs text-white/60 hover:text-white/80 transition-colors">
-                  <Printer className="w-3.5 h-3.5" /> Imprimir
-                </button>
-                <button className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/5 border border-white/[0.08] text-xs text-white/60 hover:text-white/80 transition-colors">
-                  <Download className="w-3.5 h-3.5" /> PDF
-                </button>
-                {contrato.status === 'em_vigor' && (
-                  <button className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-rose-600/20 border border-rose-500/30 text-xs text-rose-400 hover:bg-rose-600/30 transition-colors">
-                    <AlertOctagon className="w-3.5 h-3.5" /> Revogar
-                  </button>
-                )}
-              </div>
-            }
-          />
-        </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4">
-          <p className="text-xs text-white/40 mb-1">Status</p>
-          <span className={'text-xs font-semibold px-2 py-0.5 rounded-full ' + STATUS_CONTRATO_COLORS[contrato.status]}>
-            {STATUS_CONTRATO_LABELS[contrato.status]}
-          </span>
-        </div>
-        <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4">
-          <p className="text-xs text-white/40 mb-1">Tipo</p>
-          <span className={'text-xs font-semibold px-2 py-0.5 rounded-full ' + TIPO_CONTRATO_COLORS[contrato.tipo]}>
-            {TIPO_CONTRATO_LABELS[contrato.tipo]}
-          </span>
-        </div>
-        <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4">
-          <p className="text-xs text-white/40 mb-1">Obras Vinculadas</p>
-          <p className="text-xl font-bold text-violet-400">{contrato._obras_count}</p>
-        </div>
-        <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4">
-          <p className="text-xs text-white/40 mb-1">Assinaturas Pend.</p>
-          <p className={'text-xl font-bold ' + (contrato._assinaturas_pendentes > 0 ? 'text-amber-400' : 'text-emerald-400')}>
-            {contrato._assinaturas_pendentes}
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title={contrato.numero}
+        description={`${TIPO_CONTRATO_V2_LABELS[contrato.tipo]} · ${contrato.editora_nome}`}
+        actions={
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_CONTRATO_V2_COLORS[contrato.status]}`}>
+              {STATUS_CONTRATO_V2_LABELS[contrato.status]}
+            </span>
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${TIPO_CONTRATO_V2_COLORS[contrato.tipo]}`}>
+              {TIPO_CONTRATO_V2_LABELS[contrato.tipo]}
+            </span>
+          </div>
+        }
+      />
 
-      <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
-        <div className="flex border-b border-white/[0.06] overflow-x-auto">
-          {TABS.map(t => (
+      {/* Tabs */}
+      <div className="flex gap-1 overflow-x-auto bg-[#0d1526] border border-white/[0.06] rounded-xl p-1">
+        {TABS.map(t => {
+          const Icon = t.icon
+          return (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={'flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ' + (tab === t.id ? 'text-violet-300 border-violet-500' : 'text-white/40 border-transparent hover:text-white/70')}
+              className={[
+                'flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all flex-shrink-0',
+                tab === t.id
+                  ? 'bg-violet-600 text-white'
+                  : 'text-white/40 hover:text-white/70 hover:bg-white/[0.04]',
+              ].join(' ')}
             >
-              {t.icon}{t.label}
+              <Icon className="w-3.5 h-3.5" />
+              {t.label}
             </button>
-          ))}
-        </div>
+          )
+        })}
+      </div>
 
-        <div className="p-6">
-          {tab === 'informacoes' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div>
-                <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3">Dados Gerais</h4>
-                <InfoRow label="Numero" value={<span className="font-mono">{contrato.numero}</span>} />
-                <InfoRow label="Tipo" value={TIPO_CONTRATO_LABELS[contrato.tipo]} />
-                <InfoRow label="Status" value={STATUS_CONTRATO_LABELS[contrato.status]} />
-                <InfoRow label="Inicio vigencia" value={contrato.vigencia_inicio} />
-                <InfoRow label="Fim vigencia" value={contrato.vigencia_fim} />
-                <InfoRow label="Renovacao auto." value={contrato.renovacao_automatica ? 'Sim' : 'Nao'} />
-              </div>
-              <div>
-                <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3">Partes</h4>
-                <div className="space-y-2">
-                  {(assinaturas.length > 0 ? assinaturas : [
-                    { id: 'x', contrato_id: id, parte_id: 'p1', nome_parte: contrato.titular_principal, tipo_parte: 'cedente' as const, status: 'assinado' as const },
-                    { id: 'y', contrato_id: id, parte_id: 'p3', nome_parte: 'Edi Music Editora Ltda', tipo_parte: 'cessionario' as const, status: 'assinado' as const },
-                  ]).map(a => (
-                    <div key={a.id} className="flex items-center justify-between bg-white/[0.02] rounded-lg px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <Users className="w-3.5 h-3.5 text-white/30" />
-                        <div>
-                          <p className="text-sm text-white/80">{a.nome_parte}</p>
-                          <p className="text-xs text-white/40 capitalize">{a.tipo_parte}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {contrato.observacoes && (
-                  <div className="mt-5">
-                    <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3">Observacoes</h4>
-                    <p className="text-sm text-white/60 bg-white/[0.02] rounded-lg p-3">{contrato.observacoes}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {tab === 'obras' && (
-            <div className="space-y-3">
-              {obras.length === 0 && (
-                <p className="text-center text-white/30 text-sm py-8">Nenhuma obra vinculada a este contrato.</p>
-              )}
-              {obras.map(o => (
-                <div key={o.id} className="bg-white/[0.02] rounded-lg p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Music className="w-4 h-4 text-violet-400" />
-                      <div>
-                        <p className="text-sm font-medium text-white/80">{o.titulo_obra}</p>
-                        <p className="text-xs text-white/40 font-mono">{o.codigo_obra}</p>
-                      </div>
-                    </div>
-                    <Link href={'/master/obras/' + o.obra_id} className="text-xs text-violet-400 hover:text-violet-300">Ver obra</Link>
-                  </div>
-                  <div className="grid grid-cols-3 gap-4 text-xs">
-                    <div><span className="text-white/40 block">Percentual</span><span className="text-white/80 font-bold">{o.percentual}%</span></div>
-                    <div><span className="text-white/40 block">Inicio</span><span className="text-white/80">{o.vigencia_inicio ?? '—'}</span></div>
-                    <div><span className="text-white/40 block">Fim</span><span className="text-white/80">{o.vigencia_fim ?? '—'}</span></div>
-                  </div>
-                  <div className="flex flex-wrap gap-1 mt-3">
-                    {o.direitos_cedidos.map(d => (
-                      <span key={d} className="text-xs bg-violet-500/10 text-violet-400 px-2 py-0.5 rounded-full">
-                        {DIREITO_LABELS[d as DireitoCedido]}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {tab === 'assinaturas' && (
-            <div className="space-y-3">
-              {assinaturas.map(a => (
-                <div key={a.id} className="flex items-center justify-between bg-white/[0.02] rounded-lg px-4 py-4">
-                  <div className="flex items-center gap-3">
-                    <AssinaturaIcon status={a.status} />
-                    <div>
-                      <p className="text-sm font-medium text-white/80">{a.nome_parte}</p>
-                      <p className="text-xs text-white/40 capitalize">{a.tipo_parte}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className={'text-xs font-semibold px-2 py-0.5 rounded-full ' + STATUS_ASSINATURA_COLORS[a.status]}>
-                      {STATUS_ASSINATURA_LABELS[a.status]}
-                    </span>
-                    {a.data_assinatura && (
-                      <p className="text-xs text-white/40 mt-1">{formatDt(a.data_assinatura)}</p>
-                    )}
-                    {a.ip_origem && (
-                      <p className="text-xs text-white/25 font-mono">{a.ip_origem}</p>
-                    )}
-                    {a.hash_documento && (
-                      <p className="text-xs text-white/20 font-mono mt-0.5 truncate max-w-40">{a.hash_documento}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {assinaturas.length === 0 && (
-                <p className="text-center text-white/30 text-sm py-8">Sem registros de assinatura.</p>
-              )}
-            </div>
-          )}
-
-          {tab === 'clausulas' && (
-            <div>
-              <div className="bg-white/[0.02] rounded-lg p-5">
-                <pre className="text-sm text-white/70 whitespace-pre-wrap font-sans leading-relaxed">
-                  {CLAUSULAS_PADRAO}
-                  {contrato.clausulas_extras && '\n\nCLAUSULAS ADICIONAIS\n\n' + contrato.clausulas_extras}
-                </pre>
-              </div>
-            </div>
-          )}
-
-          {tab === 'auditoria' && (
-            <div className="space-y-3">
-              {auditoria.map((ev, i) => (
-                <div key={ev.id} className="flex gap-4">
-                  <div className="flex flex-col items-center">
-                    <div className="w-2 h-2 rounded-full bg-violet-500 mt-1.5 flex-shrink-0" />
-                    {i < auditoria.length - 1 && <div className="w-px flex-1 bg-white/[0.06] mt-1" />}
-                  </div>
-                  <div className="pb-4 flex-1">
-                    <p className="text-sm text-white/70">{ev.descricao}</p>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-xs text-white/30">{formatDt(ev.created_at)}</span>
-                      {ev.usuario && <span className="text-xs text-white/25">· {ev.usuario}</span>}
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {auditoria.length === 0 && (
-                <p className="text-center text-white/30 text-sm py-8">Nenhum evento registrado.</p>
-              )}
-            </div>
-          )}
-        </div>
+      {/* Tab content */}
+      <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5">
+        {tabContent[tab]?.() ?? null}
       </div>
     </div>
   )

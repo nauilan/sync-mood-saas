@@ -1,4 +1,4 @@
-﻿import { Sidebar } from './sidebar'
+import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
 import type { NavSection } from './nav-config'
 
@@ -18,11 +18,20 @@ interface AppShellProps {
 
 export function AppShell({ nav, role, editoraNome, userName, userInitials, breadcrumb, topbarBadge, topbarBadgeColor, topbarActions, notificationCount, children }: AppShellProps) {
   return (
-    <div className="flex min-h-screen bg-[#0a0e1a]">
-      <Sidebar nav={nav} role={role} editoraNome={editoraNome} userName={userName} userInitials={userInitials} />
-      <div className="flex flex-col flex-1 min-w-0">
-        <Topbar breadcrumb={breadcrumb} badge={topbarBadge} badgeColor={topbarBadgeColor} actions={topbarActions} notificationCount={notificationCount} />
-        <main className="flex-1 overflow-y-auto px-6 py-8">{children}</main>
+    // h-screen + overflow-hidden: trava a altura no viewport — cada coluna rola de forma independente
+    <div className="flex h-screen overflow-hidden bg-[#07060f]">
+      <Sidebar nav={nav} role={role} editoraNome={editoraNome} userName={userName ?? 'Marina Lopes'} userInitials={userInitials ?? 'ML'} />
+      <div className="flex flex-col flex-1 min-w-0 h-screen overflow-hidden">
+        <Topbar
+          breadcrumb={breadcrumb}
+          badge={topbarBadge}
+          badgeColor={topbarBadgeColor}
+          actions={topbarActions}
+          notificationCount={notificationCount ?? 3}
+          userName={userName ?? 'Marina Lopes'}
+          userInitials={userInitials ?? 'ML'}
+        />
+        <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   )

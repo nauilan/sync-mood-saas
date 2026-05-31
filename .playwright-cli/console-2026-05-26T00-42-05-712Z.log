@@ -1,0 +1,886 @@
+[     121ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[     840ms] [LOG] [Fast Refresh] done in 823ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[    1414ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[    1502ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   26994ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   27010ms] [LOG] [Fast Refresh] done in 124ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  275974ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  276035ms] [LOG] [Fast Refresh] done in 164ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  276199ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  276599ms] [LOG] [Fast Refresh] done in 505ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  374539ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  374575ms] [LOG] [Fast Refresh] done in 140ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  388492ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  388522ms] [LOG] [Fast Refresh] done in 135ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  473430ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  473462ms] [LOG] [Fast Refresh] done in 138ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  479327ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  479385ms] [LOG] [Fast Refresh] done in 163ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  479623ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  479925ms] [LOG] [Fast Refresh] done in 403ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  488305ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  488375ms] [LOG] [Fast Refresh] done in 167ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  488543ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  488777ms] [LOG] [Fast Refresh] done in 339ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  498341ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  498383ms] [LOG] [Fast Refresh] done in 149ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  498560ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  498730ms] [LOG] [Fast Refresh] done in 282ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  538031ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  538085ms] [LOG] [Fast Refresh] done in 163ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  538247ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  538419ms] [LOG] [Fast Refresh] done in 276ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  552433ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  552504ms] [LOG] [Fast Refresh] done in 177ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  552700ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  553159ms] [LOG] [Fast Refresh] done in 567ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  553502ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  554013ms] [LOG] [Fast Refresh] done in 724ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  578056ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  578195ms] [LOG] [Fast Refresh] done in 246ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  578419ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  578792ms] [LOG] [Fast Refresh] done in 503ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  601148ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  601592ms] [LOG] [Fast Refresh] done in 541ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  602180ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  602959ms] [LOG] [Fast Refresh] done in 1019ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  603204ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  603472ms] [LOG] [Fast Refresh] done in 377ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  622359ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  622364ms] [LOG] [Fast Refresh] done in 111ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  636374ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  636407ms] [LOG] [Fast Refresh] done in 130ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  636607ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  636855ms] [LOG] [Fast Refresh] done in 356ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  637231ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  637490ms] [LOG] [Fast Refresh] done in 406ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  651513ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  651530ms] [LOG] [Fast Refresh] done in 130ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  656670ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  656851ms] [LOG] [Fast Refresh] done in 291ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  657180ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  657649ms] [LOG] [Fast Refresh] done in 684ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  658152ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  658204ms] [LOG] [Fast Refresh] done in 156ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  664675ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  664879ms] [LOG] [Fast Refresh] done in 307ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  665243ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  665603ms] [LOG] [Fast Refresh] done in 536ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  666079ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  666081ms] [LOG] [Fast Refresh] done in 180ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  672371ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  672441ms] [LOG] [Fast Refresh] done in 173ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  672622ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  672644ms] [LOG] [Fast Refresh] done in 128ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  672781ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  672944ms] [LOG] [Fast Refresh] done in 300ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  673167ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  673296ms] [LOG] [Fast Refresh] done in 232ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  694920ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  694960ms] [LOG] [Fast Refresh] done in 153ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  711003ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  711100ms] [LOG] [Fast Refresh] done in 205ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  843355ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  843721ms] [LOG] [Fast Refresh] done in 381ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  843969ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  844806ms] [LOG] [Fast Refresh] done in 1003ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  845334ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  845341ms] [LOG] [Fast Refresh] done in 245ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  851516ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  852228ms] [LOG] [Fast Refresh] done in 744ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  852459ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  852919ms] [LOG] [Fast Refresh] done in 599ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  853269ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  853535ms] [LOG] [Fast Refresh] done in 391ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  858352ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  858628ms] [LOG] [Fast Refresh] done in 299ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  858925ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  859714ms] [LOG] [Fast Refresh] done in 979ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  860298ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  860304ms] [LOG] [Fast Refresh] done in 260ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  947434ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  947510ms] [LOG] [Fast Refresh] done in 183ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  951123ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  951145ms] [LOG] [Fast Refresh] done in 134ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  957306ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  958014ms] [LOG] [Fast Refresh] done in 812ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  968871ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[  969601ms] [LOG] [Fast Refresh] done in 844ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1125112ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1125142ms] [LOG] [Fast Refresh] done in 130ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1125462ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1125906ms] [LOG] [Fast Refresh] done in 550ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1126227ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1126341ms] [LOG] [Fast Refresh] done in 433ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1126893ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1128753ms] [LOG] [Fast Refresh] done in 1963ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1129451ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1129535ms] [LOG] [Fast Refresh] done in 195ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1129690ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1130369ms] [LOG] [Fast Refresh] done in 791ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1133577ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1134980ms] [LOG] [Fast Refresh] done in 1519ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1137646ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1137719ms] [LOG] [Fast Refresh] done in 188ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1137898ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1137918ms] [LOG] [Fast Refresh] done in 126ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1138072ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1138185ms] [LOG] [Fast Refresh] done in 222ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1181396ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1181628ms] [LOG] [Fast Refresh] done in 342ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1181778ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1182072ms] [LOG] [Fast Refresh] done in 411ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1193067ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1193093ms] [LOG] [Fast Refresh] done in 130ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1203335ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1203357ms] [LOG] [Fast Refresh] done in 125ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1227982ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1229545ms] [LOG] [Fast Refresh] done in 977ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1951426ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 1953171ms] [LOG] [Fast Refresh] done in 1028ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 3754567ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 3754615ms] [LOG] [Fast Refresh] done in 154ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 3866717ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 3866746ms] [LOG] [Fast Refresh] done in 132ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 3983133ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 3983150ms] [LOG] [Fast Refresh] done in 120ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 4099181ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 4099200ms] [LOG] [Fast Refresh] done in 120ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 4209821ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 4209839ms] [LOG] [Fast Refresh] done in 121ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 4316531ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 4316550ms] [LOG] [Fast Refresh] done in 122ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 5129976ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 5130338ms] [LOG] [Fast Refresh] done in 479ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 5130463ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 5130566ms] [LOG] [Fast Refresh] done in 224ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 5256649ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 5257132ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:3318
+[ 5257428ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/master/obras?_rsc=Iiju8r6dB4WgqnwU:0
+[ 5257516ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:3318
+[ 5257518ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:3318
+[ 5257620ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/master/obras?_rsc=Iiju8r6dB4WgqnwU:0
+[ 5257623ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:3318
+[ 5257624ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 5257695ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:3318
+[ 5257805ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 5257824ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:3318
+[ 5257912ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:3318
+[ 5257925ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 5257989ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:3000/master/obras:0
+[ 5258189ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_react-dom_0bruynb._.js:15305
+[ 5258319ms] Error: ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx
+
+
+    at <unknown> (Error: ./components/layout/sidebar.tsx:78:10)
+    at Object.getCompilationErrors (file://C:\Users\Usuário\Desktop\sync-mood-saas\apps\web\node_modules\next\dist\server\dev\hot-reloader-turbopack.js:1186:59)
+    at DevBundlerService.getCompilationError (file://C:\Users\Usuário\Desktop\sync-mood-saas\apps\web\node_modules\next\dist\server\lib\dev-bundler-service.js:44:55)
+    at DevServer.getCompilationError (file://C:\Users\Usuário\Desktop\sync-mood-saas\apps\web\node_modules\next\dist\server\dev\next-dev-server.js:720:42)
+    at DevServer.findPageComponents (file://C:\Users\Usuário\Desktop\sync-mood-saas\apps\web\node_modules\next\dist\server\dev\next-dev-server.js:690:43)
+    at async DevServer.renderErrorToResponseImpl (file://C:\Users\Usuário\Desktop\sync-mood-saas\apps\web\node_modules\next\dist\server\base-server.js:1753:26)
+[ 5258323ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1226
+[ 5258333ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258334ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258334ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258334ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258335ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258335ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258335ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258335ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258335ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258336ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258336ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258336ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258336ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258337ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258337ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258337ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258337ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258337ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258337ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258337ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258337ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258338ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258338ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258338ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258461ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5258477ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1226
+[ 5259829ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5259876ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1226
+[ 5289096ms] [ERROR] ./components/layout/sidebar.tsx:78:10
+Expected '</', got 'ident'
+  76 |       {/* Navigation */}
+  77 |       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth"
+> 78 |         {nav.map((section) => (
+     |          ^^^
+  79 |           <div key={section.title}>
+  80 |             {section.title !== 'Principal' && (
+  81 |               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Server Component:
+    ./components/layout/sidebar.tsx
+    ./components/layout/app-shell.tsx
+    ./app/master/layout.tsx @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1945
+[ 5289143ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1226
+[ 5378107ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1226
+[ 5378484ms] [WARNING] [Fast Refresh] performing full reload because your application had an unrecoverable error @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1226
+[ 5378575ms] [LOG] [Fast Refresh] done in 482ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1226
+[ 5378972ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1226
+[ 5380132ms] [LOG] [Fast Refresh] done in 1261ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_0u_w_5s._.js:1226
+[ 5383966ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 5384276ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 5504793ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 5504796ms] [LOG] [Fast Refresh] done in 114ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 5980829ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 5980916ms] [LOG] [Fast Refresh] done in 181ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6104250ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6104384ms] [LOG] [Fast Refresh] done in 231ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6104600ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6104736ms] [LOG] [Fast Refresh] done in 281ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6104983ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6104989ms] [LOG] [Fast Refresh] done in 106ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6227243ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6227327ms] [LOG] [Fast Refresh] done in 180ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6227526ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6227744ms] [LOG] [Fast Refresh] done in 330ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6852789ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6852848ms] [LOG] [Fast Refresh] done in 156ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6853039ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6853303ms] [LOG] [Fast Refresh] done in 378ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6975032ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6975146ms] [LOG] [Fast Refresh] done in 213ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6975313ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 6975490ms] [LOG] [Fast Refresh] done in 280ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 7097606ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[ 7097652ms] [LOG] [Fast Refresh] done in 143ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16458042ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16458061ms] [LOG] [Fast Refresh] done in 121ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16460718ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16460728ms] [LOG] [Fast Refresh] done in 117ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16468911ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16468946ms] [LOG] [Fast Refresh] done in 139ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16472341ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16472377ms] [LOG] [Fast Refresh] done in 136ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16473857ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16473869ms] [LOG] [Fast Refresh] done in 116ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16494724ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16494748ms] [LOG] [Fast Refresh] done in 135ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16497124ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16497143ms] [LOG] [Fast Refresh] done in 126ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16498663ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16498696ms] [LOG] [Fast Refresh] done in 133ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16928982ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16930206ms] [LOG] [Fast Refresh] done in 1331ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16930870ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16931024ms] [LOG] [Fast Refresh] done in 316ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16932491ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16932493ms] [LOG] [Fast Refresh] done in 1370ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16932675ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16932708ms] [LOG] [Fast Refresh] done in 187ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16932811ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16932914ms] [LOG] [Fast Refresh] done in 205ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16933154ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16933221ms] [LOG] [Fast Refresh] done in 214ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16933477ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16933514ms] [LOG] [Fast Refresh] done in 139ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16933827ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16933971ms] [LOG] [Fast Refresh] done in 293ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16934159ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16934172ms] [LOG] [Fast Refresh] done in 117ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16935088ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16935090ms] [LOG] [Fast Refresh] done in 137ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16935192ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16935227ms] [LOG] [Fast Refresh] done in 136ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16935329ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16935369ms] [LOG] [Fast Refresh] done in 141ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16936103ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[16936112ms] [LOG] [Fast Refresh] done in 202ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17050358ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17050806ms] [LOG] [Fast Refresh] done in 321ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17050979ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17051648ms] [LOG] [Fast Refresh] done in 839ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17280625ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17280735ms] [LOG] [Fast Refresh] done in 199ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17280909ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17281250ms] [LOG] [Fast Refresh] done in 446ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17281868ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17281969ms] [LOG] [Fast Refresh] done in 213ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17282073ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17282141ms] [LOG] [Fast Refresh] done in 171ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17282470ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17282471ms] [LOG] [Fast Refresh] done in 122ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17282770ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17282771ms] [LOG] [Fast Refresh] done in 118ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17282875ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17282963ms] [LOG] [Fast Refresh] done in 191ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17283351ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17283387ms] [LOG] [Fast Refresh] done in 166ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17284017ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17284135ms] [LOG] [Fast Refresh] done in 219ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17284238ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17284367ms] [LOG] [Fast Refresh] done in 230ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17284569ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17284637ms] [LOG] [Fast Refresh] done in 197ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17285125ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17285251ms] [LOG] [Fast Refresh] done in 250ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17285435ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17285461ms] [LOG] [Fast Refresh] done in 126ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17304015ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17304090ms] [LOG] [Fast Refresh] done in 175ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17341439ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17341487ms] [LOG] [Fast Refresh] done in 149ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17355540ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17355593ms] [LOG] [Fast Refresh] done in 149ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17415354ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17415882ms] [LOG] [Fast Refresh] done in 634ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17416493ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17416560ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17429953ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[17430596ms] [LOG] [Fast Refresh] done in 743ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477

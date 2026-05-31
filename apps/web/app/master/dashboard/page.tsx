@@ -1,101 +1,191 @@
-﻿import { KpiCard } from '@/components/ui/kpi-card'
+'use client'
+
+import { BI_AGREGADO, fmtBRL } from '@/lib/mock-bi'
+import { MOCK_INTEGRACOES } from '@/lib/mock-config'
+import { KpiCard } from '@/components/ui/kpi-card'
 import { PageHeader } from '@/components/ui/page-header'
-import { Badge } from '@/components/ui/badge'
-import { formatCurrency } from '@/lib/utils'
-import { Music, Users, FileText, TrendingUp, Download, AlertCircle, Activity } from 'lucide-react'
+import {
+  Users, Music, FileText, DollarSign, Shield,
+  AlertTriangle, Wallet, CreditCard, TrendingUp, Tv,
+  CheckCircle2, XCircle, AlertCircle,
+} from 'lucide-react'
 
-export const metadata = { title: 'Dashboard Master | Sync Mood' }
+const obras = BI_AGREGADO.bi_estrategico.obras_mais_rentaveis
+const emissoras = BI_AGREGADO.bi_estrategico.emissoras_que_mais_usam
 
-export default async function MasterDashboardPage() {
-  const kpis = { total_obras: 847, receita_mes: 48320, titulares_ativos: 23, demonstrativos_pendentes: 2 }
-  const activity = [
-    { id: '1', text: 'Demonstrativo Mai/25 gerado', sub: 'Carlos Drummond', time: 'Hoje', badge: 'violet' as const },
-    { id: '2', text: 'Importacao Spotify confirmada', sub: 'R\$ 1.840 - 3 obras', time: '2h', badge: 'emerald' as const },
-    { id: '3', text: 'Adiantamento recoupment', sub: 'Pedro Compositor', time: 'Ontem', badge: 'amber' as const },
-    { id: '4', text: 'Contrato renovado', sub: 'Joao Silva - 12 meses', time: '3d', badge: 'sky' as const },
-  ]
+function statusIcon(status: string) {
+  if (status === 'ativa') return <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+  if (status === 'erro') return <XCircle className="w-3 h-3 text-rose-400" />
+  return <AlertCircle className="w-3 h-3 text-amber-400" />
+}
+
+function statusBadgeClass(status: string) {
+  if (status === 'ativa') return 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+  if (status === 'erro') return 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+  return 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+}
+
+export default function MasterDashboardPage() {
   return (
-    <div className="space-y-6 animate-[fade-in-up_0.3s_cubic-bezier(0.16,1,0.3,1)_both]">
-      <PageHeader title="Dashboard" description="Visao geral da editora"
-        actions={
-          <button className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/[0.04] border border-white/[0.07] text-xs text-white/55 hover:text-white/80 hover:bg-white/[0.07] hover:border-white/[0.12] transition-all duration-150">
-            <Download className="w-3.5 h-3.5" strokeWidth={1.5} /> Exportar
-          </button>
-        }
+    <div className="px-6 py-6 space-y-6 animate-[fade-in-up_0.4s_cubic-bezier(0.16,1,0.3,1)_both]">
+
+      <PageHeader
+        title="Dashboard Global"
+        description="Visão executiva cross-módulos — Sync Mood Gestão Inteligente"
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard title="Total de Obras" value={kpis.total_obras} trend={12} accent="emerald" icon={<Music className="w-4 h-4 text-emerald-400" strokeWidth={1.5} />} />
-        <KpiCard title="Receita este mes" value={formatCurrency(kpis.receita_mes)} trend={8.3} accent="violet" icon={<TrendingUp className="w-4 h-4 text-violet-400" strokeWidth={1.5} />} />
-        <KpiCard title="Titulares ativos" value={kpis.titulares_ativos} accent="sky" icon={<Users className="w-4 h-4 text-sky-400" strokeWidth={1.5} />} />
-        <KpiCard title="Demonstrativos pendentes" value={kpis.demonstrativos_pendentes} subtitle="Aguardando aprovacao" accent="amber" icon={<FileText className="w-4 h-4 text-amber-400" strokeWidth={1.5} />} />
+      {/* ── Bento Grid: 8 KPI Cards (4 cols × 2 rows) ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KpiCard
+          title="Total Titulares"
+          value={0}
+          subtitle="—"
+          accent="emerald"
+          icon={<Users className="w-4 h-4 text-emerald-400" strokeWidth={1.5} />}
+        />
+        <KpiCard
+          title="Total Obras"
+          value={0}
+          subtitle="—"
+          accent="violet"
+          icon={<Music className="w-4 h-4 text-violet-400" strokeWidth={1.5} />}
+        />
+        <KpiCard
+          title="Contratos Ativos"
+          value={0}
+          subtitle="—"
+          accent="sky"
+          icon={<FileText className="w-4 h-4 text-sky-400" strokeWidth={1.5} />}
+        />
+        <KpiCard
+          title="Receita Total"
+          value={fmtBRL(0)}
+          subtitle="—"
+          accent="amber"
+          icon={<DollarSign className="w-4 h-4 text-amber-400" strokeWidth={1.5} />}
+        />
+        <KpiCard
+          title="Autorizações Pendentes"
+          value={0}
+          subtitle="—"
+          accent="rose"
+          icon={<Shield className="w-4 h-4 text-rose-400" strokeWidth={1.5} />}
+        />
+        <KpiCard
+          title="Divergências Abertas"
+          value={0}
+          subtitle="—"
+          accent="amber"
+          icon={<AlertTriangle className="w-4 h-4 text-amber-400" strokeWidth={1.5} />}
+        />
+        <KpiCard
+          title="Saldo Total CC"
+          value={fmtBRL(0)}
+          subtitle="—"
+          accent="sky"
+          icon={<Wallet className="w-4 h-4 text-sky-400" strokeWidth={1.5} />}
+        />
+        <KpiCard
+          title="A Pagar 7 dias"
+          value={fmtBRL(0)}
+          subtitle="—"
+          accent="violet"
+          icon={<CreditCard className="w-4 h-4 text-violet-400" strokeWidth={1.5} />}
+        />
       </div>
 
-      {/* Alert banner */}
-      <div className="bg-amber-500/[0.07] border border-amber-500/20 rounded-2xl p-4 shadow-[inset_0_1px_0_rgb(251_191_36_/_0.06)]">
-        <div className="flex items-center gap-2 mb-2.5">
-          <AlertCircle className="w-4 h-4 text-amber-400" strokeWidth={1.5} />
-          <span className="text-sm font-semibold text-amber-300">Acoes necessarias</span>
-        </div>
-        <ul className="space-y-1.5">
-          <li className="text-xs text-white/55 flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block shrink-0" />Banda Fluxo — contrato vence em 12 dias</li>
-          <li className="text-xs text-white/55 flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block shrink-0" />4 obras sem ISWC cadastrado</li>
-          <li className="text-xs text-white/55 flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block shrink-0" />2 demonstrativos aguardando aprovacao</li>
-        </ul>
-      </div>
-
+      {/* ── Bottom sections: 3-column layout ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Recent activity */}
-        <div className="lg:col-span-2 bg-[#0d1526] border border-white/[0.06] rounded-2xl p-5 shadow-[var(--shadow-card)]">
+
+        {/* Top 5 Obras Mais Rentáveis */}
+        <div className="bg-[#0d1526] border border-white/[0.06] rounded-2xl p-5 shadow-[var(--shadow-card)]">
           <div className="flex items-center gap-2 mb-4">
-            <Activity className="w-4 h-4 text-white/30" strokeWidth={1.5} />
-            <h2 className="text-sm font-semibold text-white">Atividade Recente</h2>
-            <span className="ml-auto flex items-center gap-1 text-[10px] text-emerald-400/70">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-[pulse-dot_2s_ease-in-out_infinite]" />
-              ao vivo
-            </span>
+            <div className="w-7 h-7 rounded-xl bg-violet-500/10 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-3.5 h-3.5 text-violet-400" strokeWidth={1.5} />
+            </div>
+            <h2 className="text-sm font-semibold text-white/80">Top 5 Obras Mais Rentáveis</h2>
           </div>
-          <ul className="space-y-3">
-            {activity.map((item) => (
-              <li key={item.id} className="flex items-start gap-3 py-2 border-b border-white/[0.03] last:border-0">
-                <div className="w-1.5 h-1.5 rounded-full bg-violet-500 mt-2 shrink-0" />
+          <ul className="space-y-2.5">
+            {obras.length === 0 && <li className="text-xs text-white/30 text-center py-4">Sem dados</li>}
+            {obras.map((item, i) => (
+              <li key={item.obra} className="flex items-center gap-3">
+                <span className="text-[10px] font-bold text-white/20 w-4 shrink-0 tabular-nums">{i + 1}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white/80 leading-snug">{item.text}</p>
-                  <p className="text-xs text-white/35 mt-0.5">{item.sub}</p>
+                  <p className="text-xs font-medium text-white/70 truncate">{item.obra}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex-1 h-1 rounded-full bg-white/[0.06]">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-violet-500 to-violet-400"
+                        style={{ width: `${Math.round((item.valor / (obras[0]?.valor ?? 1)) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Badge variant={item.badge}>{item.badge}</Badge>
-                  <span className="text-xs text-white/20 tabular-nums">{item.time}</span>
+                <div className="text-right shrink-0">
+                  <p className="text-xs font-semibold text-white/60 tabular-nums">{fmtBRL(item.valor)}</p>
+                  <p className="text-[10px] text-emerald-400">+{item.crescimento}%</p>
                 </div>
               </li>
             ))}
           </ul>
         </div>
 
-        {/* Quick access */}
+        {/* Top 5 Emissoras TV */}
         <div className="bg-[#0d1526] border border-white/[0.06] rounded-2xl p-5 shadow-[var(--shadow-card)]">
-          <h2 className="text-sm font-semibold text-white mb-4">Acesso Rapido</h2>
-          <div className="space-y-1.5">
-            {[
-              { label: 'Nova Obra', href: '/master/obras/nova' },
-              { label: 'Importar Relatorio', href: '/master/importacao' },
-              { label: 'Criar Lote Distribuicao', href: '/master/distribuicao/novo' },
-              { label: 'Gerar Demonstrativo', href: '/master/demonstrativos/gerar' },
-              { label: 'Export Socinpro', href: '/master/export/socinpro' },
-            ].map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-transparent hover:border-white/[0.06] text-sm text-white/60 hover:text-white/85 transition-all duration-150 group"
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-xl bg-sky-500/10 flex items-center justify-center shrink-0">
+              <Tv className="w-3.5 h-3.5 text-sky-400" strokeWidth={1.5} />
+            </div>
+            <h2 className="text-sm font-semibold text-white/80">Top 5 Emissoras TV</h2>
+          </div>
+          <ul className="space-y-2.5">
+            {emissoras.length === 0 && <li className="text-xs text-white/30 text-center py-4">Sem dados</li>}
+            {emissoras.map((item, i) => (
+              <li key={item.emissora} className="flex items-center gap-3">
+                <span className="text-[10px] font-bold text-white/20 w-4 shrink-0 tabular-nums">{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-white/70 truncate">{item.emissora}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex-1 h-1 rounded-full bg-white/[0.06]">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-sky-500 to-cyan-400"
+                        style={{ width: `${Math.round((item.execucoes / (emissoras[0]?.execucoes ?? 1)) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-xs font-semibold text-white/60 tabular-nums">{fmtBRL(item.valor)}</p>
+                  <p className="text-[10px] text-white/30">{item.execucoes.toLocaleString('pt-BR')} exec.</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Integrações */}
+        <div className="bg-[#0d1526] border border-white/[0.06] rounded-2xl p-5 shadow-[var(--shadow-card)]">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-7 h-7 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" strokeWidth={1.5} />
+            </div>
+            <h2 className="text-sm font-semibold text-white/80">Integrações</h2>
+          </div>
+          <div className="space-y-2">
+            {MOCK_INTEGRACOES.map(integ => (
+              <div
+                key={integ.id}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border ${statusBadgeClass(integ.status)}`}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-gradient-to-br from-violet-500 to-cyan-500 shrink-0" />
-                {link.label}
-                <span className="ml-auto text-white/20 group-hover:text-white/50 text-xs transition-colors">→</span>
-              </a>
+                {statusIcon(integ.status)}
+                <span className="text-xs font-medium flex-1 truncate">{integ.nome}</span>
+                <span className="text-[10px] capitalize opacity-70">{integ.status}</span>
+              </div>
             ))}
           </div>
         </div>
       </div>
+
     </div>
   )
 }

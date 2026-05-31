@@ -1,0 +1,24 @@
+-- ============================================================
+-- 000_run_all.sql — Executar TUDO em ordem no SQL Editor
+-- do Supabase Dashboard (supabase.com/dashboard)
+--
+-- ORDEM:
+--   001_enums.sql
+--   002_tenants_usuarios.sql
+--   003_editoras.sql
+--   004_titulares.sql
+--   005_contratos.sql
+--   006_obras.sql
+--   007_recebimentos_importacoes.sql
+--   008_distribuicao.sql
+--   009_autorizacoes_prestacao.sql
+--   010_rls.sql
+--   011_seed_primeiro_tenant.sql  ← preencher UUIDs antes
+--
+-- COMO EXECUTAR:
+--   1. Acesse https://supabase.com/dashboard
+--   2. Selecione seu projeto
+--   3. Vá em SQL Editor
+--   4. Cole o conteúdo de CADA arquivo em ordem e clique em Run
+--   5. Verifique que não há erros antes de ir para o próximo
+-- ============================================================

@@ -1,29 +1,43 @@
-// lib/types-obras.ts
-// Módulo 3 — Cadastro de Obras com Links
+// ============================================================
+// lib/types-obras.ts — Modulo 3: Obras e Catalogo (expanded)
+// Sync Mood Gestao Inteligente
+// ============================================================
+
+// ── Status & enums ────────────────────────────────────────────────────────────
 
 export type StatusObra =
-  | 'rascunho'
   | 'pre_cadastro'
-  | 'pendente_contrato'
-  | 'pendente_percentual'
-  | 'pendente_validacao'
   | 'validada'
-  | 'enviada_sociedade'
-  | 'aguardando_retorno'
   | 'ativa'
   | 'bloqueada'
-  | 'inativa'
+  | 'divergente'
+
+// BackOffice status: SONG = passiva (validada, sem uso detectado),
+// WORK = ativa (uso detectado, validacoes concluidas)
+export type StatusBO = 'SONG' | 'WORK'
 
 export type StatusIswc = 'pendente' | 'aguardando_retorno' | 'recebido'
 export type OrigemCadastro = 'contrato_sistema' | 'manual' | 'migracao'
+
+export type PapelTitularLink =
+  | 'autor'
+  | 'compositor'
+  | 'versionista'
+  | 'adaptador'
+  | 'editora_original'
+  | 'administradora'
+  | 'subeditora'
+  | 'interprete_referencia'
+
+// Legacy alias (used in older pages)
+export type FuncaoLink = 'CA' | 'V' | 'SA' | 'E' | 'AM' | 'SE' | 'C' | 'CE' | 'A' | 'I' | 'M' | 'T' | 'AD' | 'H'
+
 export type TipoLink =
   | 'controlado'
   | 'parcialmente_controlado'
   | 'direto_sem_editora'
   | 'editora_administrada'
   | 'cessionario'
-
-export type FuncaoLink = 'CA' | 'V' | 'SA' | 'E' | 'AM' | 'SE' | 'C' | 'CE' | 'A' | 'I' | 'M' | 'T' | 'AD' | 'H'
 
 export type StatusControle =
   | 'controlado'
@@ -34,26 +48,118 @@ export type StatusControle =
   | 'administrado_por_terceiro'
   | 'bloqueado'
 
+export type StatusExportacao = 'enviado' | 'confirmado' | 'erro' | 'aguardando_retorno'
+export type StatusDivergencia = 'aberta' | 'em_analise' | 'resolvida' | 'ignorada'
+
+// ── Core entities ─────────────────────────────────────────────────────────────
+
 export interface Obra {
   id: string
-  tenant_id: string
-  codigo_obra?: string
+  tenant_id?: string
+  codigo: string
   titulo: string
-  subtitulo?: string
-  titulo_alternativo?: string
-  idioma?: string
-  letra?: string
-  observacoes?: string
+  titulo_original?: string | null
+  iswc?: string | null        // NULL pos-sociedade
+  idioma: string
+  genero?: string | null
+  duracao?: number | null     // segundos
+  ano_criacao?: number | null
   status: StatusObra
-  status_iswc: StatusIswc
-  iswc?: string
-  origem_cadastro: OrigemCadastro
-  contrato_origem_id?: string
+  editora_id?: string | null
+  contrato_origem_id?: string | null
+  observacoes?: string | null
+  created_at: string
+  updated_at: string
+  // virtual
+  _links?: ObraLink[]
+  _fonogramas?: Fonograma[]
+  _fonogramas_count?: number
+  _links_count?: number
+  _percentual_controlado?: number  // soma dos links controlados
+}
+
+/**
+ * Representa UMA cadeia editorial completa da obra.
+ * Todos os participantes dessa cadeia ficam dentro de `titulares`:
+ *   autor(es) + editora_original + administradora
+ *
+ * REGRA: a soma de `percentual` de todos os titulares do link DEVE ser 100%.
+ *
+ * Exemplo:
+ *   HENRIQUE ALVES DOS REIS  (autor)          75%
+ *   EDI MUSIC EDITORA LTDA   (editora_orig)   20%
+ *   TOP SHOW MUSIC LIMITADA  (administradora)  5%
+ *   ─────────────────────────────────────────────
+ *                                            100%
+ */
+export interface ObraLink {
+  id: string
+  obra_id: string
+  ordem: number
+  descricao?: string | null
+  controlado: boolean               // TRUE = editora administra este link
+  percentual_controlado: number     // % que a admin controla nesta cadeia
+  titulares?: ObraLinkTitular[]
+}
+
+export interface ObraLinkTitular {
+  id: string
+  link_id: string
+  titular_id?: string | null
+  nome: string
+  papel: PapelTitularLink
+  /**
+   * Percentual geral (legado / fallback).
+   * Quando os campos por direito abaixo estiverem preenchidos, este campo
+   * representa a participação total do titular na obra.
+   */
+  percentual: number
+  /** % Execução Pública (PR — performing right). Se ausente, usa `percentual`. */
+  percentual_exec_publica?: number | null
+  /** % Fonomecânico / Digital (MR — mechanical right). Se ausente, usa `percentual`. */
+  percentual_fonomecanico?: number | null
+  /** % Sincronização (SR — synchronization right). Se ausente, usa `percentual`. */
+  percentual_sincronizacao?: number | null
+  sociedade?: string | null
+  cae?: string | null
+  ipi?: string | null
+  controlado: boolean             // este titular especifico e controlado
+}
+
+export interface Fonograma {
+  id: string
+  obra_id: string
+  isrc?: string | null
+  titulo_fonograma: string
+  interprete: string
+  gravadora_id?: string | null
+  produtor?: string | null
+  data_lancamento?: string | null
+  plataformas_json?: string[]
+  duracao?: number | null
+}
+
+export interface ObraExportacaoLog {
+  id: string
+  obra_id: string
+  destino: string
+  data: string
+  status: StatusExportacao
+}
+
+export interface ObraDivergencia {
+  id: string
+  obra_id: string
+  tipo: string
+  descricao: string
+  status: StatusDivergencia
   created_at: string
   updated_at: string
 }
 
-export interface ObraLink {
+// ── Legacy interface (backward compat with older pages) ───────────────────────
+
+export interface ObraLinkLegacy {
   id: string
   tenant_id: string
   obra_id: string
@@ -62,10 +168,10 @@ export interface ObraLink {
   percentual_link: number
   tipo_link: TipoLink
   status: 'ativo' | 'inativo'
-  titulares?: ObraLinkTitular[]
+  titulares?: ObraLinkTitularLegacy[]
 }
 
-export interface ObraLinkTitular {
+export interface ObraLinkTitularLegacy {
   id: string
   tenant_id: string
   obra_link_id: string
@@ -85,7 +191,7 @@ export interface ObraLinkTitular {
 }
 
 export interface ObraComLinks extends Obra {
-  links: ObraLink[]
+  links: ObraLinkLegacy[]
   controle_exec_publica: number
   controle_fonomecanico: number
   controle_sincronizacao: number
@@ -107,7 +213,30 @@ export interface ObraIntegrante {
   pais?: string
 }
 
-// Labels & helpers
+// ── Labels & helpers ──────────────────────────────────────────────────────────
+
+export const PAPEL_TITULAR_LABELS: Record<PapelTitularLink, string> = {
+  autor:                  'Autor',
+  compositor:             'Compositor',
+  versionista:            'Versionista',
+  adaptador:              'Adaptador',
+  editora_original:       'Editora Original',
+  administradora:         'Administradora',
+  subeditora:             'Subeditora',
+  interprete_referencia:  'Interprete Ref.',
+}
+
+export const PAPEL_TITULAR_COLORS: Record<PapelTitularLink, string> = {
+  autor:                  'bg-violet-500/20 text-violet-300',
+  compositor:             'bg-violet-500/20 text-violet-300',
+  versionista:            'bg-violet-500/15 text-violet-400',
+  adaptador:              'bg-slate-500/15 text-slate-400',
+  editora_original:       'bg-emerald-500/20 text-emerald-300',
+  administradora:         'bg-amber-500/20 text-amber-300',
+  subeditora:             'bg-emerald-500/15 text-emerald-400',
+  interprete_referencia:  'bg-rose-500/15 text-rose-400',
+}
+
 export const FUNCAO_LINK_LABELS: Record<FuncaoLink, string> = {
   CA: 'Compositor Autor',
   V:  'Versionista',
@@ -143,29 +272,95 @@ export const FUNCAO_LINK_COLORS: Record<FuncaoLink, string> = {
 }
 
 export const STATUS_OBRA_LABELS: Record<StatusObra, string> = {
-  rascunho:           'Rascunho',
-  pre_cadastro:       'Pre-cadastro',
-  pendente_contrato:  'Pend. Contrato',
-  pendente_percentual:'Pend. Percentual',
-  pendente_validacao: 'Pend. Validacao',
-  validada:           'Validada',
-  enviada_sociedade:  'Enviada Sociedade',
-  aguardando_retorno: 'Ag. Retorno',
-  ativa:              'Ativa',
-  bloqueada:          'Bloqueada',
-  inativa:            'Inativa',
+  pre_cadastro: 'Pre-cadastro',
+  validada:     'Validada',
+  ativa:        'Ativa',
+  bloqueada:    'Bloqueada',
+  divergente:   'Divergente',
 }
 
 export const STATUS_OBRA_COLORS: Record<StatusObra, string> = {
-  rascunho:           'bg-slate-500/15 text-slate-400',
-  pre_cadastro:       'bg-violet-500/15 text-violet-400',
-  pendente_contrato:  'bg-amber-500/15 text-amber-400',
-  pendente_percentual:'bg-amber-500/15 text-amber-400',
-  pendente_validacao: 'bg-amber-500/15 text-amber-400',
-  validada:           'bg-sky-500/15 text-sky-400',
-  enviada_sociedade:  'bg-sky-500/20 text-sky-300',
-  aguardando_retorno: 'bg-sky-500/15 text-sky-400',
-  ativa:              'bg-emerald-500/20 text-emerald-300',
-  bloqueada:          'bg-rose-500/15 text-rose-400',
-  inativa:            'bg-slate-500/10 text-slate-500',
+  pre_cadastro: 'bg-violet-500/15 text-violet-400',
+  validada:     'bg-sky-500/15 text-sky-400',
+  ativa:        'bg-emerald-500/20 text-emerald-300',
+  bloqueada:    'bg-rose-500/15 text-rose-400',
+  divergente:   'bg-amber-500/15 text-amber-400',
+}
+
+export const GENEROS_MUSICAIS = [
+  'Sertanejo', 'Forro', 'Pagode', 'Samba', 'MPB', 'Pop', 'Rock', 'Gospel',
+  'Funk', 'Axe', 'Baiao', 'Bossa Nova', 'Electronic', 'Jazz', 'Blues',
+  'Country', 'Reggae', 'Hip-Hop', 'R&B', 'Outro',
+]
+
+// ── Validação de link ─────────────────────────────────────────────────────────
+
+/**
+ * Valida se a soma dos percentuais dos titulares de um link fecha em 100%.
+ * Tolerância: 0.01 (arredondamentos como 33,33 + 33,33 + 33,34).
+ */
+export function validarSomaTitularesLink(link: ObraLink): {
+  valido: boolean
+  soma: number
+  diferenca: number
+} {
+  const soma = (link.titulares ?? []).reduce((s, t) => s + t.percentual, 0)
+  const diferenca = Math.abs(soma - 100)
+  return { valido: diferenca < 0.02, soma: parseFloat(soma.toFixed(4)), diferenca }
+}
+
+// ── Normalização de links legados ─────────────────────────────────────────────
+
+const PAPEIS_AUTOR = ['autor', 'compositor', 'versionista', 'adaptador'] as const
+const PAPEIS_EDITORA = ['editora_original', 'subeditora'] as const
+const PAPEIS_ADMIN  = ['administradora'] as const
+
+type PapelAutor  = typeof PAPEIS_AUTOR[number]
+type PapelEditora = typeof PAPEIS_EDITORA[number]
+type PapelAdmin  = typeof PAPEIS_ADMIN[number]
+
+/**
+ * Normaliza links no formato legado (1 titular por link) para o formato
+ * correto: 1 link por cadeia editorial com N titulares, soma = 100%.
+ *
+ * Regra de agrupamento:
+ *   - Todos os autores/compositores da obra
+ *   - + todas as editoras originais/subeditoras
+ *   - + todos os administradores
+ *   → formam UM único ObraLink cujos percentuais somam 100%.
+ *
+ * Se já existir algum link com mais de 1 titular, assume que o dado já está
+ * no formato correto e retorna sem alterar.
+ */
+export function normalizarLinksObra(links: ObraLink[]): ObraLink[] {
+  if (!links || links.length === 0) return links
+
+  // Já normalizado se qualquer link tem >1 titular
+  if (links.some(l => (l.titulares?.length ?? 0) > 1)) return links
+
+  const todos = links.flatMap(l => l.titulares ?? [])
+  const autores  = todos.filter(t => (PAPEIS_AUTOR  as readonly string[]).includes(t.papel))
+  const editoras = todos.filter(t => (PAPEIS_EDITORA as readonly string[]).includes(t.papel))
+  const admins   = todos.filter(t => (PAPEIS_ADMIN  as readonly string[]).includes(t.papel))
+  const outros   = todos.filter(t =>
+    !(PAPEIS_AUTOR  as readonly string[]).includes(t.papel) &&
+    !(PAPEIS_EDITORA as readonly string[]).includes(t.papel) &&
+    !(PAPEIS_ADMIN  as readonly string[]).includes(t.papel)
+  )
+
+  const titulares = [...autores, ...editoras, ...admins, ...outros]
+  const somaControlado = titulares
+    .filter(t => t.controlado)
+    .reduce((s, t) => s + t.percentual, 0)
+
+  const mergedLink: ObraLink = {
+    id:                    links[0].id,
+    obra_id:               links[0].obra_id,
+    ordem:                 1,
+    controlado:            links.some(l => l.controlado),
+    percentual_controlado: parseFloat(somaControlado.toFixed(4)),
+    titulares,
+  }
+
+  return [mergedLink]
 }

@@ -1,97 +1,118 @@
+'use client'
+
+import { useState } from 'react'
+import Link from 'next/link'
 import { PageHeader } from '@/components/ui/page-header'
-import { Eye, FileText, AlignLeft, Paperclip, Edit, CheckCircle2 } from 'lucide-react'
-import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, FUNCAO_LINK_COLORS } from '@/lib/types-obras'
-import type { FuncaoLink, StatusObra, ObraIntegrante } from '@/lib/types-obras'
+import {
+  Edit, AlignLeft, Mic2, FileText, Link2, Activity, AlertTriangle,
+  CheckCircle2, ChevronRight, ExternalLink, Music, Users2, Globe2, DollarSign, Users,
+} from 'lucide-react'
+import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, PAPEL_TITULAR_LABELS, PAPEL_TITULAR_COLORS, normalizarLinksObra } from '@/lib/types-obras'
+import { getObraById, getLinksById, getFonogramasById } from '@/lib/mock-obras'
+import { getAutorizacoesByObra } from '@/lib/mock-autorizacoes'
+import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
+import { MOCK_CC_OBRAS, fmtBRL, fmtDate } from '@/lib/mock-cc'
 
-export const metadata = { title: 'Detalhes da Obra | Sync Mood' }
-
-const MOCK_OBRA = {
-  id: '2', codigo_obra: 'OBR-002',
-  titulo: 'EXEMPLO DE OBRA - VER PRINTS',
-  subtitulo: null as string | null, titulo_alternativo: null as string | null,
-  idioma: 'Portugues', status: 'ativa' as StatusObra,
-  status_iswc: 'recebido', iswc: 'T-987654321-0',
-  origem_cadastro: 'contrato_sistema',
-  observacoes: 'Obra com administracao parcial — Link 1 administrado, Links 2 e 3 diretos.',
-  controle_exec_publica: 3.75, controle_fonomecanico: 30.0, controle_sincronizacao: 30.0,
-}
-
-const MOCK_INTEGRANTES: ObraIntegrante[] = [
-  { obra_id:'2', numero_link:1, tipo_link:'editora_administrada', percentual_link:26.25,
-    nome_participante:'ALEX STELA', ipi:'2780022', funcao_no_link:'CA',
-    percentual_exec_publica:22.50, percentual_fonomecanico:0.00, percentual_sincronizacao:0.00,
-    status_controle:'controlado', pais:'BR' },
-  { obra_id:'2', numero_link:1, tipo_link:'editora_administrada', percentual_link:26.25,
-    nome_participante:'P3 EDITORA MUSICAL LTDA - ME', ipi:'8961236', funcao_no_link:'E',
-    percentual_exec_publica:3.75, percentual_fonomecanico:0.00, percentual_sincronizacao:0.00,
-    status_controle:'controlado', pais:'BR' },
-  { obra_id:'2', numero_link:1, tipo_link:'editora_administrada', percentual_link:26.25,
-    nome_participante:'TOP SHOW MUSIC LIMITADA - ME', ipi:'2646326', funcao_no_link:'AM',
-    percentual_exec_publica:3.75, percentual_fonomecanico:30.00, percentual_sincronizacao:30.00,
-    status_controle:'controlado', pais:'BR' },
-  { obra_id:'2', numero_link:2, tipo_link:'direto_sem_editora', percentual_link:50,
-    nome_participante:'RENEE FERNANDES CORDEIRO', ipi:'970754', funcao_no_link:'CA',
-    percentual_exec_publica:50.00, percentual_fonomecanico:50.00, percentual_sincronizacao:50.00,
-    status_controle:'nao_controlado', pais:'BR' },
-  { obra_id:'2', numero_link:3, tipo_link:'direto_sem_editora', percentual_link:20,
-    nome_participante:'EDUARDO MUNIZ DE ARAUJO', ipi:'8153005', funcao_no_link:'CA',
-    percentual_exec_publica:20.00, percentual_fonomecanico:20.00, percentual_sincronizacao:20.00,
-    status_controle:'nao_controlado', pais:'BR' },
+const TABS = [
+  { id: 'resumo',         label: 'Resumo',              icon: Music },
+  { id: 'integrantes',    label: 'Integrantes da Obra',  icon: Users2 },
+  { id: 'conta_corrente', label: 'Conta Corrente',       icon: DollarSign },
+  { id: 'letra',          label: 'Letra',               icon: AlignLeft },
+  { id: 'fonogramas',     label: 'Fonogramas',           icon: Mic2 },
+  { id: 'contratos',      label: 'Contratos',            icon: FileText },
+  { id: 'exportacoes',    label: 'Exportações',          icon: Activity },
+  { id: 'divergencias',   label: 'Divergências',         icon: AlertTriangle },
 ]
 
-const LINK_BG = ['bg-violet-600','bg-slate-600','bg-slate-700','bg-slate-700','bg-slate-700']
+// Parseia o campo descricao em campos estruturados
+function parseDescricao(desc?: string) {
+  if (!desc) return null
+  const parts = desc.split(' | ')
+  const header = parts[0]
+  const fields: { label: string; value: string }[] = []
+  for (const part of parts.slice(1)) {
+    const i = part.indexOf(':')
+    if (i > -1) fields.push({ label: part.slice(0, i).trim(), value: part.slice(i + 1).trim() })
+  }
+  return { header, fields }
+}
 
-function LinkCircle({ n }: { n: number }) {
+// Siglas de categoria → badge color
+const SIGLA_COLOR: Record<string, string> = {
+  CA: 'bg-violet-600 text-white',
+  E:  'bg-sky-600 text-white',
+  SE: 'bg-indigo-600 text-white',
+  AM: 'bg-amber-600 text-white',
+  V:  'bg-emerald-600 text-white',
+  AD: 'bg-rose-600 text-white',
+  AR: 'bg-pink-600 text-white',
+}
+
+function papelToSigla(papel: string): string {
+  const map: Record<string, string> = {
+    compositor: 'CA', autor_ca: 'CA', autor: 'CA',
+    editora: 'E', editora_original: 'E',
+    subeditora: 'SE',
+    administradora: 'AM', editora_administradora: 'AM',
+    versionista: 'V', adaptador: 'AD', arranjador: 'AR',
+  }
+  return map[papel] ?? papel.toUpperCase().slice(0, 3)
+}
+
+function SiglaBadge({ papel }: { papel: string }) {
+  const sigla = papelToSigla(papel)
+  const color = SIGLA_COLOR[sigla] ?? 'bg-white/10 text-white/60'
   return (
-    <span className={'inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold shrink-0 text-white ' + (LINK_BG[n-1] ?? LINK_BG[4])}>
-      {n}
+    <span className={`inline-flex items-center justify-center w-7 h-6 rounded text-[10px] font-bold ${color}`}>
+      {sigla}
     </span>
   )
 }
 
-function FuncaoBadge({ f }: { f: FuncaoLink }) {
+function ControleBadge({ pct, label, color }: { pct: number; label: string; color: string }) {
   return (
-    <span className={'inline-flex items-center justify-center w-7 h-6 rounded text-[11px] font-bold ' + FUNCAO_LINK_COLORS[f]}>
-      {f}
-    </span>
-  )
-}
-
-function PctCell({ v, color }: { v: number; color: string }) {
-  return (
-    <span className={'text-sm font-semibold tabular-nums ' + (v === 0 ? 'text-white/25' : color)}>
-      {v.toFixed(2).replace('.', ',')}%
-    </span>
-  )
-}
-
-function CtrlBadge({ label, value, bg, text }: { label: string; value: number; bg: string; text: string }) {
-  return (
-    <div className={'flex flex-col items-center justify-center px-4 py-2 rounded-lg min-w-[160px] border ' + bg}>
-      <span className={'text-[10px] font-semibold uppercase tracking-wide ' + text}>{label}</span>
-      <span className={'text-lg font-bold ' + text}>{value.toFixed(3).replace('.', ',')} %</span>
+    <div className={`flex flex-col items-start px-4 py-3 rounded-xl border min-w-[160px] ${color}`}>
+      <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{label}</span>
+      <span className="text-xl font-bold tabular-nums">{pct.toFixed(2).replace('.', ',')}%</span>
+      <div className="w-full h-1 bg-black/20 rounded-full mt-1.5 overflow-hidden">
+        <div className="h-full rounded-full bg-current opacity-60" style={{ width: `${Math.min(pct, 100)}%` }} />
+      </div>
     </div>
   )
 }
 
 export default function ObraDetailPage({ params }: { params: { id: string } }) {
-  const obra = MOCK_OBRA
-  const integrantes = MOCK_INTEGRANTES
-  const linkNumbers = [...new Set(integrantes.map(i => i.numero_link))].sort((a, b) => a - b)
-  const sumExec = integrantes.reduce((s, i) => s + i.percentual_exec_publica, 0)
-  const sumFono = integrantes.reduce((s, i) => s + i.percentual_fonomecanico, 0)
-  const sumSync = integrantes.reduce((s, i) => s + i.percentual_sincronizacao, 0)
+  const obra = getObraById(params.id)
+  const links = normalizarLinksObra(getLinksById(params.id))
+  const fonogramas = getFonogramasById(params.id)
+  const autorizacoes = getAutorizacoesByObra(params.id)
+  const [activeTab, setActiveTab] = useState('resumo')
+
+  if (!obra) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-16 text-white/40">
+        <Music className="w-10 h-10" />
+        <p className="text-sm">Obra nao encontrada</p>
+        <Link href="/master/obras" className="text-xs text-violet-400 hover:text-violet-300">
+          Voltar para Obras
+        </Link>
+      </div>
+    )
+  }
+
+  const editora = MOCK_EDITORAS.find(e => e.id === obra.editora_id)
+  const pcControlado = obra._percentual_controlado ?? 0
 
   return (
     <div className="space-y-5">
       <PageHeader
         title={obra.titulo}
-        description={'Codigo: ' + obra.codigo_obra + (obra.iswc ? '  |  ISWC: ' + obra.iswc : '')}
+        description={`Codigo: ${obra.codigo}${obra.iswc ? '  |  ISWC: ' + obra.iswc : '  |  ISWC: Pendente'}`}
         actions={
           <div className="flex items-center gap-2">
-            <a href="/master/obras" className="h-8 px-3 rounded-lg bg-white/5 border border-white/[0.06] text-xs text-white/60 hover:text-white/80 transition-colors flex items-center">
+            <Link href="/master/obras" className="h-8 px-3 rounded-lg bg-white/5 border border-white/[0.06] text-xs text-white/60 hover:text-white/80 transition-colors flex items-center">
               Voltar
-            </a>
+            </Link>
             <button className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-violet-600 hover:bg-violet-500 text-xs text-white font-semibold transition-colors">
               <Edit className="w-3.5 h-3.5" /> Editar
             </button>
@@ -99,178 +120,349 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
         }
       />
 
-      {/* Status + controles */}
-      <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4">
-        <div className="flex flex-wrap items-center gap-3 mb-3">
-          <span className={'text-xs font-semibold px-2.5 py-1 rounded-full ' + STATUS_OBRA_COLORS[obra.status]}>
+      {/* Status bar */}
+      <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_OBRA_COLORS[obra.status]}`}>
             {STATUS_OBRA_LABELS[obra.status]}
           </span>
+          {obra.genero && <span className="text-xs px-2 py-1 rounded-full bg-white/5 text-white/50">{obra.genero}</span>}
           <span className="text-xs text-white/30">|</span>
-          <span className="text-xs text-white/40">Origem: {obra.origem_cadastro.replace(/_/g, ' ')}</span>
+          <span className="text-xs text-white/40">{obra.idioma}</span>
+          {obra.ano_criacao && <><span className="text-xs text-white/30">|</span><span className="text-xs text-white/40">{obra.ano_criacao}</span></>}
           <span className="text-xs text-white/30">|</span>
-          <span className={'text-xs font-semibold ' + (obra.status_iswc === 'recebido' ? 'text-emerald-400' : 'text-amber-400')}>
-            ISWC: {obra.status_iswc === 'recebido' ? obra.iswc : 'Pendente'}
+          <span className={`text-xs font-semibold ${obra.iswc ? 'text-emerald-400' : 'text-amber-400'}`}>
+            ISWC: {obra.iswc ?? 'Pendente'}
           </span>
+          {editora && (
+            <><span className="text-xs text-white/30">|</span>
+            <span className="text-xs text-white/40">Editora: <span className="text-white/60">{editora.nome_fantasia}</span></span></>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <CtrlBadge label="Controle execucao publica" value={obra.controle_exec_publica}
-            bg="bg-cyan-500/10 border-cyan-500/20" text="text-cyan-400" />
-          <CtrlBadge label="Controle fonomecanico" value={obra.controle_fonomecanico}
-            bg="bg-emerald-500/10 border-emerald-500/20" text="text-emerald-400" />
-          <CtrlBadge label="Controle sincronizacao" value={obra.controle_sincronizacao}
-            bg="bg-amber-500/10 border-amber-500/20" text="text-amber-400" />
+          <ControleBadge pct={pcControlado} label="Percentual Controlado" color="bg-violet-500/10 border-violet-500/20 text-violet-300" />
+          <ControleBadge pct={fonogramas.length > 0 ? 100 : 0} label={`Fonogramas (${fonogramas.length})`} color="bg-sky-500/10 border-sky-500/20 text-sky-300" />
+          <ControleBadge pct={autorizacoes.length * 12.5} label={`Autorizacoes (${autorizacoes.length})`} color="bg-emerald-500/10 border-emerald-500/20 text-emerald-300" />
         </div>
       </div>
 
-      {/* Action buttons */}
-      <div className="flex flex-wrap items-center gap-2">
-        <button className="flex items-center gap-2 h-9 px-5 rounded-lg bg-violet-600 hover:bg-violet-500 text-sm font-bold text-white transition-colors">
-          <AlignLeft className="w-4 h-4" /> EXIBIR LETRA
-        </button>
-        <button className="flex items-center gap-2 h-9 px-5 rounded-lg bg-violet-700/60 hover:bg-violet-700 text-sm font-bold text-white transition-colors">
-          <FileText className="w-4 h-4" /> OBSERVACOES
-        </button>
-        <div className="flex items-center gap-2 h-9 px-4 rounded-lg bg-white/5 border border-white/[0.06] text-xs text-white/40">
-          <Paperclip className="w-3.5 h-3.5" /> Arquivos recebidos
-        </div>
+      {/* Tabs */}
+      <div className="flex items-center gap-0.5 border-b border-white/[0.06] overflow-x-auto">
+        {TABS.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-1.5 h-9 px-4 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px
+              ${activeTab === tab.id
+                ? 'border-violet-500 text-white'
+                : 'border-transparent text-white/40 hover:text-white/70'}`}
+          >
+            <tab.icon className="w-3.5 h-3.5" />
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Integrantes da Obra table */}
-      <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
-          <h2 className="text-sm font-semibold text-white">Integrantes da Obra</h2>
-          <div className="flex items-center gap-2 text-xs text-white/40">
-            Visao Padrao
-            <div className="w-8 h-4 rounded-full bg-violet-600 relative">
-              <div className="absolute right-0.5 top-0.5 w-3 h-3 bg-white rounded-full" />
-            </div>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-white/[0.02] border-b border-white/[0.04]">
-                <th className="w-10 px-4 py-2.5" />
-                <th className="w-10 px-2 py-2.5" />
-                <th className="text-left text-xs font-semibold text-white/40 px-3 py-2.5 min-w-[200px]">Participante</th>
-                <th className="text-center text-xs font-semibold text-white/40 px-3 py-2.5">IPI</th>
-                <th className="text-center text-xs font-semibold text-white/40 px-3 py-2.5">Fn</th>
-                <th className="text-center text-xs font-semibold text-cyan-500/80 px-4 py-2.5">Exec. Publica</th>
-                <th className="text-center text-xs font-semibold text-emerald-500/80 px-4 py-2.5">Fonomecanico</th>
-                <th className="text-center text-xs font-semibold text-amber-500/80 px-4 py-2.5">Sincronizacao</th>
-                <th className="w-24 px-4 py-2.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {linkNumbers.map(linkNum => {
-                const rows = integrantes.filter(i => i.numero_link === linkNum)
-                return rows.map((row, rowIdx) => (
-                  <tr
-                    key={row.nome_participante + String(linkNum)}
-                    className={'border-b border-white/[0.03] transition-colors ' +
-                      (row.status_controle === 'nao_controlado' ? 'opacity-60 hover:opacity-90' : 'hover:bg-white/[0.02]')}
-                  >
-                    <td className="px-4 py-3 text-center">
-                      <span className="inline-flex items-center justify-center w-7 h-5 rounded text-[9px] font-bold bg-blue-700/30 text-blue-400 border border-blue-700/20">
-                        {row.pais ?? 'BR'}
-                      </span>
-                    </td>
-                    <td className="px-2 py-3 text-center">
-                      {rowIdx === 0 ? <LinkCircle n={linkNum} /> : <span className="inline-block w-5" />}
-                    </td>
-                    <td className="px-3 py-3">
-                      <span className={'text-sm ' + (row.status_controle === 'nao_controlado' ? 'text-white/50' : 'text-white/80 font-medium')}>
-                        {row.nome_participante}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 text-center">
-                      <span className={'text-xs font-mono ' + (row.status_controle === 'nao_controlado' ? 'text-white/30' : 'text-violet-400')}>
-                        {row.ipi ?? '—'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 text-center">
-                      <FuncaoBadge f={row.funcao_no_link} />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <PctCell v={row.percentual_exec_publica} color="text-cyan-400" />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <PctCell v={row.percentual_fonomecanico} color="text-emerald-400" />
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <PctCell v={row.percentual_sincronizacao} color="text-amber-400" />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors ml-auto">
-                        <Eye className="w-3.5 h-3.5" /> Visualizar
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              })}
-            </tbody>
-            <tfoot className="border-t border-white/[0.06] bg-white/[0.02]">
-              <tr>
-                <td colSpan={5} className="px-5 py-3">
-                  <span className="text-xs font-semibold text-white/40">TOTAIS</span>
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <span className={'text-sm font-bold tabular-nums ' + (sumExec === 100 ? 'text-cyan-400' : 'text-rose-400')}>
-                    {sumExec.toFixed(2).replace('.', ',')}%
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <span className={'text-sm font-bold tabular-nums ' + (sumFono === 100 ? 'text-emerald-400' : 'text-rose-400')}>
-                    {sumFono.toFixed(2).replace('.', ',')}%
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <span className={'text-sm font-bold tabular-nums ' + (sumSync === 100 ? 'text-amber-400' : 'text-rose-400')}>
-                    {sumSync.toFixed(2).replace('.', ',')}%
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  {sumExec === 100 && sumFono === 100 && sumSync === 100 ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 ml-auto" />
-                  ) : (
-                    <span className="text-xs text-rose-400">Verificar</span>
-                  )}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-
-      {/* Dados complementares */}
-      <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5">
-        <details>
-          <summary className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-white/60 hover:text-white/80 transition-colors list-none select-none">
-            <span className="text-white/30">v</span> DADOS COMPLEMENTARES
-          </summary>
-          <div className="mt-4 grid grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Tab: Resumo */}
+      {activeTab === 'resumo' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-white">Dados da Obra</h3>
             {[
-              { label: 'Idioma', value: obra.idioma ?? '—' },
-              { label: 'Titulo Alternativo', value: obra.titulo_alternativo ?? '—' },
-              { label: 'Subtitulo', value: obra.subtitulo ?? '—' },
-              { label: 'Origem', value: obra.origem_cadastro.replace(/_/g, ' ') },
-              { label: 'Status ISWC', value: obra.status_iswc },
+              { label: 'Titulo',           value: obra.titulo },
+              { label: 'Titulo Original',  value: obra.titulo_original ?? '—' },
+              { label: 'Codigo',           value: obra.codigo },
+              { label: 'ISWC',             value: obra.iswc ?? 'Pendente SOCINPRO' },
+              { label: 'Idioma',           value: obra.idioma },
+              { label: 'Genero',           value: obra.genero ?? '—' },
+              { label: 'Ano de Criacao',   value: obra.ano_criacao?.toString() ?? '—' },
+              { label: 'Duracao',          value: obra.duracao ? `${Math.floor(obra.duracao/60)}:${String(obra.duracao%60).padStart(2,'0')}` : '—' },
             ].map(f => (
-              <div key={f.label}>
-                <p className="text-xs text-white/30 mb-0.5">{f.label}</p>
-                <p className="text-sm text-white/70">{f.value}</p>
+              <div key={f.label} className="flex items-center justify-between">
+                <span className="text-xs text-white/35">{f.label}</span>
+                <span className="text-xs text-white/70 font-medium">{f.value}</span>
+              </div>
+            ))}
+          </div>
+          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-white">Controle & Administracao</h3>
+            {[
+              { label: 'Status',               value: STATUS_OBRA_LABELS[obra.status] },
+              { label: 'Editora Responsavel',  value: editora?.nome_fantasia ?? '—' },
+              { label: 'Links de Participacao',value: String(links.length) },
+              { label: 'Links Controlados',    value: String(links.filter(l => l.controlado).length) },
+              { label: '% Controlado',         value: `${pcControlado.toFixed(3)}%` },
+              { label: 'Fonogramas',           value: String(fonogramas.length) },
+              { label: 'Autorizacoes Vinculadas', value: String(autorizacoes.length) },
+            ].map(f => (
+              <div key={f.label} className="flex items-center justify-between">
+                <span className="text-xs text-white/35">{f.label}</span>
+                <span className="text-xs text-white/70 font-medium">{f.value}</span>
               </div>
             ))}
           </div>
           {obra.observacoes && (
-            <div className="mt-4 pt-4 border-t border-white/[0.06]">
-              <p className="text-xs text-white/30 mb-1">Observacoes</p>
+            <div className="lg:col-span-2 bg-[#0d1526] border border-white/[0.06] rounded-xl p-5">
+              <h3 className="text-xs font-semibold text-white/50 mb-2">Observacoes</h3>
               <p className="text-sm text-white/60 leading-relaxed">{obra.observacoes}</p>
             </div>
           )}
-        </details>
-      </div>
+        </div>
+      )}
+
+      {/* Tab: Integrantes da Obra */}
+      {activeTab === 'integrantes' && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 mb-1">
+            <span className="text-xs text-white/40">
+              {links.length} link{links.length !== 1 ? 's' : ''} · {links.filter(l => l.controlado).length} controlado{links.filter(l=>l.controlado).length!==1?'s':''}
+            </span>
+            <span className="text-xs text-violet-400 font-semibold ml-auto">{pcControlado.toFixed(2)}% controlado</span>
+          </div>
+
+          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-white/[0.06] bg-white/[0.02]">
+              <h3 className="text-sm font-semibold text-white">Integrantes da Obra</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[600px]">
+                <thead>
+                  <tr className="border-b border-white/[0.06]">
+                    <th className="text-center px-4 py-2.5 text-white/30 font-semibold text-xs w-12">Link</th>
+                    <th className="text-left px-4 py-2.5 text-white/30 font-semibold text-xs">Nome</th>
+                    <th className="text-center px-4 py-2.5 text-white/30 font-semibold text-xs w-28">IPI / Cód.</th>
+                    <th className="text-center px-4 py-2.5 text-white/30 font-semibold text-xs w-16">Cat.</th>
+                    <th className="text-right px-5 py-2.5 text-white/30 font-semibold text-xs w-24">%</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.04]">
+                  {links.flatMap(link =>
+                    (link.titulares ?? []).map(t => (
+                      <tr key={t.id} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="px-4 py-3 text-center">
+                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 text-[10px] font-bold text-white">
+                            {link.ordem}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`font-medium ${t.controlado ? 'text-white/80' : 'text-white/55'}`}>
+                            {t.nome}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="font-mono text-sm text-violet-400/80">
+                            {t.ipi || t.cae || '—'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <SiglaBadge papel={t.papel} />
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <span className="font-semibold tabular-nums text-sky-300/90 text-sm">
+                            {t.percentual.toFixed(2).replace('.', ',')}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-white/[0.08]">
+                    <td colSpan={4} className="px-4 py-2 text-right text-xs text-white/25 font-medium">Total</td>
+                    <td className="px-5 py-2 text-right font-bold tabular-nums text-xs text-white/50">
+                      {links.flatMap(l => l.titulares ?? []).reduce((s, t) => s + t.percentual, 0).toFixed(2).replace('.', ',')}%
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Letra */}
+      {activeTab === 'letra' && (
+        <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6">
+          <h3 className="text-sm font-semibold text-white mb-4">Letra da Obra</h3>
+          <div className="text-white/40 text-sm italic py-8 text-center">
+            Letra nao cadastrada para esta obra.
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Fonogramas */}
+      {activeTab === 'fonogramas' && (
+        <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+            <h3 className="text-sm font-semibold text-white">Fonogramas ({fonogramas.length})</h3>
+          </div>
+          {fonogramas.length === 0 ? (
+            <div className="py-8 text-center text-xs text-white/30">Nenhum fonograma cadastrado.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs min-w-[600px]">
+                <thead>
+                  <tr className="border-b border-white/[0.04]">
+                    <th className="text-left px-5 py-2 text-white/30 font-semibold">Titulo</th>
+                    <th className="text-left px-4 py-2 text-white/30 font-semibold">Interprete</th>
+                    <th className="text-center px-4 py-2 text-white/30 font-semibold">ISRC</th>
+                    <th className="text-center px-4 py-2 text-white/30 font-semibold">Plataformas</th>
+                    <th className="text-center px-4 py-2 text-white/30 font-semibold">Lancamento</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.03]">
+                  {fonogramas.map(f => (
+                    <tr key={f.id} className="hover:bg-white/[0.02]">
+                      <td className="px-5 py-3 font-medium text-white/70">{f.titulo_fonograma}</td>
+                      <td className="px-4 py-3 text-white/50">{f.interprete}</td>
+                      <td className="px-4 py-3 text-center font-mono text-white/40">{f.isrc ?? <span className="text-amber-400/60 italic">Pendente</span>}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="text-white/40">{f.plataformas_json?.length ?? 0} plataformas</span>
+                      </td>
+                      <td className="px-4 py-3 text-center text-white/40">{f.data_lancamento ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Contratos */}
+      {activeTab === 'contratos' && (
+        <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6">
+          <h3 className="text-sm font-semibold text-white mb-4">Contratos Vinculados</h3>
+          {obra.contrato_origem_id ? (
+            <div className="flex items-center justify-between p-3 bg-white/[0.03] rounded-lg border border-white/[0.06]">
+              <div>
+                <p className="text-sm text-white/70 font-medium">Contrato de Origem</p>
+                <p className="text-xs font-mono text-white/40">{obra.contrato_origem_id}</p>
+              </div>
+              <Link href={`/master/contratos/${obra.contrato_origem_id}`}
+                className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300">
+                Ver <ExternalLink className="w-3 h-3" />
+              </Link>
+            </div>
+          ) : (
+            <div className="py-8 text-center text-xs text-white/30">Nenhum contrato vinculado.</div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Exportacoes */}
+      {activeTab === 'exportacoes' && (
+        <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6">
+          <h3 className="text-sm font-semibold text-white mb-4">Historico de Exportacoes</h3>
+          <div className="py-8 text-center text-xs text-white/30">Nenhuma exportacao registrada.</div>
+        </div>
+      )}
+
+      {/* Tab: Conta Corrente */}
+      {activeTab === 'conta_corrente' && (() => {
+        const ccObras = MOCK_CC_OBRAS.filter(o => o.obra_id === params.id)
+        const totalSaldo = ccObras.reduce((s, o) => s + o.saldo_atual, 0)
+        const totalDist  = ccObras.reduce((s, o) => s + o.saldo_distribuido, 0)
+        if (ccObras.length === 0) return (
+          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-10 text-center text-white/30 text-sm">
+            Nenhum recebimento distribuído para esta obra ainda.
+          </div>
+        )
+        return (
+          <div className="space-y-6">
+            {/* KPI cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="bg-[#0d1526] border border-emerald-500/10 rounded-2xl p-4">
+                <p className="text-[10px] text-emerald-400/70 mb-1">Saldo Total</p>
+                <p className="text-xl font-bold text-emerald-400 tabular-nums">{fmtBRL(totalSaldo)}</p>
+              </div>
+              <div className="bg-[#0d1526] border border-violet-500/10 rounded-2xl p-4">
+                <p className="text-[10px] text-violet-400/70 mb-1">Total Distribuído</p>
+                <p className="text-xl font-bold text-violet-400 tabular-nums">{fmtBRL(totalDist)}</p>
+              </div>
+              <div className="bg-[#0d1526] border border-sky-500/10 rounded-2xl p-4">
+                <p className="text-[10px] text-sky-400/70 mb-1">Statements</p>
+                <p className="text-xl font-bold text-sky-400 tabular-nums">{ccObras.length}</p>
+              </div>
+            </div>
+
+            {/* Por statement */}
+            {ccObras.map(cc => {
+              const allMovimentos = cc.movimentos
+              return (
+                <div key={cc.id} className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
+                  <div className="px-5 py-3 border-b border-white/[0.05] flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-white/80">{cc.obra_titulo}</p>
+                      <p className="text-[10px] text-white/35 font-mono">{cc.id}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold text-emerald-400 tabular-nums">{fmtBRL(cc.saldo_atual)}</p>
+                      <p className="text-[10px] text-white/35">saldo</p>
+                    </div>
+                  </div>
+
+                  {/* Movimentos com campos estruturados */}
+                  {allMovimentos.map(m => {
+                    const parsed = parseDescricao(m.descricao)
+                    return (
+                      <div key={m.id} className="px-5 py-4 border-b border-white/[0.04] last:border-0">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div>
+                            <p className="text-xs font-semibold text-white/70">{parsed?.header ?? m.descricao}</p>
+                            <p className="text-[10px] text-white/35">{fmtDate(m.data_movimento)}</p>
+                          </div>
+                          <span className="text-sm font-bold text-emerald-400 tabular-nums shrink-0">+{fmtBRL(m.valor_liquido)}</span>
+                        </div>
+                        {parsed && parsed.fields.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mb-3">
+                            {parsed.fields.map(f => (
+                              <span key={f.label} className="inline-flex items-center gap-1 text-[10px] bg-white/[0.04] border border-white/[0.08] rounded px-1.5 py-0.5">
+                                <span className="text-white/30">{f.label}:</span>
+                                <span className="text-white/65">{f.value}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  {/* Distribuições por titular */}
+                  {cc.distribuicoes.length > 0 && (
+                    <div className="px-5 py-3 border-t border-white/[0.05] bg-white/[0.01]">
+                      <p className="text-[10px] text-white/30 font-semibold uppercase mb-2">Distribuição por Titular</p>
+                      <div className="space-y-1.5">
+                        {cc.distribuicoes.map(d => (
+                          <div key={d.id} className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Users className="w-3 h-3 text-violet-400 shrink-0" />
+                              <span className="text-xs text-white/60 truncate">{d.titular_nome}</span>
+                              <span className="text-[10px] text-white/30 shrink-0">{d.percentual_aplicado.toFixed(2)}%</span>
+                            </div>
+                            <span className="text-xs font-semibold text-violet-400 tabular-nums shrink-0">{fmtBRL(d.valor_destinado)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
+
+      {/* Tab: Divergencias */}
+      {activeTab === 'divergencias' && (
+        <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6">
+          <h3 className="text-sm font-semibold text-white mb-4">Divergencias</h3>
+          <div className="py-8 text-center text-xs text-white/30">
+            <CheckCircle2 className="w-8 h-8 text-emerald-500/40 mx-auto mb-2" />
+            Nenhuma divergencia aberta.
+          </div>
+        </div>
+      )}
     </div>
   )
 }
