@@ -1,8 +1,35 @@
 ﻿-- ============================================================
--- SYNC MOOD SAAS -- MIGRATION COMPLETA
--- Execute UMA VEZ no SQL Editor do Supabase:
--- https://supabase.com/dashboard/project/tigubwxotanaznqqxogf/editor
+-- SYNC MOOD SAAS -- MIGRATION COMPLETA v2 (com DROP seguro)
+-- Execute no SQL Editor: https://supabase.com/dashboard/project/tigubwxotanaznqqxogf/editor
 -- ============================================================
+
+-- DROP tudo na ordem inversa (seguro para reexecutar)
+DROP TABLE IF EXISTS autorizacao_obras, autorizacoes CASCADE;
+DROP TABLE IF EXISTS prestacao_contas CASCADE;
+DROP TABLE IF EXISTS cc_movimentos, cc_titulares, cc_obras CASCADE;
+DROP TABLE IF EXISTS distribuicao_itens, distribuicoes, periodos_distribuicao CASCADE;
+DROP TABLE IF EXISTS recebimento_itens, importacoes_log, recebimentos CASCADE;
+DROP TABLE IF EXISTS gravacoes, fonogramas CASCADE;
+DROP TABLE IF EXISTS obra_link_titulares, obra_links, obras CASCADE;
+DROP TABLE IF EXISTS clausulas, contrato_obras, contratos, modelos_juridicos CASCADE;
+DROP TABLE IF EXISTS titulares_dados_bancarios, titulares_contatos, titulares_pseudonimos CASCADE;
+DROP TABLE IF EXISTS titulares_pj, titulares_pf, titulares CASCADE;
+DROP TABLE IF EXISTS editoras_configuracoes, editoras CASCADE;
+DROP TABLE IF EXISTS permissoes, perfis, usuarios CASCADE;
+DROP TABLE IF EXISTS tenants CASCADE;
+DROP FUNCTION IF EXISTS set_updated_at() CASCADE;
+DROP FUNCTION IF EXISTS fn_meu_tenant_id() CASCADE;
+DROP FUNCTION IF EXISTS fn_meu_role() CASCADE;
+DROP FUNCTION IF EXISTS fn_meu_titular_id() CASCADE;
+DROP VIEW IF EXISTS v_obras_com_titulares CASCADE;
+DROP VIEW IF EXISTS v_cc_titular_resumo CASCADE;
+DROP TYPE IF EXISTS pessoa_tipo, status_geral, tipo_titular, tipo_conta_bancaria, tipo_contrato CASCADE;
+DROP TYPE IF EXISTS status_contrato, direito_tipo, status_obra, versao_fonograma, funcao_autor CASCADE;
+DROP TYPE IF EXISTS role_usuario, plano_tenant, tipo_link, funcao_link, status_controle CASCADE;
+DROP TYPE IF EXISTS origem_cadastro_obra, status_iswc, tipo_periodo_dist, status_periodo_dist CASCADE;
+DROP TYPE IF EXISTS status_distribuicao, tipo_movimento_obra, tipo_movimento_tit, fonte_recebimento CASCADE;
+DROP TYPE IF EXISTS status_recebimento, formato_importacao, tipo_importacao_log, status_importacao CASCADE;
+
 
 -- ============================================================
 -- 001_enums.sql
@@ -74,11 +101,12 @@ CREATE TABLE usuarios (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   auth_user_id    UUID UNIQUE REFERENCES auth.users(id) ON DELETE SET NULL,
-  email           TEXT NOT NULL,
+  email           TEXT,                                              -- email Supabase Auth ({cpf}@syncmood.app)
+  cpf             TEXT UNIQUE,                                       -- login principal (CPF sem formatação)
   nome            TEXT NOT NULL,
   role            role_usuario NOT NULL DEFAULT 'autor',
-  titular_id      UUID,                                            -- FK titulares (adicionado depois)
-  editora_id      UUID,                                            -- FK editoras (adicionado depois)
+  titular_id      UUID,                                              -- FK titulares (adicionado depois)
+  editora_id      UUID,                                              -- FK editoras (adicionado depois)
   ativo           BOOLEAN NOT NULL DEFAULT TRUE,
   ultimo_acesso   TIMESTAMPTZ,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1202,17 +1230,17 @@ SET editora_master_id = 'bbbbbbbb-0000-0000-0000-000000000001'
 WHERE id = 'aaaaaaaa-0000-0000-0000-000000000001';
 
 -- 4. Criar o usuário master
--- ATENÇÃO: substitua 'SEU-AUTH-USER-ID' pelo UUID retornado pelo Supabase Auth
--- após criar o usuário em Authentication > Users no dashboard do Supabase
+-- auth_user_id será vinculado após criar usuário no Supabase Auth → Authentication → Users
 INSERT INTO usuarios (
-  id, tenant_id, auth_user_id, email, nome, role, editora_id, ativo
+  id, tenant_id, auth_user_id, email, cpf, nome, role, editora_id, ativo
 )
 VALUES (
   gen_random_uuid(),
   'aaaaaaaa-0000-0000-0000-000000000001',
-  'SEU-AUTH-USER-ID',                        -- ← PREENCHER
-  'admin@topshowmusic.com.br',               -- ← PREENCHER
-  'Administrador Master',                    -- ← PREENCHER
+  NULL,                                      -- vincular após criar em Authentication > Users
+  'admin@topshowmusic.com.br',
+  NULL,                                      -- preencher com CPF do admin quando criar login
+  'Administrador Master',
   'master',
   'bbbbbbbb-0000-0000-0000-000000000001',
   TRUE

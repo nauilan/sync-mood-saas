@@ -5,10 +5,26 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 
+// CPF: login por CPF + senha
+// Internamente o Supabase Auth usa "{cpf_digits}@syncmood.app" como email
+
+function cpfParaEmail(cpf: string): string {
+  const digits = cpf.replace(/\D/g, '')
+  return `${digits}@syncmood.app`
+}
+
+function formatarCpf(value: string): string {
+  const d = value.replace(/\D/g, '').slice(0, 11)
+  if (d.length <= 3) return d
+  if (d.length <= 6) return `${d.slice(0,3)}.${d.slice(3)}`
+  if (d.length <= 9) return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6)}`
+  return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`
+}
+
 export function LoginForm() {
   const router = useRouter()
   const params = useSearchParams()
-  const [email, setEmail] = useState('')
+  const [cpf, setCpf] = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -21,14 +37,22 @@ export function LoginForm() {
 
     try {
       const supabase = createClient()
+      const cpfDigits = cpf.replace(/\D/g, '')
+
+      if (cpfDigits.length !== 11) {
+        setError('CPF inválido. Digite os 11 dígitos.')
+        return
+      }
+
+      const emailAuth = cpfParaEmail(cpfDigits)
 
       const { data, error: authErr } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: emailAuth,
         password,
       })
 
       if (authErr || !data.user) {
-        setError('E-mail ou senha incorretos.')
+        setError('CPF ou senha incorretos.')
         return
       }
 
@@ -41,9 +65,7 @@ export function LoginForm() {
 
       const role = usuario?.role ?? 'autor'
 
-      // Redireciona baseado no role real (ou redirectTo da URL)
       const redirectTo = params.get('redirectTo')
-
       const defaultRoutes: Record<string, string> = {
         master: '/master/dashboard',
         admin: '/master/dashboard',
@@ -76,14 +98,15 @@ export function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-white/55">E-mail</label>
+        <label className="text-xs font-medium text-white/55">CPF</label>
         <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          type="text"
+          inputMode="numeric"
+          value={cpf}
+          onChange={(e) => setCpf(formatarCpf(e.target.value))}
           required
-          autoComplete="email"
-          placeholder="seuemail@editora.com.br"
+          autoComplete="username"
+          placeholder="000.000.000-00"
           className={inputCls}
         />
       </div>

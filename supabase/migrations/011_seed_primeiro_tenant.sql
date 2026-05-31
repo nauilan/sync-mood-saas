@@ -32,17 +32,17 @@ SET editora_master_id = 'bbbbbbbb-0000-0000-0000-000000000001'
 WHERE id = 'aaaaaaaa-0000-0000-0000-000000000001';
 
 -- 4. Criar o usuário master
--- ATENÇÃO: substitua 'SEU-AUTH-USER-ID' pelo UUID retornado pelo Supabase Auth
--- após criar o usuário em Authentication > Users no dashboard do Supabase
+-- auth_user_id será vinculado após criar usuário no Supabase Auth → Authentication → Users
 INSERT INTO usuarios (
-  id, tenant_id, auth_user_id, email, nome, role, editora_id, ativo
+  id, tenant_id, auth_user_id, email, cpf, nome, role, editora_id, ativo
 )
 VALUES (
   gen_random_uuid(),
   'aaaaaaaa-0000-0000-0000-000000000001',
-  'SEU-AUTH-USER-ID',                        -- ← PREENCHER
-  'admin@topshowmusic.com.br',               -- ← PREENCHER
-  'Administrador Master',                    -- ← PREENCHER
+  NULL,                                      -- vincular após criar em Authentication > Users
+  'admin@topshowmusic.com.br',
+  NULL,                                      -- preencher com CPF do admin quando criar login
+  'Administrador Master',
   'master',
   'bbbbbbbb-0000-0000-0000-000000000001',
   TRUE

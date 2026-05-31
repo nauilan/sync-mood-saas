@@ -22,11 +22,12 @@ CREATE TABLE usuarios (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   auth_user_id    UUID UNIQUE REFERENCES auth.users(id) ON DELETE SET NULL,
-  email           TEXT NOT NULL,
+  email           TEXT,                                              -- email Supabase Auth ({cpf}@syncmood.app)
+  cpf             TEXT UNIQUE,                                       -- login principal (CPF sem formatação)
   nome            TEXT NOT NULL,
   role            role_usuario NOT NULL DEFAULT 'autor',
-  titular_id      UUID,                                            -- FK titulares (adicionado depois)
-  editora_id      UUID,                                            -- FK editoras (adicionado depois)
+  titular_id      UUID,                                              -- FK titulares (adicionado depois)
+  editora_id      UUID,                                              -- FK editoras (adicionado depois)
   ativo           BOOLEAN NOT NULL DEFAULT TRUE,
   ultimo_acesso   TIMESTAMPTZ,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
