@@ -11,8 +11,9 @@ import {
   Send, Database, Tag, ShieldCheck, ShieldAlert, Loader2,
 } from 'lucide-react'
 import { MOCK_OBRAS, MOCK_OBRAS_LINKS, MOCK_OBRAS_FONOGRAMAS, KPI_OBRAS } from '@/lib/mock-obras'
-import { STORE_KEYS } from '@/lib/store'
+import { STORE_KEYS, clearAllStores } from '@/lib/store'
 import { useSupabaseQuery } from '@/lib/hooks/use-supabase-query'
+import { createClient } from '@supabase/supabase-js'
 import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
 import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, normalizarLinksObra } from '@/lib/types-obras'
 import type { StatusObra } from '@/lib/types-obras'
@@ -330,31 +331,50 @@ export default function ObrasPage() {
   const [filterFono, setFilterFono] = useState<'todos' | 'com' | 'sem'>('todos')
   const [obraAtiva, setObraAtiva] = useState<any>(null)
   const [cwrInvalidos, setCwrInvalidos] = useState(0)
+  const [limpando, setLimpando] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
 
-  // Detectar quantas obras existem no localStorage (de imports anteriores)
+  // Contar dados no localStorage
   useEffect(() => {
     try {
       const stored = JSON.parse(localStorage.getItem(STORE_KEYS.obras) ?? '[]')
-      // Considera inválidas: código gerado (CWR-xxx) OU ISWC com apenas dígitos (data/número = parse errado)
-      const invalidos = stored.filter((o: any) => {
-        const cod = String(o.codigo ?? '')
-        const iswc = String(o.iswc ?? '')
-        return cod.startsWith('CWR-') || (iswc.length > 0 && /^\d+$/.test(iswc))
-      }).length
-      setCwrInvalidos(invalidos > 0 ? invalidos : stored.length > 0 ? -1 : 0)
-      // -1 = há dados mas sem inválidos detectados (pode ainda ser ruim)
+      setCwrInvalidos(stored.length)
     } catch { /* silencioso */ }
   }, [])
 
-  // Limpar TUDO do localStorage (nuclear)
-  const clearCwrInvalidos = () => {
+  // Limpar localStorage + Supabase (nuclear)
+  const clearCwrInvalidos = async () => {
+    if (!confirm('Isso vai apagar TODAS as obras do armazenamento local. Deseja continuar?')) return
+    setLimpando(true)
     try {
-      localStorage.removeItem(STORE_KEYS.obras)
-      localStorage.removeItem(STORE_KEYS.titulares)
-      window.dispatchEvent(new Event('storage'))
+      // 1. Limpar localStorage
+      clearAllStores()
+      // 2. Tentar limpar Supabase também
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      if (url && key && !url.includes('placeholder')) {
+        const sb = createClient(url, key)
+        const { data: { user } } = await sb.auth.getUser()
+        if (user) {
+          // Buscar tenant do usuário
+          const { data: tenant } = await sb.from('usuarios').select('tenant_id').eq('id', user.id).single()
+          const tenantId = tenant?.tenant_id
+          if (tenantId) {
+            await sb.from('obras_links_titulares').delete().eq('tenant_id', tenantId)
+            await sb.from('obras_links').delete().eq('tenant_id', tenantId)
+            await sb.from('obras').delete().eq('tenant_id', tenantId)
+            await sb.from('titulares').delete().eq('tenant_id', tenantId)
+          }
+        }
+      }
       setCwrInvalidos(0)
-    } catch { /* silencioso */ }
+      window.location.reload()
+    } catch (e) {
+      console.error('Erro ao limpar:', e)
+      window.location.reload()
+    } finally {
+      setLimpando(false)
+    }
   }
 
   // Carrega obras: Supabase → localStorage → mock
@@ -414,17 +434,16 @@ export default function ObrasPage() {
         description="Catalogo musical com estrutura de links de participacao e controle editorial"
         actions={
           <div className="flex items-center gap-2 flex-wrap justify-end">
-            {/* Botão de limpeza — aparece quando há dados locais (válidos ou inválidos) */}
-            {cwrInvalidos !== 0 && (
-              <button
-                onClick={clearCwrInvalidos}
-                title="Remove TODOS os dados locais de obras (localStorage) para permitir reimportação limpa"
-                className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 text-xs text-red-400 font-semibold transition-colors"
-              >
-                <X className="w-3.5 h-3.5" />
-                {cwrInvalidos > 0 ? `Limpar ${cwrInvalidos} obras inválidas` : 'Zerar dados locais'}
-              </button>
-            )}
+            {/* Botão de limpeza — SEMPRE visível */}
+            <button
+              onClick={clearCwrInvalidos}
+              disabled={limpando}
+              title="Apaga TODOS os dados de obras do armazenamento local e Supabase"
+              className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 text-xs text-red-400 font-semibold transition-colors disabled:opacity-50"
+            >
+              {limpando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+              {limpando ? 'Limpando...' : 'Zerar obras'}
+            </button>
             <Link href="/master/obras/importar-cwr"
               className="flex items-center gap-1.5 h-9 px-4 rounded-lg bg-sky-600/20 border border-sky-500/40 hover:bg-sky-600/30 text-sm text-sky-300 font-semibold transition-colors">
               <Upload className="w-4 h-4" /> Importar CWR
