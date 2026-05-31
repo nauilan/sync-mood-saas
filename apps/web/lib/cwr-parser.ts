@@ -121,54 +121,124 @@ function papelFromRole(role: string, tipo: 'SPU' | 'SWR' | 'OWR' | 'OPU'): CwrPa
 
 // ── Auto-detecção de formato CWR ──────────────────────────────────────────────
 /**
- * Detecta o offset do conteúdo nas linhas NWR/SPU/SWR usando scoring alfabético.
+ * Detecta o offset do arquivo CWR usando múltiplos campos-âncora do NWR.
  *
- * Testa os offsets candidatos [0, 4, 8] contra as primeiras linhas NWR/SPU do arquivo.
- * Para cada offset, extrai o campo "title" (NWR) ou "name" (SPU/SWR) e pontua
- * quantos caracteres alfabéticos aparecem nos primeiros 12 chars.
- * O offset com maior pontuação ganha.
+ * Estratégia multi-campo (decrescente em confiabilidade):
+ *   1. Language Code (pos 79+off, 2 chars) — exatamente 2 letras maiúsculas (PT, EN, ES…)
+ *   2. First char of ISWC (pos 95+off) — deve ser 'T' ou ' ' (espaço = sem ISWC)
+ *   3. Sequência numérica antes do título (pos 11-18, 8 dígitos) — imutável qualquer que seja off
+ *   4. Conteúdo alfabético do título (pos 19+off) — reforço
  *
- * Isso torna o parser agnóstico a variações de formato:
- *   Standard CWR 2.1   → conteúdo em 19 (off=0)
- *   Extended BR (+4)   → conteúdo em 23 (off=4)
- *   Extended UBEM (+8) → conteúdo em 27 (off=8)
+ * Formats suportados:
+ *   Standard CWR 2.1   → off=0  (conteúdo a partir de pos 19)
+ *   Extended BR (+4)   → off=4  (extra de 4 chars no header)
+ *   Extended UBEM (+8) → off=8  (extra de 8 chars no header)
+ *
+ * IMPORTANTE: o fallback padrão é 0 (standard) — não 8.
+ * Off=8 só ganha se tiver evidências positivas claras.
  */
-function scoreOffset(line: string, off: number): number {
-  // Para NWR: título começa em 19+off; para SPU/SWR: nome em 32+off
-  const recType = line.slice(0, 3)
-  const start   = (recType === 'NWR' || recType === 'REV') ? 19 + off : 32 + off
-  const sample  = line.slice(start, start + 12)
-  // Pontuação: cada letra A-Z ou char acentuado = +2; espaço entre letras = +1
-  let score = 0
-  for (let i = 0; i < sample.length; i++) {
-    const c = sample[i]
-    if (/[A-Za-zÀ-ÿ]/.test(c)) score += 2
-    else if (c === ' ' && i > 0 && i < sample.length - 1) score += 1
-  }
-  // Penalizar se começa com dígito (provavelmente ainda é campo sequencial)
-  if (/\d/.test(sample[0] ?? '')) score -= 10
-  return score
-}
-
 function detectCwrOffset(lines: string[]): number {
   const candidates = [0, 4, 8]
   const scores: Record<number, number> = { 0: 0, 4: 0, 8: 0 }
-  let samples = 0
+  let nwrCount = 0
 
   for (const line of lines) {
+    if (line.length < 50) continue
     const rec = line.slice(0, 3)
-    if (rec !== 'NWR' && rec !== 'REV' && rec !== 'SPU' && rec !== 'SWR') continue
-    if (samples >= 6) break
-    for (const off of candidates) {
-      scores[off] += scoreOffset(line, off)
+
+    if (rec === 'NWR' || rec === 'REV') {
+      // Verificar que pos 11-18 são todos dígitos (record seq number)
+      const recSeq = line.slice(11, 19)
+      if (!/^\d{8}$/.test(recSeq)) continue  // linha malformada, pular
+
+      for (const off of candidates) {
+        // ── Campo 1: Language Code (pos 79+off, 2 chars) ───────────────────
+        // Valor esperado: 2 letras maiúsculas (PT, EN, ES, FR…) ou "  " (2 espaços)
+        const lang = line.slice(79 + off, 81 + off)
+        if (/^[A-Z]{2}$/.test(lang)) {
+          scores[off] += 20   // muito confiável: exatamente 2 maiúsculas
+        } else if (/^[A-Z ]{2}$/.test(lang)) {
+          scores[off] += 8    // 1 maiúscula + espaço = plausível
+        } else if (/^\d/.test(lang)) {
+          scores[off] -= 20   // dígito no campo de idioma = offset errado
+        }
+
+        // ── Campo 2: Primeiro char do campo ISWC (pos 95+off) ──────────────
+        // Um ISWC válido começa com 'T'; campo vazio tem ' '
+        const iswcFirst = line[95 + off] ?? ''
+        if (iswcFirst === 'T' || iswcFirst === 't') {
+          scores[off] += 15   // ISWC presente e correto
+        } else if (iswcFirst === ' ') {
+          scores[off] += 5    // campo ISWC vazio é normal
+        } else if (/\d/.test(iswcFirst)) {
+          scores[off] -= 15   // dígito onde deveria ser T = offset errado
+        }
+
+        // ── Campo 3: Conteúdo alfabético do título (pos 19+off) ─────────────
+        const titleSample = line.slice(19 + off, 31 + off)  // 12 chars
+        let alphaCount = 0
+        for (const c of titleSample) {
+          if (/[A-Za-zÀ-ÿ]/.test(c)) alphaCount++
+        }
+        scores[off] += alphaCount * 1  // reforço leve
+
+        // Penalizar se o campo título começa com dígito
+        if (/\d/.test(line[19 + off] ?? '')) scores[off] -= 8
+      }
+
+      nwrCount++
+      if (nwrCount >= 8) break
     }
-    samples++
+
+    if (rec === 'SPU' || rec === 'SWR') {
+      // Para SPU/SWR, verificar se pos 11-18 são dígitos também
+      const seq = line.slice(11, 19)
+      if (!/^\d{8}$/.test(seq)) continue
+      for (const off of candidates) {
+        const nameSample = line.slice(32 + off, 44 + off)
+        for (const c of nameSample) {
+          if (/[A-Za-zÀ-ÿ]/.test(c)) scores[off] += 1
+        }
+        if (/\d/.test(line[32 + off] ?? '')) scores[off] -= 5
+      }
+    }
   }
 
-  if (samples === 0) return 8 // fallback
+  // Fallback padrão: 0 (Standard CWR 2.1)
+  // Off=8 só ganha se pontuação for estritamente maior
+  return candidates.reduce(
+    (best, off) => scores[off] > scores[best] ? off : best,
+    0  // ← default 0, NÃO 8
+  )
+}
 
-  // Retorna o offset com maior pontuação acumulada
-  return candidates.reduce((best, off) => scores[off] > scores[best] ? off : best, 8)
+/** Exportar offset detectado para debugging */
+export function detectarOffsetCwr(content: string): { offset: number; scores: Record<number, number> } {
+  const lines = content.split(/\r?\n/).filter(l => l.length >= 3)
+  const candidates = [0, 4, 8]
+  const scores: Record<number, number> = { 0: 0, 4: 0, 8: 0 }
+  let nwrCount = 0
+  for (const line of lines) {
+    if (line.length < 50) continue
+    const rec = line.slice(0, 3)
+    if (rec !== 'NWR' && rec !== 'REV') continue
+    const recSeq = line.slice(11, 19)
+    if (!/^\d{8}$/.test(recSeq)) continue
+    for (const off of candidates) {
+      const lang = line.slice(79 + off, 81 + off)
+      if (/^[A-Z]{2}$/.test(lang)) scores[off] += 20
+      else if (/^[A-Z ]{2}$/.test(lang)) scores[off] += 8
+      else if (/^\d/.test(lang)) scores[off] -= 20
+      const iswcFirst = line[95 + off] ?? ''
+      if (iswcFirst === 'T' || iswcFirst === 't') scores[off] += 15
+      else if (iswcFirst === ' ') scores[off] += 5
+      else if (/\d/.test(iswcFirst)) scores[off] -= 15
+    }
+    nwrCount++
+    if (nwrCount >= 8) break
+  }
+  const offset = candidates.reduce((best, off) => scores[off] > scores[best] ? off : best, 0)
+  return { offset, scores }
 }
 
 // ── Record parsers ────────────────────────────────────────────────────────────
@@ -311,10 +381,11 @@ function calcPctControlado(titulares: CwrTitular[]): { pct: number; tem_editora:
 
 // ── Parser principal ──────────────────────────────────────────────────────────
 
-export function parseCwr(content: string): CwrParseResult {
+export function parseCwr(content: string, offsetOverride?: number): CwrParseResult {
   const lines  = content.split(/\r?\n/).filter(l => l.length >= 3)
-  // Auto-detectar formato: extended (off=8) ou standard (off=0)
-  const off = detectCwrOffset(lines)
+  // Auto-detectar formato: standard (off=0), BR (+4), UBEM (+8)
+  // offsetOverride permite forçar manualmente quando auto-detecção falha
+  const off = offsetOverride !== undefined ? offsetOverride : detectCwrOffset(lines)
 
   const result: CwrParseResult = {
     sender: '',

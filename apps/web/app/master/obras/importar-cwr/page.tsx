@@ -5,7 +5,7 @@ import {
   Upload, FileText, CheckCircle, AlertCircle, ChevronDown, ChevronUp,
   Music, Users, Shield, X, Download, Info, Database, Mic2,
 } from 'lucide-react'
-import { parseCwr, labelPapel } from '@/lib/cwr-parser'
+import { parseCwr, labelPapel, detectarOffsetCwr } from '@/lib/cwr-parser'
 import type { CwrParseResult, CwrObra, CwrTitular } from '@/lib/cwr-parser'
 import { cwrToStore } from '@/lib/cwr-to-obra'
 import { upsertStore, registrarImportacao, STORE_KEYS } from '@/lib/store'
@@ -218,6 +218,9 @@ export default function ImportarCwrPage() {
   const [parsing, setParsing] = useState(false)
   const [result, setResult] = useState<CwrParseResult | null>(null)
   const [fileName, setFileName] = useState('')
+  const [fileContent, setFileContent] = useState('')          // para re-parsear com outro offset
+  const [offsetOverride, setOffsetOverride] = useState<number | null>(null)  // null = auto
+  const [offsetScores, setOffsetScores] = useState<Record<number, number> | null>(null)
   const [search, setSearch] = useState('')
   const [filtro, setFiltro] = useState<'todos' | 'controlados' | 'nao_controlados'>('todos')
   const [importResult, setImportResult] = useState<{
@@ -274,7 +277,7 @@ export default function ImportarCwrPage() {
     setImporting(false)
   }, [result, fileName, importing])
 
-  const processar = useCallback((file: File) => {
+  const processar = useCallback((file: File, offOverride?: number) => {
     setFileName(file.name)
     setParsing(true)
     setResult(null)
@@ -283,8 +286,13 @@ export default function ImportarCwrPage() {
     const reader = new FileReader()
     reader.onload = (e) => {
       const text = (e.target?.result as string) ?? ''
+      setFileContent(text)
       try {
-        const parsed = parseCwr(text)
+        // Calcular scores para exibir diagnóstico
+        const { offset: autoOff, scores } = detectarOffsetCwr(text)
+        setOffsetScores(scores)
+        const useOff = offOverride !== undefined ? offOverride : autoOff
+        const parsed = parseCwr(text, useOff)
         setResult(parsed)
       } catch (err) {
         setResult({
@@ -303,9 +311,32 @@ export default function ImportarCwrPage() {
     reader.readAsText(file, 'latin1')
   }, [])
 
+  // Re-parsear com offset diferente (sem re-ler o arquivo)
+  const reparse = useCallback((off: number) => {
+    if (!fileContent) return
+    setImportResult(null)
+    try {
+      const parsed = parseCwr(fileContent, off)
+      setResult(parsed)
+    } catch { /* silencioso */ }
+  }, [fileContent])
+
   const onFile = (file: File | null | undefined) => {
     if (!file) return
+    setOffsetOverride(null)
     processar(file)
+  }
+
+  // Limpar dados CWR ruins do localStorage
+  const clearCwrData = () => {
+    try {
+      const key = STORE_KEYS.obras
+      const stored = JSON.parse(localStorage.getItem(key) ?? '[]')
+      const cleaned = stored.filter((o: any) => !String(o.codigo ?? '').startsWith('CWR-'))
+      localStorage.setItem(key, JSON.stringify(cleaned))
+      window.dispatchEvent(new Event('storage'))
+    } catch { /* silencioso */ }
+    alert('Dados CWR com código inválido removidos. Re-importe o arquivo.')
   }
 
   const obras_filtradas = (result?.obras ?? []).filter(o => {
@@ -330,24 +361,34 @@ export default function ImportarCwrPage() {
             Carregue um arquivo CWR 2.1 (.cwr / .txt) para visualizar e importar obras para o catálogo
           </p>
         </div>
-        {result && !importResult && (
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* Limpar dados CWR ruins */}
           <button
-            onClick={processarImport}
-            disabled={importing}
-            className="flex items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 px-5 py-2.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={clearCwrData}
+            title="Remove obras com código CWR-xxx inválido do armazenamento local"
+            className="flex items-center gap-1.5 rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-400/70 hover:bg-red-500/20 hover:text-red-300 transition-colors"
           >
-            {importing
-              ? <><div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" /> Importando…</>
-              : <><Database className="w-4 h-4" /> Importar {result.total_obras} obras para o sistema</>
-            }
+            <X className="w-3.5 h-3.5" /> Limpar CWR inválidos
           </button>
-        )}
-        {importResult && (
-          <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 px-5 py-2.5">
-            <CheckCircle className="w-4 h-4 text-emerald-400" />
-            <span className="text-sm font-semibold text-emerald-300">Importação concluída</span>
-          </div>
-        )}
+          {result && !importResult && (
+            <button
+              onClick={processarImport}
+              disabled={importing}
+              className="flex items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-500/40 px-5 py-2.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {importing
+                ? <><div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" /> Importando…</>
+                : <><Database className="w-4 h-4" /> Importar {result.total_obras} obras para o sistema</>
+              }
+            </button>
+          )}
+          {importResult && (
+            <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 px-5 py-2.5">
+              <CheckCircle className="w-4 h-4 text-emerald-400" />
+              <span className="text-sm font-semibold text-emerald-300">Importação concluída</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Drop zone */}
@@ -413,10 +454,56 @@ export default function ImportarCwrPage() {
                 {result.stats.linhas.toLocaleString('pt-BR')} linhas processadas
               </p>
             </div>
-            <button onClick={() => { setResult(null); setFileName('') }} className="p-1 rounded-lg hover:bg-white/10 transition-colors">
+            <button onClick={() => { setResult(null); setFileName(''); setFileContent(''); setOffsetScores(null); setOffsetOverride(null) }} className="p-1 rounded-lg hover:bg-white/10 transition-colors">
               <X className="w-4 h-4 text-white/30" />
             </button>
           </div>
+
+          {/* Diagnóstico de Offset + Override manual */}
+          {result && (
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-[10px] uppercase tracking-widest text-white/30">Formato CWR detectado</span>
+                <span className={`text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full ${
+                  result.offset_detectado === 0 ? 'bg-emerald-500/20 text-emerald-300' :
+                  result.offset_detectado === 4 ? 'bg-amber-500/20 text-amber-300' :
+                  'bg-red-500/20 text-red-300'
+                }`}>
+                  off={result.offset_detectado} {result.offset_detectado === 0 ? '(Standard 2.1)' : result.offset_detectado === 4 ? '(Extended BR +4)' : '(Extended UBEM +8)'}
+                </span>
+                {offsetScores && (
+                  <span className="text-[10px] text-white/30 font-mono">
+                    scores: 0={offsetScores[0]} 4={offsetScores[4]} 8={offsetScores[8]}
+                  </span>
+                )}
+              </div>
+              {/* Override manual — útil quando auto-detecção erra */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] text-white/30">Forçar offset:</span>
+                {[0, 4, 8].map(off => (
+                  <button
+                    key={off}
+                    onClick={() => { setOffsetOverride(off); reparse(off) }}
+                    className={`text-[11px] font-mono px-2 py-0.5 rounded-full border transition-colors ${
+                      (offsetOverride === off || (offsetOverride === null && result.offset_detectado === off))
+                        ? 'border-violet-500/60 bg-violet-500/20 text-violet-300'
+                        : 'border-white/10 bg-white/5 text-white/40 hover:border-white/20'
+                    }`}
+                  >
+                    {off}
+                  </button>
+                ))}
+                {offsetOverride !== null && (
+                  <button
+                    onClick={() => { setOffsetOverride(null); reparse(result.offset_detectado) }}
+                    className="text-[10px] text-white/30 hover:text-white/60 underline"
+                  >
+                    voltar para auto
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Painel de resultado da importação */}
           {importResult && (
