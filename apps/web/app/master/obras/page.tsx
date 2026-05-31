@@ -332,23 +332,26 @@ export default function ObrasPage() {
   const [cwrInvalidos, setCwrInvalidos] = useState(0)
   const searchRef = useRef<HTMLDivElement>(null)
 
-  // Detectar quantas obras CWR inválidas existem no localStorage
+  // Detectar quantas obras existem no localStorage (de imports anteriores)
   useEffect(() => {
     try {
       const stored = JSON.parse(localStorage.getItem(STORE_KEYS.obras) ?? '[]')
-      const invalidos = stored.filter((o: any) =>
-        String(o.codigo ?? '').startsWith('CWR-')
-      ).length
-      setCwrInvalidos(invalidos)
+      // Considera inválidas: código gerado (CWR-xxx) OU ISWC com apenas dígitos (data/número = parse errado)
+      const invalidos = stored.filter((o: any) => {
+        const cod = String(o.codigo ?? '')
+        const iswc = String(o.iswc ?? '')
+        return cod.startsWith('CWR-') || (iswc.length > 0 && /^\d+$/.test(iswc))
+      }).length
+      setCwrInvalidos(invalidos > 0 ? invalidos : stored.length > 0 ? -1 : 0)
+      // -1 = há dados mas sem inválidos detectados (pode ainda ser ruim)
     } catch { /* silencioso */ }
   }, [])
 
-  // Limpar obras CWR com código inválido (código auto-gerado = import com parse errado)
+  // Limpar TUDO do localStorage (nuclear)
   const clearCwrInvalidos = () => {
     try {
-      const stored = JSON.parse(localStorage.getItem(STORE_KEYS.obras) ?? '[]')
-      const cleaned = stored.filter((o: any) => !String(o.codigo ?? '').startsWith('CWR-'))
-      localStorage.setItem(STORE_KEYS.obras, JSON.stringify(cleaned))
+      localStorage.removeItem(STORE_KEYS.obras)
+      localStorage.removeItem(STORE_KEYS.titulares)
       window.dispatchEvent(new Event('storage'))
       setCwrInvalidos(0)
     } catch { /* silencioso */ }
@@ -411,14 +414,15 @@ export default function ObrasPage() {
         description="Catalogo musical com estrutura de links de participacao e controle editorial"
         actions={
           <div className="flex items-center gap-2 flex-wrap justify-end">
-            {/* Botão de limpeza — aparece apenas quando há obras com código CWR-xxx (import errado) */}
-            {cwrInvalidos > 0 && (
+            {/* Botão de limpeza — aparece quando há dados locais (válidos ou inválidos) */}
+            {cwrInvalidos !== 0 && (
               <button
                 onClick={clearCwrInvalidos}
-                title="Remove obras com código CWR-xxx gerado por importação com offset errado"
+                title="Remove TODOS os dados locais de obras (localStorage) para permitir reimportação limpa"
                 className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 text-xs text-red-400 font-semibold transition-colors"
               >
-                <X className="w-3.5 h-3.5" /> Limpar {cwrInvalidos} CWR inválidos
+                <X className="w-3.5 h-3.5" />
+                {cwrInvalidos > 0 ? `Limpar ${cwrInvalidos} obras inválidas` : 'Zerar dados locais'}
               </button>
             )}
             <Link href="/master/obras/importar-cwr"

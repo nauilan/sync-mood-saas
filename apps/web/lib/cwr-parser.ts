@@ -71,6 +71,8 @@ export interface CwrParseResult {
   erros: string[]
   /** Offset detectado: 0=Standard, 4=Extended+4, 8=Extended UBEM */
   offset_detectado: number
+  /** Primeira linha NWR bruta — para diagnóstico de offset */
+  debug_nwr_line?: string
   stats: {
     nwr: number
     spu: number
@@ -439,6 +441,8 @@ export function parseCwr(content: string, offsetOverride?: number): CwrParseResu
       if (rec === 'NWR' || rec === 'REV') {
         flush()
         const nwr = parseNWR(line, off)
+        // Capturar primeira linha NWR bruta para diagnóstico
+        if (!result.debug_nwr_line) result.debug_nwr_line = line
         current = { ...nwr, titulares: [], pwr_links: [], linhas_raw: [line], pct_controlado: 0, tem_editora: false }
         result.stats.nwr++
         continue

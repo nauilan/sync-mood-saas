@@ -330,13 +330,12 @@ export default function ImportarCwrPage() {
   // Limpar dados CWR ruins do localStorage
   const clearCwrData = () => {
     try {
-      const key = STORE_KEYS.obras
-      const stored = JSON.parse(localStorage.getItem(key) ?? '[]')
-      const cleaned = stored.filter((o: any) => !String(o.codigo ?? '').startsWith('CWR-'))
-      localStorage.setItem(key, JSON.stringify(cleaned))
+      // Nuclear: remove TODAS as obras do localStorage (para reimportar limpo)
+      localStorage.removeItem(STORE_KEYS.obras)
+      localStorage.removeItem(STORE_KEYS.titulares)
       window.dispatchEvent(new Event('storage'))
     } catch { /* silencioso */ }
-    alert('Dados CWR com código inválido removidos. Re-importe o arquivo.')
+    alert('Todos os dados de obras/titulares removidos do armazenamento local.\nAgora re-importe o arquivo CWR.')
   }
 
   const obras_filtradas = (result?.obras ?? []).filter(o => {
@@ -362,13 +361,13 @@ export default function ImportarCwrPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          {/* Limpar dados CWR ruins */}
+          {/* Limpar dados ruins — NUCLEAR: remove todo localStorage de obras */}
           <button
             onClick={clearCwrData}
-            title="Remove obras com código CWR-xxx inválido do armazenamento local"
+            title="Remove TODAS as obras do armazenamento local para reimportar com dados corretos"
             className="flex items-center gap-1.5 rounded-xl bg-red-500/10 border border-red-500/20 px-3 py-2 text-xs text-red-400/70 hover:bg-red-500/20 hover:text-red-300 transition-colors"
           >
-            <X className="w-3.5 h-3.5" /> Limpar CWR inválidos
+            <X className="w-3.5 h-3.5" /> Zerar obras locais
           </button>
           {result && !importResult && (
             <button
@@ -503,6 +502,59 @@ export default function ImportarCwrPage() {
                 )}
               </div>
             </div>
+          )}
+
+          {/* Painel diagnóstico — linha NWR bruta + análise de posições */}
+          {result.debug_nwr_line && (
+            <details className="rounded-xl border border-amber-500/20 bg-amber-500/5">
+              <summary className="px-4 py-2.5 cursor-pointer text-xs text-amber-400/70 font-semibold select-none">
+                Diagnóstico: linha NWR bruta (clique para ver)
+              </summary>
+              <div className="px-4 pb-4 space-y-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-white/30 mb-1">Linha bruta (primeiros 130 chars)</p>
+                  <div className="font-mono text-[10px] text-white/60 bg-black/40 rounded-lg p-3 overflow-x-auto whitespace-nowrap">
+                    <div className="text-white/25 mb-0.5">
+                      {'0         1         2         3         4         5         6         7         8         9         10        11        12   '.slice(0, 130)}
+                    </div>
+                    <div className="text-white/25 mb-1">
+                      {'0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789'.slice(0, 130)}
+                    </div>
+                    <div className="text-amber-300/80">
+                      {result.debug_nwr_line.slice(0, 130)}
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[0, 4, 8].map(off => {
+                    const line = result.debug_nwr_line!
+                    const titulo  = line.slice(19 + off, 79 + off).trim()
+                    const lang    = line.slice(79 + off, 81 + off).trim()
+                    const codigo  = line.slice(81 + off, 95 + off).trim()
+                    const iswc    = line.slice(95 + off, 106 + off).trim()
+                    const isActive = result.offset_detectado === off
+                    return (
+                      <div key={off} className={`rounded-lg p-2.5 space-y-1 ${isActive ? 'border border-emerald-500/40 bg-emerald-500/10' : 'border border-white/10 bg-white/[0.02]'}`}>
+                        <p className={`text-[10px] font-bold ${isActive ? 'text-emerald-300' : 'text-white/40'}`}>
+                          off={off} {off === 0 ? '(Standard)' : off === 4 ? '(Extended+4)' : '(Extended+8)'}
+                          {isActive && ' ← detectado'}
+                        </p>
+                        <div className="space-y-0.5 font-mono text-[10px]">
+                          <p><span className="text-white/30">titulo: </span><span className="text-white/70">"{titulo.slice(0, 30)}"</span></p>
+                          <p><span className="text-white/30">lang:   </span><span className={/^[A-Z]{2}$/.test(lang) ? 'text-emerald-400' : 'text-red-400'}>{lang || '??'}</span></p>
+                          <p><span className="text-white/30">codigo: </span><span className="text-white/70">"{codigo}"</span></p>
+                          <p><span className="text-white/30">iswc:   </span><span className={/^[Tt]\d{9,10}/.test(iswc) ? 'text-emerald-400' : iswc ? 'text-amber-400' : 'text-white/30'}>{iswc || '(vazio)'}</span></p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="text-[10px] text-white/25 italic">
+                  Se o offset detectado mostrar título truncado, use "Forçar offset" acima para testar os outros valores.
+                  O offset correto é aquele onde lang=2 letras maiúsculas (ex: PT) e título começa com letras do nome da música.
+                </p>
+              </div>
+            </details>
           )}
 
           {/* Painel de resultado da importação */}
