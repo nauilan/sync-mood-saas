@@ -329,7 +329,30 @@ export default function ObrasPage() {
   const [filterIswc, setFilterIswc] = useState<'todos' | 'com' | 'sem'>('todos')
   const [filterFono, setFilterFono] = useState<'todos' | 'com' | 'sem'>('todos')
   const [obraAtiva, setObraAtiva] = useState<any>(null)
+  const [cwrInvalidos, setCwrInvalidos] = useState(0)
   const searchRef = useRef<HTMLDivElement>(null)
+
+  // Detectar quantas obras CWR inválidas existem no localStorage
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(STORE_KEYS.obras) ?? '[]')
+      const invalidos = stored.filter((o: any) =>
+        String(o.codigo ?? '').startsWith('CWR-')
+      ).length
+      setCwrInvalidos(invalidos)
+    } catch { /* silencioso */ }
+  }, [])
+
+  // Limpar obras CWR com código inválido (código auto-gerado = import com parse errado)
+  const clearCwrInvalidos = () => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(STORE_KEYS.obras) ?? '[]')
+      const cleaned = stored.filter((o: any) => !String(o.codigo ?? '').startsWith('CWR-'))
+      localStorage.setItem(STORE_KEYS.obras, JSON.stringify(cleaned))
+      window.dispatchEvent(new Event('storage'))
+      setCwrInvalidos(0)
+    } catch { /* silencioso */ }
+  }
 
   // Carrega obras: Supabase → localStorage → mock
   const { data: obrasData } = useSupabaseQuery<any>({
@@ -387,7 +410,17 @@ export default function ObrasPage() {
         title="Obras & Catalogo"
         description="Catalogo musical com estrutura de links de participacao e controle editorial"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {/* Botão de limpeza — aparece apenas quando há obras com código CWR-xxx (import errado) */}
+            {cwrInvalidos > 0 && (
+              <button
+                onClick={clearCwrInvalidos}
+                title="Remove obras com código CWR-xxx gerado por importação com offset errado"
+                className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 text-xs text-red-400 font-semibold transition-colors"
+              >
+                <X className="w-3.5 h-3.5" /> Limpar {cwrInvalidos} CWR inválidos
+              </button>
+            )}
             <Link href="/master/obras/importar-cwr"
               className="flex items-center gap-1.5 h-9 px-4 rounded-lg bg-sky-600/20 border border-sky-500/40 hover:bg-sky-600/30 text-sm text-sky-300 font-semibold transition-colors">
               <Upload className="w-4 h-4" /> Importar CWR
