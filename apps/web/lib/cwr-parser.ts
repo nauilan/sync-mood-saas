@@ -135,6 +135,15 @@ function papelFromRole(role: string, tipo: 'SPU' | 'SWR' | 'OWR' | 'OPU'): CwrPa
  * Suporta qualquer offset de 0 a 12 inclusive.
  * Fallback padrão: 0 (Standard CWR 2.1).
  */
+// Idiomas oficiais ISO 639-1 usados em CWR — score alto quando identificados
+const KNOWN_LANG_CODES = new Set([
+  'PT','EN','ES','FR','IT','DE','JA','KO','ZH','AR','RU','NL','SV','NO','DA',
+  'FI','PL','TR','CS','HU','RO','UK','CA','GL','EU','CY','EL','HE','HI','TH',
+  'ID','MS','VI','FA','SL','HR','SK','BG','LT','LV','ET','MT','SQ','MK','SR',
+  'BS','GA','IS','LB','MG','SW','HA','YO','IG','ZU','AF','AM','BE','KA','HY',
+  'AZ','KK','UZ','TK','MN','NE','SI','MY','KM','LO','BO','KU','PS','UR','BN',
+])
+
 function detectCwrOffset(lines: string[]): number {
   // Testar todos os offsets de 0 a 12
   const candidates = [0,1,2,3,4,5,6,7,8,9,10,11,12]
@@ -156,25 +165,29 @@ function detectCwrOffset(lines: string[]): number {
         if (19 + off + 60 > line.length) continue  // linha muito curta
 
         // ── Âncora 1: Language Code (pos 79+off, 2 chars) ──────────────────
+        // Idioma ISO conhecido = +50 (fortíssimo); 2 maiúsculas genéricas = apenas +5
+        // Isso evita falso-positivo quando substring do submitter_code (ex: "FW" de "AFW2") cai nesta posição
         const lang = line.slice(79 + off, 81 + off)
-        if (/^[A-Z]{2}$/.test(lang)) {
-          scores[off] += 25   // 2 maiúsculas exatas = muito confiável
-        } else if (/^[A-Z ]{2}$/.test(lang)) {
-          scores[off] += 10
+        if (KNOWN_LANG_CODES.has(lang)) {
+          scores[off] += 50   // idioma real — sinal fortíssimo
+        } else if (/^[A-Z]{2}$/.test(lang)) {
+          scores[off] += 5    // 2 maiúsculas mas não é idioma known — sinal fraco
+        } else if (lang.trim() === '') {
+          scores[off] += 0    // vazio = neutro (muitos CWRs omitem lang)
         } else if (/^\d/.test(lang)) {
-          scores[off] -= 25   // dígito no campo idioma = offset claramente errado
+          scores[off] -= 40   // dígito = offset claramente errado
         } else if (/^[a-z]/.test(lang)) {
-          scores[off] -= 10   // minúscula = improvável
+          scores[off] -= 15   // minúscula = improvável
         }
 
         // ── Âncora 2: ISWC (pos 95+off) ────────────────────────────────────
         const iswcFirst = line[95 + off] ?? ''
         if (iswcFirst === 'T' || iswcFirst === 't') {
-          scores[off] += 20
+          scores[off] += 25
         } else if (iswcFirst === ' ') {
           scores[off] += 8    // sem ISWC é comum
         } else if (/\d/.test(iswcFirst)) {
-          scores[off] -= 20   // número onde deveria ser T = errado
+          scores[off] -= 25   // número onde deveria ser T = errado
         }
 
         // ── Âncora 3: Título (pos 19+off, 12 chars sample) ─────────────────
@@ -194,7 +207,7 @@ function detectCwrOffset(lines: string[]): number {
       }
 
       nwrCount++
-      if (nwrCount >= 12) break
+      if (nwrCount >= 20) break  // processar mais linhas para maior confiança
     }
 
     if (rec === 'SPU' || rec === 'SWR' || rec === 'OWR') {
@@ -235,19 +248,20 @@ export function detectarOffsetCwr(content: string): { offset: number; scores: Re
     for (const off of candidates) {
       if (79 + off + 2 > line.length) continue
       const lang = line.slice(79 + off, 81 + off)
-      if (/^[A-Z]{2}$/.test(lang)) scores[off] += 25
-      else if (/^[A-Z ]{2}$/.test(lang)) scores[off] += 10
-      else if (/^\d/.test(lang)) scores[off] -= 25
+      if (KNOWN_LANG_CODES.has(lang)) scores[off] += 50
+      else if (/^[A-Z]{2}$/.test(lang)) scores[off] += 5
+      else if (lang.trim() === '') scores[off] += 0
+      else if (/^\d/.test(lang)) scores[off] -= 40
       const iswcFirst = line[95 + off] ?? ''
-      if (iswcFirst === 'T' || iswcFirst === 't') scores[off] += 20
+      if (iswcFirst === 'T' || iswcFirst === 't') scores[off] += 25
       else if (iswcFirst === ' ') scores[off] += 8
-      else if (/\d/.test(iswcFirst)) scores[off] -= 20
+      else if (/\d/.test(iswcFirst)) scores[off] -= 25
       const titleSample = line.slice(19 + off, 31 + off)
       for (const c of titleSample) { if (/[A-Za-zÀ-ÿ]/.test(c)) scores[off] += 2 }
       if (/\d/.test(line[19 + off] ?? '')) scores[off] -= 10
     }
     nwrCount++
-    if (nwrCount >= 12) break
+    if (nwrCount >= 20) break
   }
   const offset = candidates.reduce((best, off) => scores[off] > scores[best] ? off : best, 0)
   return { offset, scores }
@@ -282,7 +296,7 @@ function parseSPU(line: string, off: number = 8): CwrTitular {
   // off=8 (extended UBEM/BR): conteúdo em 27, submitter_code=14 chars
   // off=0 (standard CWR 2.1): conteúdo em 19, Tax_ID=9 chars
   // spu_extra: SPU extended tem submitter_code 14 chars vs 9 chars standard → +5 shift nos campos seguintes
-  const spu_extra = off > 0 ? 5 : 0
+  const spu_extra = off >= 8 ? 5 : 0
   const sequence_code  = s(line, 19 + off, 2)
   const ipi            = s(line, 21 + off, 11)
   const nome           = s(line, 32 + off, 45)
@@ -364,7 +378,7 @@ function parseOPU(line: string, off: number = 8): CwrTitular {
 
 function parsePWR(line: string, off: number = 8): CwrPwrLink {
   // off=8 (extended): pub_code=14 chars; off=0 (standard): pub_seq=2 chars
-  const pwr_extra  = off > 0 ? 12 : 0
+  const pwr_extra  = off >= 8 ? 12 : 0
   const pub_ipi    = s(line, 19 + off, 11)
   const pub_code   = s(line, 30 + off, 2 + pwr_extra)
   const writer_ipi = s(line, 32 + off + pwr_extra, 11)

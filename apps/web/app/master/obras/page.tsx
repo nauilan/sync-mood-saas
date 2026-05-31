@@ -357,7 +357,7 @@ export default function ObrasPage() {
         const { data: { user } } = await sb.auth.getUser()
         if (user) {
           // Buscar tenant do usuário
-          const { data: tenant } = await sb.from('usuarios').select('tenant_id').eq('id', user.id).single()
+          const { data: tenant } = await sb.from('usuarios').select('tenant_id').eq('auth_user_id', user.id).single()
           const tenantId = tenant?.tenant_id
           if (tenantId) {
             await sb.from('obras_links_titulares').delete().eq('tenant_id', tenantId)
