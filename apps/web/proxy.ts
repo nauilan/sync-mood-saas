@@ -3,7 +3,15 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 type UserRole = 'master' | 'editora' | 'titular'
 
-const PROTECTED_PREFIXES = ['/master', '/editora', '/titular']
+// Rotas protegidas — exigem sessão ativa
+const PROTECTED_PREFIXES = [
+  '/master', '/editora', '/titular', '/portal', '/backoffice', '/admin',
+]
+
+// Rotas de API públicas (não exigem sessão)
+const API_PUBLIC = ['/api/auth/login']
+
+// Rotas de auth — redireciona para dashboard se já logado
 const AUTH_ROUTES = ['/auth/login', '/auth/signup']
 
 const ROLE_HOME: Record<UserRole, string> = {
@@ -12,16 +20,7 @@ const ROLE_HOME: Record<UserRole, string> = {
   titular: '/titular/dashboard',
 }
 
-const DEMO_MODE = true
-
 export async function proxy(request: NextRequest) {
-  if (DEMO_MODE) {
-    if (request.nextUrl.pathname === '/') {
-      return NextResponse.redirect(new URL('/master/dashboard', request.url))
-    }
-    return NextResponse.next({ request })
-  }
-
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -41,28 +40,43 @@ export async function proxy(request: NextRequest) {
     }
   )
 
+  // Atualiza sessão (OBRIGATÓRIO — não remover)
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
+  // Raiz → redireciona conforme estado de autenticação
   if (pathname === '/') {
     if (!user) return NextResponse.redirect(new URL('/auth/login', request.url))
     const role = (user.user_metadata?.user_role ?? 'editora') as UserRole
     return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/editora/dashboard', request.url))
   }
 
-  const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))
+  // API protegida sem sessão → 401 JSON
+  const isApiRoute = pathname.startsWith('/api')
+  const isApiPublic = API_PUBLIC.some(p => pathname.startsWith(p))
+  if (isApiRoute && !isApiPublic && !user) {
+    return NextResponse.json(
+      { error: 'Unauthorized', message: 'Sessão inválida ou expirada.' },
+      { status: 401 }
+    )
+  }
+
+  // Rota protegida sem sessão → redireciona para login
+  const isProtected = PROTECTED_PREFIXES.some(p => pathname.startsWith(p))
   if (isProtected && !user) {
     const loginUrl = new URL('/auth/login', request.url)
     loginUrl.searchParams.set('redirectTo', pathname)
     return NextResponse.redirect(loginUrl)
   }
 
-  const isAuthRoute = AUTH_ROUTES.some((r) => pathname.startsWith(r))
+  // Já logado tentando acessar login/signup → redireciona para dashboard
+  const isAuthRoute = AUTH_ROUTES.some(r => pathname.startsWith(r))
   if (isAuthRoute && user) {
     const role = (user.user_metadata?.user_role ?? 'editora') as UserRole
     return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/editora/dashboard', request.url))
   }
 
+  // Previne acesso a /master por roles que não sejam master
   if (user && pathname.startsWith('/master')) {
     const role = user.user_metadata?.user_role as UserRole
     if (role !== 'master') {
