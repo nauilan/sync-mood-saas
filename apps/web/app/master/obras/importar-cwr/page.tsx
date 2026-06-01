@@ -345,12 +345,20 @@ function ObraRow({ obra }: { obra: CwrObra }) {
               </p>
               <div className="px-5 pb-3 flex flex-wrap gap-2">
                 {obra.pwr_links.map((pwr, i) => {
+                  const pubCode = (pwr.pub_code || pwr.pub_seq || '').trim()
+                  const wrCode  = pwr.writer_seq.trim()
                   const pub = obra.titulares.find(t =>
-                    t.tipo === 'SPU' && (t.sequence_code === pwr.pub_seq || t.ipi === pwr.pub_ipi)
+                    t.tipo === 'SPU' && (
+                      t.submitter_code.trim() === pubCode ||
+                      t.sequence_code.trim() === pubCode ||
+                      t.ipi === pwr.pub_ipi
+                    )
                   )
                   const aut = obra.titulares.find(t =>
                     (t.tipo === 'SWR' || t.tipo === 'OWR') && (
-                      t.sequence_code === pwr.writer_seq || t.ipi === pwr.writer_ipi
+                      t.submitter_code.trim() === wrCode ||
+                      t.sequence_code.trim() === wrCode ||
+                      t.ipi === pwr.writer_ipi
                     )
                   )
                   return (
