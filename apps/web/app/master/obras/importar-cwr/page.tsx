@@ -8,7 +8,8 @@ import {
 import { parseCwr, labelPapel, detectarOffsetCwr } from '@/lib/cwr-parser'
 import type { CwrParseResult, CwrObra, CwrTitular } from '@/lib/cwr-parser'
 import { cwrToStore } from '@/lib/cwr-to-obra'
-import { upsertStore, registrarImportacao, STORE_KEYS } from '@/lib/store'
+import { upsertStore, registrarImportacao, deleteImportacao, getStore, STORE_KEYS } from '@/lib/store'
+import type { ImportacaoLog } from '@/lib/store'
 import { saveObrasToSupabase, clearObrasFromSupabase } from '@/lib/save-obras-supabase'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -439,6 +440,110 @@ function ObraRow({ obra }: { obra: CwrObra }) {
   )
 }
 
+// ── Histórico de Importações CWR ─────────────────────────────────────────────
+
+function HistoricoCwr({ historico, onDelete }: { historico: ImportacaoLog[]; onDelete: () => void }) {
+  const [deletando, setDeletando] = useState<string | null>(null)
+  const [expandido, setExpandido] = useState<string | null>(null)
+
+  const handleDelete = async (log: ImportacaoLog) => {
+    if (!confirm(
+      `Apagar importação "${log.arquivo}"?\n\nIsso vai remover ${log.obras_importadas} obra(s) e todos os titulares/gravações associados do localStorage.\n\nNOTA: dados no Supabase precisam ser apagados manualmente pelo momento.`
+    )) return
+    setDeletando(log.id)
+    try {
+      const { obras_removidas } = deleteImportacao(log.id)
+      window.dispatchEvent(new Event('storage'))
+      alert(`Importação removida. ${obras_removidas} obra(s) apagada(s) do localStorage.`)
+      onDelete()
+    } finally {
+      setDeletando(null)
+    }
+  }
+
+  return (
+    <div className="mt-8 border-t border-white/10 pt-6 space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold text-white/70 flex items-center gap-2">
+          <FileText className="w-4 h-4 text-violet-400" />
+          Arquivos CWR Importados
+        </h2>
+        <span className="text-[10px] text-white/30">{historico.length} registro{historico.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {historico.length === 0 && (
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-6 text-center text-sm text-white/25">
+          Nenhum arquivo CWR importado ainda
+        </div>
+      )}
+
+      {historico.map(log => (
+        <div key={log.id} className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
+          {/* Cabeçalho do registro */}
+          <div className="flex items-center gap-3 px-4 py-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-white/80 truncate max-w-[240px]">{log.arquivo}</span>
+                <span className={`text-[9px] font-bold uppercase rounded-full px-2 py-0.5 border ${
+                  log.status === 'sucesso'
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                    : log.status === 'parcial'
+                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                    : 'border-red-500/30 bg-red-500/10 text-red-400'
+                }`}>{log.status}</span>
+              </div>
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                <span className="text-[10px] text-white/35">
+                  {new Date(log.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <span className="text-[10px] font-semibold text-violet-300/60">{log.obras_importadas} obras</span>
+                <span className="text-[10px] text-white/30">{log.titulares_importados} titulares</span>
+                {log.detalhes && <span className="text-[10px] text-white/20 italic">{log.detalhes}</span>}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Expandir obras */}
+              {log.codigos_obras && log.codigos_obras.length > 0 && (
+                <button
+                  onClick={() => setExpandido(expandido === log.id ? null : log.id)}
+                  className="text-[10px] text-white/30 hover:text-white/60 border border-white/10 rounded-lg px-2 py-1.5 hover:bg-white/5 transition-colors"
+                >
+                  {expandido === log.id ? 'fechar ▲' : `ver ${log.codigos_obras.length} obras ▼`}
+                </button>
+              )}
+              {/* Botão deletar */}
+              <button
+                onClick={() => handleDelete(log)}
+                disabled={deletando === log.id}
+                className="flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-1.5 text-xs text-red-400/70 hover:bg-red-500/15 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deletando === log.id
+                  ? <><div className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" /> Apagando…</>
+                  : <><X className="w-3 h-3" /> Apagar</>
+                }
+              </button>
+            </div>
+          </div>
+
+          {/* Lista de obras (colapsável) */}
+          {expandido === log.id && log.codigos_obras && (
+            <div className="border-t border-white/[0.06] px-4 pb-3 pt-2">
+              <p className="text-[10px] uppercase tracking-widest text-white/25 mb-2">Códigos das obras nesta importação</p>
+              <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
+                {log.codigos_obras.map(code => (
+                  <span key={code} className="text-[10px] font-mono bg-violet-500/10 border border-violet-500/20 text-violet-300/70 rounded px-1.5 py-0.5">
+                    {code}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ImportarCwrPage() {
@@ -459,6 +564,11 @@ export default function ImportarCwrPage() {
     com_codigo_legado: number; com_iswc: number; total_pwr: number
   } | null>(null)
   const [importing, setImporting] = useState(false)
+  const [historico, setHistorico] = useState<ImportacaoLog[]>(() =>
+    typeof window !== 'undefined' ? getStore<ImportacaoLog>(STORE_KEYS.importacoes).filter(l => l.tipo === 'CWR') : []
+  )
+  const reloadHistorico = () =>
+    setHistorico(getStore<ImportacaoLog>(STORE_KEYS.importacoes).filter(l => l.tipo === 'CWR'))
 
   const processarImport = useCallback(async () => {
     if (!result || importing) return
@@ -474,6 +584,7 @@ export default function ImportarCwrPage() {
       titulares_importados: converted.stats.titulares_novos + converted.stats.titulares_nao_controlados,
       status: result.erros.length === 0 ? 'sucesso' : 'parcial',
       detalhes: `${result.stats.linhas} linhas · ${result.erros.length} avisos`,
+      codigos_obras: converted.obras.map(o => o.codigo).filter(Boolean),
     })
     let sbRes = { obras_saved: 0, titulares_saved: 0, links_saved: 0, errors: [] as string[] }
     try {
@@ -501,6 +612,7 @@ export default function ImportarCwrPage() {
       total_pwr,
     })
     setImporting(false)
+    reloadHistorico()
   }, [result, fileName, importing])
 
   const processar = useCallback((file: File, offOverride?: number) => {
@@ -857,6 +969,9 @@ export default function ImportarCwrPage() {
           </div>
         </>
       )}
+
+      {/* ── Histórico de Importações CWR ── */}
+      <HistoricoCwr historico={historico} onDelete={reloadHistorico} />
     </div>
   )
 }

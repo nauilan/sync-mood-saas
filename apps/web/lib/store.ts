@@ -108,14 +108,40 @@ export interface ImportacaoLog {
   total_valor?: number
   status: 'sucesso' | 'parcial' | 'erro'
   detalhes?: string
+  /** Códigos das obras importadas neste arquivo — usado para deletar seletivamente */
+  codigos_obras?: string[]
 }
 
-export function registrarImportacao(log: Omit<ImportacaoLog, 'id' | 'data'>): void {
+export function registrarImportacao(log: Omit<ImportacaoLog, 'id' | 'data'>): string {
   const logs = getStore<ImportacaoLog>(STORE_KEYS.importacoes)
-  const novo: ImportacaoLog = {
-    ...log,
-    id: `imp-${Date.now()}`,
-    data: new Date().toISOString(),
-  }
+  const id = `imp-${Date.now()}`
+  const novo: ImportacaoLog = { ...log, id, data: new Date().toISOString() }
   setStore(STORE_KEYS.importacoes, [novo, ...logs])
+  return id
+}
+
+/** Remove o log de importação e todas as obras/titulares/gravações associadas do localStorage */
+export function deleteImportacao(importId: string): { obras_removidas: number } {
+  const logs = getStore<ImportacaoLog>(STORE_KEYS.importacoes)
+  const entry = logs.find(l => l.id === importId)
+  const codigosRemover = new Set(entry?.codigos_obras ?? [])
+
+  setStore(STORE_KEYS.importacoes, logs.filter(l => l.id !== importId))
+
+  if (codigosRemover.size === 0) return { obras_removidas: 0 }
+
+  // Remover obras
+  const obras = getStore<{ codigo?: string; id?: string }>(STORE_KEYS.obras)
+  const obrasRestantes = obras.filter(o => !codigosRemover.has(o.codigo ?? ''))
+  setStore(STORE_KEYS.obras, obrasRestantes)
+
+  // Remover titulares vinculados
+  const titulares = getStore<{ obra_codigo?: string }>(STORE_KEYS.titulares)
+  setStore(STORE_KEYS.titulares, titulares.filter(t => !codigosRemover.has(t.obra_codigo ?? '')))
+
+  // Remover gravações vinculadas
+  const gravacoes = getStore<{ obra_codigo?: string }>(STORE_KEYS.gravacoes)
+  setStore(STORE_KEYS.gravacoes, gravacoes.filter(g => !codigosRemover.has(g.obra_codigo ?? '')))
+
+  return { obras_removidas: obras.length - obrasRestantes.length }
 }
