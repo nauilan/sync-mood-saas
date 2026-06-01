@@ -420,8 +420,12 @@ function parseSWR(line: string, tipo: 'SWR' | 'OWR' = 'SWR', off: number = 0): C
   const first_name     = s(line, 77 + off + extra, 30)
   const unknown        = s(line, 107 + off + extra, 1)
   const writer_role    = s(line, 108 + off + extra, 2)
-  const pr_pct_raw     = s(line, 126 + off + extra, 5)
-  const mr_pct_raw     = s(line, 134 + off + extra, 5)
+  // CWR 2.1: após writer_role(2) → tax_id(9) → writer_ipi_base(11) → pr_soc(3) → pr_pct(5)
+  //          → mr_soc(3) → mr_pct(5)
+  // 108 + 2 + 9 + 11 + 3 = 133  (pr_pct)
+  // 133 + 5 + 3 = 141            (mr_pct)
+  const pr_pct_raw     = s(line, 133 + off + extra, 5)
+  const mr_pct_raw     = s(line, 141 + off + extra, 5)
   const controlado     = tipo === 'SWR' && unknown !== 'Y'
 
   // Detectar código embutido no campo last_name (padrão mais antigo: "JD01   JOAO DALZOTO")
