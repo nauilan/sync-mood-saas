@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
 
 // Strip BOM (U+FEFF) and whitespace that PowerShell/Windows may inject into env vars
 const sanitize = (v: string | undefined) => (v ?? '').replace(/^\uFEFF/, '').trim()
@@ -28,56 +29,75 @@ export async function POST(req: NextRequest) {
 
   const email = `${cpf}@syncmood.app`
 
-  // 1. Auth no Supabase (server → sem CORS)
-  let authResp: Response
-  try {
-    authResp = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-      method: 'POST',
-      headers: {
-        apikey: ANON_KEY,
-        Authorization: `Bearer ${ANON_KEY}`,
-        'Content-Type': 'application/json',
+  // 1. Auth no Supabase via SSR client (seta cookies automaticamente na resposta)
+  const cookiesToSet: { name: string; value: string; options: Record<string, unknown> }[] = []
+
+  const response = NextResponse.json({ ok: false }) // placeholder
+  const supabase = createServerClient(SUPABASE_URL, ANON_KEY, {
+    cookies: {
+      getAll: () => req.cookies.getAll(),
+      setAll: (cookies) => {
+        cookies.forEach(c => cookiesToSet.push(c))
       },
-      body: JSON.stringify({ email, password }),
-    })
-  } catch (err) {
-    return NextResponse.json(
-      { error: `Falha ao conectar Supabase Auth: ${String(err)}` },
-      { status: 502 }
-    )
-  }
+    },
+  })
 
-  const authData = await authResp.json()
+  const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  })
 
-  if (!authResp.ok || !authData.access_token) {
+  if (authError || !authData.session) {
     return NextResponse.json(
-      { error: authData.error_description ?? authData.message ?? 'CPF ou senha incorretos.' },
+      { error: 'CPF ou senha incorretos.' },
       { status: 401 }
     )
   }
 
-  // 2. Busca role
-  let role = 'autor'
+  // 2. Busca role na tabela usuarios
+  let role = 'master'
   try {
     const usersResp = await fetch(
       `${SUPABASE_URL}/rest/v1/usuarios?auth_user_id=eq.${authData.user.id}&select=role&limit=1`,
       {
         headers: {
           apikey: ANON_KEY,
-          Authorization: `Bearer ${authData.access_token}`,
+          Authorization: `Bearer ${authData.session.access_token}`,
         },
       }
     )
     const users = await usersResp.json()
     if (Array.isArray(users) && users[0]?.role) role = users[0].role
   } catch {
-    // não fatal: usa role padrão 'autor'
+    // não fatal
   }
 
-  return NextResponse.json({
-    access_token:  authData.access_token,
-    refresh_token: authData.refresh_token,
-    user:          authData.user,
+  // 3. Monta resposta com cookies de sessão + JSON
+  const defaultRoutes: Record<string, string> = {
+    master: '/master/dashboard',
+    admin: '/master/dashboard',
+    editora_administrada: '/master/dashboard',
+    financeiro: '/master/dashboard',
+    juridico: '/master/dashboard',
+    atendimento: '/master/dashboard',
+    autor: '/portal/dashboard',
+    titular: '/titular/dashboard',
+    editora: '/editora/dashboard',
+  }
+  const redirectTo = defaultRoutes[role] ?? '/master/dashboard'
+
+  const finalResponse = NextResponse.json({
+    access_token: authData.session.access_token,
+    refresh_token: authData.session.refresh_token,
+    user: authData.user,
     role,
+    redirectTo,
   })
+
+  // Propagar cookies de sessão do Supabase SSR para o browser
+  cookiesToSet.forEach(({ name, value, options }) => {
+    finalResponse.cookies.set(name, value, options as Parameters<typeof finalResponse.cookies.set>[2])
+  })
+
+  return finalResponse
 }

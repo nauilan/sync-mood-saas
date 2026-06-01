@@ -54,25 +54,10 @@ export function LoginForm() {
         return
       }
 
-      // Salva sessão no cliente via supabase-js
-      const { createClient } = await import('@/lib/supabase/client')
-      const supabase = createClient()
-      await supabase.auth.setSession({
-        access_token:  data.access_token,
-        refresh_token: data.refresh_token,
-      })
-
-      const redirectTo = params.get('redirectTo')
-      const defaultRoutes: Record<string, string> = {
-        master:               '/master/dashboard',
-        admin:                '/master/dashboard',
-        editora_administrada: '/master/dashboard',
-        financeiro:           '/master/dashboard',
-        juridico:             '/master/dashboard',
-        atendimento:          '/master/dashboard',
-        autor:                '/portal/dashboard',
-      }
-      window.location.href = redirectTo ?? defaultRoutes[data.role] ?? '/master/dashboard'
+      // Cookies já foram setados pelo servidor (route.ts usa createServerClient)
+      // Redireciona direto para o dashboard correto
+      const redirectTo = params.get('redirectTo') ?? data.redirectTo ?? '/master/dashboard'
+      window.location.href = redirectTo
 
     } catch (err) {
       setError('Erro de conexão. Tente novamente.')
