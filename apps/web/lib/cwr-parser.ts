@@ -267,6 +267,22 @@ export function detectarOffsetCwr(content: string): { offset: number; scores: Re
   return { offset, scores }
 }
 
+// ── Detecção dinâmica do tamanho do campo sequência (2 ou 14 chars) ──────────
+// CWR 2.1 padrão: publisher_seq/writer_seq = 2 chars numéricos ("01", "02")
+// CWR Brasil estendido: usa 14 chars alfanuméricos ("ED01", "JD01", "2646326")
+function seqFieldLen(line: string, base: number): number {
+  const c0 = line[base] ?? ' '
+  // Inicia com letra → código alfanumérico estendido (ED01, JD01, HR01, DJ01)
+  if (/[A-Z]/.test(c0)) return 14
+  // Inicia com dígito → verificar se é código numérico longo (2646326) com padding
+  if (/\d/.test(c0)) {
+    const raw14 = line.slice(base, base + 14)
+    // 3+ dígitos seguidos de espaço = código numérico padded (ex: "2646326       ")
+    if (/^\d{3,}\s/.test(raw14)) return 14
+  }
+  return 2
+}
+
 // ── Record parsers ────────────────────────────────────────────────────────────
 
 function parseNWR(line: string, off: number = 8): Omit<CwrObra, 'titulares' | 'pwr_links' | 'linhas_raw' | 'pct_controlado' | 'tem_editora'> {
@@ -275,15 +291,13 @@ function parseNWR(line: string, off: number = 8): Omit<CwrObra, 'titulares' | 'p
   const lang         = s(line, 79 + off, 2)
   const codigo       = s(line, 81 + off, 14)
   const iswc         = s(line, 95 + off, 11)
-  // version_type e duracao: posições podem variar entre implementações;
-  // lemos com o offset mais seguro (off-only, sem extra de sub_len).
   const version_type = s(line, 142 + off, 3) || 'ORI'
   const dur_raw      = s(line, 129 + off, 6)
 
   return {
     tx_seq: parseInt(tx_seq_raw, 10) || 0,
     codigo,
-    codigo_interno_legado: codigo,   // preservar explicitamente
+    codigo_interno_legado: codigo,
     titulo,
     iswc,
     lang,
@@ -292,125 +306,121 @@ function parseNWR(line: string, off: number = 8): Omit<CwrObra, 'titulares' | 'p
   }
 }
 
-function parseSPU(line: string, off: number = 8): CwrTitular {
-  // off=8 (extended UBEM/BR): conteúdo em 27, submitter_code=14 chars
-  // off=0 (standard CWR 2.1): conteúdo em 19, Tax_ID=9 chars
-  // spu_extra: SPU extended tem submitter_code 14 chars vs 9 chars standard → +5 shift nos campos seguintes
-  const spu_extra = off >= 8 ? 5 : 0
-  const sequence_code  = s(line, 19 + off, 2)
-  const ipi            = s(line, 21 + off, 11)
-  const nome_raw       = s(line, 32 + off, 45)
-  const pub_unknown    = s(line, 77 + off, 1)
-  const pub_role       = s(line, 78 + off, 2)
-  const sub_len        = 9 + spu_extra                          // 14 extended, 9 standard
-  const submitter_code = s(line, 80 + off, sub_len)
-  const pr_pct_raw     = s(line, 105 + off + spu_extra, 5)
-  const mr_pct_raw     = s(line, 113 + off + spu_extra, 5)
-  // Controle provisório: pub_unknown = 'Y' significa editora desconhecida/externa
-  // O controle definitivo será recalculado em cwr-to-obra.ts
-  const controlado     = pub_unknown !== 'Y'
+function parseSPU(line: string, off: number = 0): CwrTitular {
+  // Layout CWR 2.1 SPU (posições relativas a base=19+off):
+  // seq(2 ou 14) | ipi(11) | nome(45) | unknown(1) | role(2) |
+  // tax_id(9) | cae_ipi(11) | submitter_id(14) | pr_soc(3) | pr_pct(5) | mr_soc(3) | mr_pct(5)
+  const base  = 19 + off
+  const seq_l = seqFieldLen(line, base)
+  const extra = seq_l - 2   // deslocamento adicional dos campos seguintes
 
-  // Detectar código interno embutido no campo nome (padrão brasileiro: "ED01   EDI MUSIC EDITORA")
-  // Pattern: 2-4 chars alfanuméricos (codigo) + 3+ espaços + nome real
+  let p = base + seq_l
+  const sequence_code = s(line, base, seq_l)
+  const ipi           = s(line, p, 11); p += 11
+  const nome_raw      = s(line, p, 45); p += 45
+  const pub_unknown   = s(line, p, 1);  p += 1
+  const pub_role      = s(line, p, 2);  p += 2
+  p += 9   // tax_id
+  p += 11  // cae_ipi (2º IPI)
+  const submitter_id  = s(line, p, 14); p += 14
+  p += 3   // pr_society
+  const pr_pct_raw    = s(line, p, 5);  p += 5
+  p += 3   // mr_society
+  const mr_pct_raw    = s(line, p, 5)
+
+  const controlado = pub_unknown !== 'Y'
+
+  // Detectar código embutido no campo nome (padrão mais antigo: "ED01   EDI MUSIC EDITORA")
   let nome = nome_raw
-  let codigo_interno_spu = ''
+  let codigo_em_nome = ''
   const codeMatch = nome_raw.match(/^([A-Z0-9]{2,8})\s{3,}(.+)/)
-  if (codeMatch) {
-    codigo_interno_spu = codeMatch[1]
-    nome = codeMatch[2].trim()
-  }
-  // Usar submitter_code como código primário se não extraído do nome
-  const seq_key = submitter_code || codigo_interno_spu || sequence_code
+  if (codeMatch) { codigo_em_nome = codeMatch[1]; nome = codeMatch[2].trim() }
+
+  // Código primário: submitter_id (100% confiável quando presente)
+  const code = submitter_id || codigo_em_nome || sequence_code
 
   return {
-    seq: parseInt(sequence_code, 10) || 0,
-    tipo: 'SPU',
-    nome,
-    ipi,
-    submitter_code: seq_key,
+    seq: parseInt(sequence_code.replace(/\D/g, ''), 10) || 0,
+    tipo: 'SPU', nome, ipi,
+    submitter_code: code,
     papel_cwr: pub_role,
     papel: papelFromRole(pub_role, 'SPU'),
     pr_pct: pct(pr_pct_raw),
     mr_pct: pct(mr_pct_raw),
-    controlado,
-    sequence_code,
+    controlado, sequence_code,
   }
 }
 
-function parseSWR(line: string, tipo: 'SWR' | 'OWR' = 'SWR', off: number = 8): CwrTitular {
-  // off=8 (extended) ou off=0 (standard)
-  const sequence_code  = s(line, 19 + off, 2)
-  const ipi            = s(line, 21 + off, 11)
-  const last_name_raw  = s(line, 32 + off, 45)
-  const first_name     = s(line, 77 + off, 30)
-  const unknown        = s(line, 107 + off, 1)
-  const writer_role    = s(line, 108 + off, 2)
-  const pr_pct_raw     = s(line, 126 + off, 5)
-  const mr_pct_raw     = s(line, 134 + off, 5)
-  // OWR = sempre não controlado; SWR depende do PWR
+function parseSWR(line: string, tipo: 'SWR' | 'OWR' = 'SWR', off: number = 0): CwrTitular {
+  // Layout CWR 2.1 SWR (posições relativas a base=19+off):
+  // seq(2 ou 14) | ipi(11) | last_name(45) | first_name(30) | unknown(1) | role(2) | … | pr_pct(5) | … | mr_pct(5)
+  const base  = 19 + off
+  const seq_l = seqFieldLen(line, base)
+  const extra = seq_l - 2
+
+  const sequence_code  = s(line, base, seq_l)
+  const ipi            = s(line, 21 + off + extra, 11)
+  const last_name_raw  = s(line, 32 + off + extra, 45)
+  const first_name     = s(line, 77 + off + extra, 30)
+  const unknown        = s(line, 107 + off + extra, 1)
+  const writer_role    = s(line, 108 + off + extra, 2)
+  const pr_pct_raw     = s(line, 126 + off + extra, 5)
+  const mr_pct_raw     = s(line, 134 + off + extra, 5)
   const controlado     = tipo === 'SWR' && unknown !== 'Y'
 
-  // Detectar código interno embutido no campo last_name (padrão brasileiro: "HR01   ALVES DOS REIS")
-  // Pattern: código alfanumérico (2-8 chars) + 3+ espaços + sobrenome real
+  // Detectar código embutido no campo last_name (padrão mais antigo: "JD01   JOAO DALZOTO")
   let last_name = last_name_raw
   let codigo_interno_swr = ''
   const codeMatch = last_name_raw.match(/^([A-Z]{1,3}\d{1,4})\s{3,}(.+)/)
-  if (codeMatch) {
-    codigo_interno_swr = codeMatch[1]
-    last_name = codeMatch[2].trim()
-  }
+  if (codeMatch) { codigo_interno_swr = codeMatch[1]; last_name = codeMatch[2].trim() }
 
   const nome = first_name ? `${first_name} ${last_name}` : last_name
-  // Preservar código interno legado (HR01, etc.) no campo submitter_code
   const submitter_code = codigo_interno_swr || sequence_code
 
   return {
-    seq: parseInt(sequence_code, 10) || 0,
-    tipo,
-    nome,
-    ipi,
-    submitter_code,
-    papel_cwr: writer_role,
-    papel: papelFromRole(writer_role, tipo),
-    pr_pct: pct(pr_pct_raw),
-    mr_pct: pct(mr_pct_raw),
-    controlado,
-    sequence_code,
+    seq: parseInt(sequence_code.replace(/\D/g, ''), 10) || 0,
+    tipo, nome, ipi, submitter_code,
+    papel_cwr: writer_role, papel: papelFromRole(writer_role, tipo),
+    pr_pct: pct(pr_pct_raw), mr_pct: pct(mr_pct_raw),
+    controlado, sequence_code,
   }
 }
 
-function parseOPU(line: string, off: number = 8): CwrTitular {
-  const spu_extra      = off > 0 ? 5 : 0
-  const sequence_code  = s(line, 19 + off, 2)
-  const ipi            = s(line, 21 + off, 11)
-  const nome           = s(line, 32 + off, 45)
-  const submitter_code = s(line, 80 + off, 9 + spu_extra)
+function parseOPU(line: string, off: number = 0): CwrTitular {
+  const base  = 19 + off
+  const seq_l = seqFieldLen(line, base)
+  const extra = seq_l - 2
+
+  const sequence_code  = s(line, base, seq_l)
+  const ipi            = s(line, 21 + off + extra, 11)
+  const nome           = s(line, 32 + off + extra, 45)
+  let p = base + seq_l + 11 + 45 + 1 + 2 + 9 + 11
+  const submitter_code = s(line, p, 14)
   return {
-    seq: parseInt(sequence_code, 10) || 0,
-    tipo: 'OPU',
-    nome,
-    ipi,
-    submitter_code,
-    papel_cwr: 'E ',
-    papel: 'editora_original',
-    pr_pct: 0,
-    mr_pct: 0,
-    controlado: false,
-    sequence_code,
+    seq: parseInt(sequence_code.replace(/\D/g, ''), 10) || 0,
+    tipo: 'OPU', nome, ipi, submitter_code,
+    papel_cwr: 'E ', papel: 'editora_original',
+    pr_pct: 0, mr_pct: 0, controlado: false, sequence_code,
   }
 }
 
-function parsePWR(line: string, off: number = 8): CwrPwrLink {
-  // off=8 (extended): pub_code=14 chars; off=0 (standard): pub_seq=2 chars
-  const pwr_extra  = off >= 8 ? 12 : 0
-  const pub_ipi    = s(line, 19 + off, 11)
-  const pub_code   = s(line, 30 + off, 2 + pwr_extra)
-  const writer_ipi = s(line, 32 + off + pwr_extra, 11)
-  const writer_seq = s(line, 43 + off + pwr_extra, 2)
-  // pub_seq: primeiros 2 chars do pub_code (quando pub_code é o seq numérico)
-  // ou derivado do sub-campo; manter pub_code completo + seq 2-char
-  const pub_seq = pub_code.length <= 2 ? pub_code : pub_code.slice(0, 2)
-  return { pub_ipi, pub_code, pub_seq, writer_ipi, writer_seq }
+function parsePWR(line: string, off: number = 0): CwrPwrLink {
+  // Layout CWR 2.1 PWR: pub_ipi(11) | pub_seq(2 ou 14) | writer_ipi(11) | writer_seq(2 ou 14)
+  const base = 19 + off
+
+  const pub_ipi     = s(line, base, 11)
+  const pub_seq_pos = base + 11         // = 30 + off
+  const pub_seq_l   = seqFieldLen(line, pub_seq_pos)
+  const pub_code    = s(line, pub_seq_pos, pub_seq_l)
+
+  const writer_ipi_pos = pub_seq_pos + pub_seq_l
+  const writer_ipi     = s(line, writer_ipi_pos, 11)
+
+  const writer_seq_pos = writer_ipi_pos + 11
+  const writer_seq_l   = seqFieldLen(line, writer_seq_pos)
+  const writer_seq     = s(line, writer_seq_pos, writer_seq_l)
+
+  return { pub_ipi, pub_code, pub_seq: pub_code, writer_ipi, writer_seq }
 }
 
 function parseALT(line: string, off: number = 8): string {
