@@ -363,86 +363,139 @@ function parseNWR(line: string, off: number = 8): Omit<CwrObra, 'titulares' | 'p
 }
 
 function parseSPU(line: string, off: number = 0): CwrTitular {
-  // Layout CWR 2.1 SPU (posições relativas a base=19+off):
-  // seq(2 ou 14) | ipi(11) | nome(45) | unknown(1) | role(2) |
-  // tax_id(9) | cae_ipi(11) | submitter_id(14) | pr_soc(3) | pr_pct(5) | mr_soc(3) | mr_pct(5)
-  const base  = 19 + off
-  const seq_l = seqFieldLen(line, base)
-  const extra = seq_l - 2   // deslocamento adicional dos campos seguintes
+  // ── Formato detectado do arquivo real (CW260020TSL_189.V21) ─────────────────
+  // pos 19-20: ip_sequence_n (2)  → "01"
+  // pos 21-29: sub_id / INTERESTED_PARTY_N (9) → "ED01     " ou "2646326  "
+  // pos 30-74: publisher_name (45)
+  // pos 75:    publisher_unknown (1)
+  // pos 76-77: publisher_type / role (2) → "E ", "AM"
+  // pos 78-86: tax_id (9)
+  // pos 87-97: publisher_ipi_name_n (11)
+  // pos 98-111: submitter_agreement_n (14, ignorado)
+  // pos 112-114: pr_soc (3) | pos 115-119: pr_pct (5)
+  // pos 120-122: mr_soc (3) | pos 123-127: mr_pct (5)
+  const base = 19 + off
 
+  // Tenta layout BR (sub_id 9 chars, nome a pos 30, role a pos 76)
+  const sub_id_br = s(line, base + 2, 9)    // pos 21
+  const nome_br   = s(line, base + 11, 45)  // pos 30
+  const role_br   = s(line, base + 57, 2)   // pos 76
+
+  const VALID_ROLES = new Set(['E','AQ','AM','SE','PA','ES','CA','C','A','V','AD'])
+
+  if (VALID_ROLES.has(role_br.trim().toUpperCase())) {
+    // ── Layout BR confirmado ─────────────────────────────────────────────────
+    const seq_num    = s(line, base, 2)
+    const ipi        = s(line, base + 68, 11)  // pos 87
+    const pr_pct_raw = s(line, base + 96, 5)   // pos 115
+    const mr_pct_raw = s(line, base + 104, 5)  // pos 123
+    const unknown    = s(line, base + 56, 1)   // pos 75
+    const controlado = unknown !== 'Y'
+    return {
+      seq: parseInt(seq_num.replace(/\D/g, ''), 10) || 0,
+      tipo: 'SPU', nome: nome_br, ipi,
+      submitter_code: sub_id_br || seq_num,
+      papel_cwr: role_br.trim(),
+      papel: papelFromRole(role_br, 'SPU'),
+      pr_pct: pct(pr_pct_raw), mr_pct: pct(mr_pct_raw),
+      controlado, sequence_code: seq_num,
+    }
+  }
+
+  // ── Fallback: layout padrão CWR 2.1 (seq variável + ipi 11 chars) ──────────
+  const seq_l = seqFieldLen(line, base)
+  const extra = seq_l - 2
   let p = base + seq_l
   const sequence_code = s(line, base, seq_l)
   const ipi           = s(line, p, 11); p += 11
   const nome_raw      = s(line, p, 45); p += 45
   const pub_unknown   = s(line, p, 1);  p += 1
   const pub_role      = s(line, p, 2);  p += 2
-  p += 9   // tax_id
-  p += 11  // cae_ipi (2º IPI)
+  p += 9; p += 11
   const submitter_id  = s(line, p, 14); p += 14
-  p += 3   // pr_society
+  p += 3
   const pr_pct_raw    = s(line, p, 5);  p += 5
-  p += 3   // mr_society
+  p += 3
   const mr_pct_raw    = s(line, p, 5)
-
-  const controlado = pub_unknown !== 'Y'
-
-  // Detectar código embutido no campo nome (padrão mais antigo: "ED01   EDI MUSIC EDITORA")
   let nome = nome_raw
   let codigo_em_nome = ''
   const codeMatch = nome_raw.match(/^([A-Z0-9]{2,8})\s{3,}(.+)/)
   if (codeMatch) { codigo_em_nome = codeMatch[1]; nome = codeMatch[2].trim() }
-
-  // Código primário: submitter_id (100% confiável quando presente)
   const code = submitter_id || codigo_em_nome || sequence_code
-
   return {
     seq: parseInt(sequence_code.replace(/\D/g, ''), 10) || 0,
     tipo: 'SPU', nome, ipi,
-    submitter_code: code,
-    papel_cwr: pub_role,
+    submitter_code: code, papel_cwr: pub_role,
     papel: papelFromRole(pub_role, 'SPU'),
-    pr_pct: pct(pr_pct_raw),
-    mr_pct: pct(mr_pct_raw),
-    controlado, sequence_code,
+    pr_pct: pct(pr_pct_raw), mr_pct: pct(mr_pct_raw),
+    controlado: pub_unknown !== 'Y', sequence_code,
   }
 }
 
 function parseSWR(line: string, tipo: 'SWR' | 'OWR' = 'SWR', off: number = 0): CwrTitular {
-  // Layout CWR 2.1 SWR (posições relativas a base=19+off):
-  // seq(2 ou 14) | ipi(11) | last_name(45) | first_name(30) | unknown(1) | role(2) | … | pr_pct(5) | … | mr_pct(5)
-  const base  = 19 + off
+  // ── Formato detectado do arquivo real (CW260020TSL_189.V21) ─────────────────
+  // pos 19-27: writer_ip_n / sequence_code (9) → "HR01     " ou "JD01     "
+  // pos 28-72: last_name (45) → "ALVES DOS REIS"
+  // pos 73-102: first_name (30) → "HENRIQUE"
+  // pos 103: writer_unknown (1)
+  // pos 104-105: writer_designation_code / role (2) → "CA"
+  // pos 106-114: tax_id (9)
+  // pos 115-125: writer_ipi_name_n (11)
+  // pos 126-128: pr_soc (3) | pos 129-133: pr_pct (5)
+  // pos 134-136: mr_soc (3) | pos 137-141: mr_pct (5)
+  const base = 19 + off
+
+  // Tenta layout BR (writer_seq 9 chars, last_name a pos 28, role a pos 104)
+  const sub_code_br = s(line, base, 9)          // pos 19 (9 chars)
+  const last_name_br = s(line, base + 9, 45)    // pos 28
+  const first_name_br = s(line, base + 54, 30)  // pos 73
+  const role_br = s(line, base + 85, 2)         // pos 104
+
+  const VALID_WRITER_ROLES = new Set(['CA','C','A','V','AD','E','AM','SE','AQ'])
+
+  if (VALID_WRITER_ROLES.has(role_br.trim().toUpperCase())) {
+    // ── Layout BR confirmado ─────────────────────────────────────────────────
+    const ipi        = s(line, base + 96, 11)   // pos 115
+    const pr_pct_raw = s(line, base + 110, 5)   // pos 129
+    const mr_pct_raw = s(line, base + 118, 5)   // pos 137
+    const unknown    = s(line, base + 84, 1)    // pos 103
+    const controlado = tipo === 'SWR' && unknown !== 'Y'
+    const nome = first_name_br ? `${first_name_br} ${last_name_br}` : last_name_br
+    return {
+      seq: parseInt(sub_code_br.replace(/\D/g, ''), 10) || 0,
+      tipo, nome, ipi,
+      submitter_code: sub_code_br,
+      papel_cwr: role_br.trim(),
+      papel: papelFromRole(role_br, tipo),
+      pr_pct: pct(pr_pct_raw), mr_pct: pct(mr_pct_raw),
+      controlado, sequence_code: sub_code_br,
+    }
+  }
+
+  // ── Fallback: layout padrão CWR 2.1 (seq variável) ─────────────────────────
   const seq_l = seqFieldLen(line, base)
   const extra = seq_l - 2
-
   const sequence_code  = s(line, base, seq_l)
   const ipi            = s(line, 21 + off + extra, 11)
   const last_name_raw  = s(line, 32 + off + extra, 45)
   const first_name     = s(line, 77 + off + extra, 30)
   const unknown        = s(line, 107 + off + extra, 1)
   const writer_role    = s(line, 108 + off + extra, 2)
-  // CWR 2.1: após writer_role(2) → tax_id(9) → writer_ipi_base(11) → pr_soc(3) → pr_pct(5)
-  //          → mr_soc(3) → mr_pct(5)
-  // 108 + 2 + 9 + 11 + 3 = 133  (pr_pct)
-  // 133 + 5 + 3 = 141            (mr_pct)
   const pr_pct_raw     = s(line, 133 + off + extra, 5)
   const mr_pct_raw     = s(line, 141 + off + extra, 5)
-  const controlado     = tipo === 'SWR' && unknown !== 'Y'
-
-  // Detectar código embutido no campo last_name (padrão mais antigo: "JD01   JOAO DALZOTO")
+  const controlado_fb  = tipo === 'SWR' && unknown !== 'Y'
   let last_name = last_name_raw
   let codigo_interno_swr = ''
   const codeMatch = last_name_raw.match(/^([A-Z]{1,3}\d{1,4})\s{3,}(.+)/)
   if (codeMatch) { codigo_interno_swr = codeMatch[1]; last_name = codeMatch[2].trim() }
-
   const nome = first_name ? `${first_name} ${last_name}` : last_name
   const submitter_code = codigo_interno_swr || sequence_code
-
   return {
     seq: parseInt(sequence_code.replace(/\D/g, ''), 10) || 0,
     tipo, nome, ipi, submitter_code,
     papel_cwr: writer_role, papel: papelFromRole(writer_role, tipo),
     pr_pct: pct(pr_pct_raw), mr_pct: pct(mr_pct_raw),
-    controlado, sequence_code,
+    controlado: controlado_fb, sequence_code,
   }
 }
 
@@ -465,21 +518,44 @@ function parseOPU(line: string, off: number = 0): CwrTitular {
 }
 
 function parsePWR(line: string, off: number = 0): CwrPwrLink {
-  // Layout CWR 2.1 PWR: pub_ipi(11) | pub_seq(2 ou 14) | writer_ipi(11) | writer_seq(2 ou 14)
+  // ── Formato detectado do arquivo real (CW260020TSL_189.V21, len=110) ─────────
+  // pos 19-27: pub_code (9) → "ED01     " ou "2646326  "
+  // pos 28-72: pub_name (45) → "EDI MUSIC EDITORA LTDA"
+  // pos 73-77: pr_owner_seq (5) → "33   " (número de ordem/referência)
+  // pos 78-100: padding (23)
+  // pos 101-109: writer_code (9) → "HR01     " ou "JD01     "
+  //
+  // O vínculo é: pub_code (pos 19) ↔ SPU.submitter_code
+  //              writer_code (pos 101) ↔ SWR.submitter_code (sequence_code)
   const base = 19 + off
 
+  // Tentar layout BR: pub_code 9 chars a pos 19, writer_code 9 chars a pos 101
+  if (line.length >= 110 + off) {
+    const pub_code_br    = s(line, base, 9)       // pos 19
+    const writer_code_br = s(line, base + 82, 9)  // pos 101
+
+    // Validar: writer_code deve conter letra (HR01, JD01, DJ01, etc.)
+    if (/[A-Za-z]/.test(writer_code_br) || /[A-Za-z]/.test(pub_code_br)) {
+      return {
+        pub_ipi: '',
+        pub_code: pub_code_br,
+        pub_seq: pub_code_br,
+        writer_ipi: '',
+        writer_seq: writer_code_br,
+      }
+    }
+  }
+
+  // ── Fallback: layout padrão CWR 2.1 ─────────────────────────────────────────
   const pub_ipi     = s(line, base, 11)
-  const pub_seq_pos = base + 11         // = 30 + off
+  const pub_seq_pos = base + 11
   const pub_seq_l   = seqFieldLen(line, pub_seq_pos)
   const pub_code    = s(line, pub_seq_pos, pub_seq_l)
-
   const writer_ipi_pos = pub_seq_pos + pub_seq_l
   const writer_ipi     = s(line, writer_ipi_pos, 11)
-
   const writer_seq_pos = writer_ipi_pos + 11
   const writer_seq_l   = seqFieldLen(line, writer_seq_pos)
   const writer_seq     = s(line, writer_seq_pos, writer_seq_l)
-
   return { pub_ipi, pub_code, pub_seq: pub_code, writer_ipi, writer_seq }
 }
 
