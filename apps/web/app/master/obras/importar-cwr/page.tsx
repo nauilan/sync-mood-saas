@@ -43,25 +43,35 @@ function KpiCard({ label, value, accent }: { label: string; value: string | numb
 }
 
 function TitularRow({ t }: { t: CwrTitular }) {
+  const codigoPrincipal = t.submitter_code && t.submitter_code !== t.sequence_code
+    ? t.submitter_code
+    : (t.sequence_code || null)
+
   return (
     <tr className="border-t border-white/5 hover:bg-white/[0.02]">
       <td className="py-2 pl-4 pr-2">
-        <span className={badgePapel(t)}>{labelPapel(t.papel_cwr)} {t.controlado ? '✓' : '—'}</span>
+        {/* Papel CWR explícito: CA, AM, E, SE… */}
+        <div className="flex flex-col gap-0.5">
+          <span className={badgePapel(t)}>{t.papel_cwr.trim() || labelPapel(t.papel_cwr)}</span>
+          <span className="text-[9px] text-white/25">{labelPapel(t.papel_cwr)}</span>
+        </div>
       </td>
       <td className="py-2 px-2">
         <p className="text-xs text-white/80">{t.nome}</p>
-        {t.submitter_code && t.tipo !== 'SPU' && (
-          <p className="text-[10px] font-mono text-amber-400/60" title="Código legado do titular (ex: HR01)">
-            {t.submitter_code || t.sequence_code}
+        {/* Código do titular: JD01, DJ01, ED01, 2646326 */}
+        {codigoPrincipal && (
+          <p className="text-[10px] font-mono text-amber-400/70 font-semibold"
+            title="Código do titular no CWR (submitter code / sequence code)">
+            {codigoPrincipal}
           </p>
         )}
       </td>
       <td className="py-2 px-2 text-[11px] text-white/40 font-mono">{t.ipi || '—'}</td>
       <td className="py-2 px-2 text-[11px] font-mono">
-        <span className="text-sky-400/60" title="Sequence code CWR">{t.sequence_code || '—'}</span>
+        <span className="text-sky-400/60" title="Sequence code numérico CWR">{t.sequence_code || '—'}</span>
         {t.publisher_seq && (
-          <span className="ml-1 text-amber-400/50" title="Vinculado via PWR">
-            ↗{t.publisher_seq.slice(0, 6)}
+          <span className="ml-1 text-amber-400/50" title="Vinculado via PWR a esta editora">
+            ↗{t.publisher_seq.slice(0, 8)}
           </span>
         )}
       </td>
