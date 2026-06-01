@@ -47,8 +47,8 @@ export async function proxy(request: NextRequest) {
   // Raiz → redireciona conforme estado de autenticação
   if (pathname === '/') {
     if (!user) return NextResponse.redirect(new URL('/auth/login', request.url))
-    const role = (user.user_metadata?.user_role ?? 'editora') as UserRole
-    return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/editora/dashboard', request.url))
+    const role = (user.user_metadata?.user_role ?? 'master') as UserRole
+    return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/master/dashboard', request.url))
   }
 
   // API protegida sem sessão → 401 JSON
@@ -72,15 +72,15 @@ export async function proxy(request: NextRequest) {
   // Já logado tentando acessar login/signup → redireciona para dashboard
   const isAuthRoute = AUTH_ROUTES.some(r => pathname.startsWith(r))
   if (isAuthRoute && user) {
-    const role = (user.user_metadata?.user_role ?? 'editora') as UserRole
-    return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/editora/dashboard', request.url))
+    const role = (user.user_metadata?.user_role ?? 'master') as UserRole
+    return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/master/dashboard', request.url))
   }
 
   // Previne acesso a /master por roles que não sejam master
   if (user && pathname.startsWith('/master')) {
     const role = user.user_metadata?.user_role as UserRole
-    if (role !== 'master') {
-      return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/editora/dashboard', request.url))
+    if (role && role !== 'master') {
+      return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/master/dashboard', request.url))
     }
   }
 
