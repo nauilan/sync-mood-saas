@@ -209,148 +209,99 @@ function ObraDrawer({ obra, onClose }: { obra: any; onClose: () => void }) {
           )}
 
           {tab === 'titulares' && (() => {
-            // ── Flatten: [{ link, titular }] ──────────────────────────────
             const rows = links.flatMap((link: any, li: number) =>
-              (link.titulares ?? []).map((t: any) => ({ link, li, t }))
+              (link.titulares ?? []).map((t: any) => ({ li, t }))
             )
-            // ── Totais controlados por direito ────────────────────────────
-            const controlled = rows.filter(r => r.t.controlado)
-            const sumExec = controlled.reduce((s: number, r: any) => s + (r.t.percentual_exec_publica ?? r.t.percentual ?? 0), 0)
-            const sumFono = controlled.reduce((s: number, r: any) => s + (r.t.percentual_fonomecanico ?? 0), 0)
-            const sumSync = controlled.reduce((s: number, r: any) => s + (r.t.percentual_sincronizacao ?? 0), 0)
-
-            // ── Cores por categoria ───────────────────────────────────────
-            const PAPEL_BADGE: Record<string, string> = {
-              CA: 'bg-violet-500/20 text-violet-300',
-              C:  'bg-violet-500/20 text-violet-300',
-              A:  'bg-sky-500/20 text-sky-300',
-              E:  'bg-amber-500/20 text-amber-300',
-              AM: 'bg-emerald-500/20 text-emerald-300',
-              SE: 'bg-rose-500/20 text-rose-300',
-              ES: 'bg-orange-500/20 text-orange-300',
-              AQ: 'bg-teal-500/20 text-teal-300',
-            }
-            const badgePapel = (p: string) => PAPEL_BADGE[p] ?? 'bg-white/10 text-white/40'
-
-            // ── Formatar CPF/CNPJ mascarado ───────────────────────────────
             const fmtDoc = (doc?: string | null, tipo?: string | null) => {
               if (!doc) return '—'
               const d = doc.replace(/\D/g, '')
-              if (tipo === 'PJ' || d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
-              if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+              if (tipo === 'PJ' || d.length === 14)
+                return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
+              if (d.length === 11)
+                return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
               return doc
             }
-
-            // ── Barra de percentual ───────────────────────────────────────
-            const PctBar = ({ value, color }: { value: number; color: string }) => (
-              <div className="flex flex-col items-center gap-1 flex-1 bg-white/[0.03] rounded-xl p-3">
-                <p className="text-[9px] uppercase tracking-wider text-white/30 text-center leading-tight">{color === 'bg-cyan-500' ? 'Exec. Pública' : color === 'bg-teal-500' ? 'Fono / Digital' : 'Sincronização'}</p>
-                <p className="text-lg font-bold text-white tabular-nums">{value.toFixed(0)}%</p>
-                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(value, 100)}%` }} />
-                </div>
+            const sumExec = rows.reduce((s: number, r: any) => s + (r.t.percentual_exec_publica ?? r.t.percentual ?? 0), 0)
+            const sumFono = rows.reduce((s: number, r: any) => s + (r.t.percentual_fonomecanico ?? 0), 0)
+            const sumSync = rows.reduce((s: number, r: any) => s + (r.t.percentual_sincronizacao ?? 0), 0)
+            const CAT_COLOR: Record<string, string> = {
+              CA: 'text-violet-300', C: 'text-violet-300', A: 'text-sky-300',
+              E: 'text-amber-300', AM: 'text-emerald-300', SE: 'text-rose-300',
+            }
+            return rows.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-10 text-white/25">
+                <Users className="w-8 h-8" />
+                <p className="text-sm">Nenhum integrante cadastrado</p>
               </div>
-            )
-
-            return (
-              <div className="space-y-4">
-                {/* Barras de controle */}
-                <div className="flex gap-2">
-                  <PctBar value={sumExec} color="bg-cyan-500" />
-                  <PctBar value={sumFono} color="bg-teal-500" />
-                  <PctBar value={sumSync} color="bg-amber-500" />
-                </div>
-
-                {/* Cabeçalho com data */}
-                {obra.updated_at && (
-                  <div className="flex items-center gap-1.5 text-[10px] text-white/25">
-                    <Calendar className="w-3 h-3" />
-                    Atualizado em {new Date(obra.updated_at).toLocaleDateString('pt-BR')}
-                  </div>
-                )}
-
-                {/* Tabela de integrantes */}
-                {rows.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 py-10 text-white/25">
-                    <Users className="w-8 h-8" />
-                    <p className="text-sm">Nenhum integrante cadastrado</p>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-xs font-bold text-white/60 uppercase tracking-widest mb-2">Integrantes da Obra</p>
-                    <div className="overflow-x-auto -mx-5 px-5">
-                      <table className="w-full text-[11px] border-collapse min-w-[560px]">
-                        <thead>
-                          <tr className="border-b border-white/[0.08]">
-                            <th className="text-left py-2 pr-2 text-white/30 font-semibold w-8">País</th>
-                            <th className="text-left py-2 pr-2 text-white/30 font-semibold w-10">Link</th>
-                            <th className="text-left py-2 pr-2 text-white/30 font-semibold">Nome / Pseudônimo</th>
-                            <th className="text-left py-2 pr-2 text-white/30 font-semibold w-28">CPF / CNPJ</th>
-                            <th className="text-left py-2 pr-2 text-white/30 font-semibold w-14">Código</th>
-                            <th className="text-left py-2 pr-2 text-white/30 font-semibold w-12">Cat.</th>
-                            <th className="text-right py-2 pr-2 text-cyan-400/60 font-semibold w-12">Exec</th>
-                            <th className="text-right py-2 pr-2 text-teal-400/60 font-semibold w-12">Fono</th>
-                            <th className="text-right py-2 text-amber-400/60 font-semibold w-12">Sync</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.map(({ link, li, t }: any, ri: number) => (
-                            <tr key={t.id || ri} className={`border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors ${!t.controlado ? 'opacity-50' : ''}`}>
-                              <td className="py-2 pr-2">
-                                <span className="inline-flex items-center justify-center w-6 h-5 rounded bg-white/10 text-white/50 font-bold text-[9px] tracking-wider">
-                                  {t.pais || 'BR'}
-                                </span>
-                              </td>
-                              <td className="py-2 pr-2">
-                                <span className="inline-flex items-center gap-1 text-[10px] text-violet-400 font-semibold">
-                                  <Link2 className="w-2.5 h-2.5" />{li + 1}
-                                </span>
-                              </td>
-                              <td className="py-2 pr-2">
-                                <p className="text-white/85 font-medium truncate max-w-[160px]">{t.nome}</p>
-                                {(t.pseudonimo_fantasia || t.ipi) && (
-                                  <p className="text-[9px] text-white/30 truncate">
-                                    {t.pseudonimo_fantasia ? `"${t.pseudonimo_fantasia}"` : `IPI ${t.ipi}`}
-                                  </p>
-                                )}
-                              </td>
-                              <td className="py-2 pr-2 font-mono text-white/40 text-[10px]">
-                                {fmtDoc(t.cpf_cnpj, t.tipo_pessoa)}
-                              </td>
-                              <td className="py-2 pr-2">
-                                <span className="font-mono text-white/50 text-[10px]">
-                                  {t.codigo_interno_legado_titular || t.cae || t.ipi?.slice(0,8) || '—'}
-                                </span>
-                              </td>
-                              <td className="py-2 pr-2">
-                                <span className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-bold ${badgePapel(t.papel)}`}>
-                                  {t.papel}
-                                </span>
-                              </td>
-                              <td className="py-2 pr-2 text-right tabular-nums text-cyan-400 font-semibold">
-                                {(t.percentual_exec_publica ?? t.percentual ?? 0).toFixed(2)}%
-                              </td>
-                              <td className="py-2 pr-2 text-right tabular-nums text-teal-400 font-semibold">
-                                {(t.percentual_fonomecanico ?? 0).toFixed(2)}%
-                              </td>
-                              <td className="py-2 text-right tabular-nums text-amber-400 font-semibold">
-                                {(t.percentual_sincronizacao ?? 0).toFixed(2)}%
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="border-t border-white/[0.08] bg-white/[0.02]">
-                            <td colSpan={6} className="py-2 pr-2 text-[10px] text-white/30 font-semibold">Total controlado</td>
-                            <td className="py-2 pr-2 text-right text-[10px] font-bold text-cyan-400 tabular-nums">{sumExec.toFixed(2)}%</td>
-                            <td className="py-2 pr-2 text-right text-[10px] font-bold text-teal-400 tabular-nums">{sumFono.toFixed(2)}%</td>
-                            <td className="py-2 text-right text-[10px] font-bold text-amber-400 tabular-nums">{sumSync.toFixed(2)}%</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  </div>
-                )}
+            ) : (
+              <div className="overflow-x-auto -mx-5">
+                <table className="w-full text-[11px] border-collapse min-w-[620px]">
+                  <thead>
+                    <tr className="bg-white/[0.04] text-white/40 font-semibold text-[10px] uppercase tracking-wide">
+                      <th className="text-center px-3 py-2.5 w-10 border-b border-white/[0.06]">link</th>
+                      <th className="text-left px-3 py-2.5 border-b border-white/[0.06]">autor / editora</th>
+                      <th className="text-left px-3 py-2.5 border-b border-white/[0.06]">pseudônimo</th>
+                      <th className="text-center px-3 py-2.5 w-14 border-b border-white/[0.06]">cat.</th>
+                      <th className="text-left px-3 py-2.5 w-32 border-b border-white/[0.06]">cpf / cnpj</th>
+                      <th className="text-center px-2 py-2.5 w-16 border-b border-l border-white/[0.06] text-cyan-400/60 leading-tight">% exec<br/>pública</th>
+                      <th className="text-center px-2 py-2.5 w-16 border-b border-l border-white/[0.06] text-teal-400/60 leading-tight">% fono/<br/>digital</th>
+                      <th className="text-center px-2 py-2.5 w-16 border-b border-l border-white/[0.06] text-amber-400/60 leading-tight">% sinc-<br/>roniz.</th>
+                      <th className="text-center px-3 py-2.5 w-20 border-b border-l border-white/[0.06]">contrato</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map(({ li, t }: any, ri: number) => (
+                      <tr key={t.id || ri}
+                        className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors">
+                        <td className="text-center px-3 py-2 text-violet-400 font-bold">{li + 1}</td>
+                        <td className="px-3 py-2">
+                          <p className="text-white/80 font-medium">{t.nome}</p>
+                          {t.codigo_interno_legado_titular && (
+                            <p className="text-[9px] font-mono text-white/25">{t.codigo_interno_legado_titular}</p>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-white/45 italic">
+                          {t.pseudonimo_fantasia || '—'}
+                        </td>
+                        <td className="text-center px-3 py-2">
+                          <span className={`font-bold uppercase ${CAT_COLOR[t.papel] ?? 'text-white/40'}`}>
+                            {t.papel}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 font-mono text-white/40 text-[10px]">
+                          {fmtDoc(t.cpf_cnpj, t.tipo_pessoa)}
+                        </td>
+                        <td className="text-center px-2 py-2 border-l border-white/[0.04] tabular-nums text-cyan-400 font-semibold">
+                          {(t.percentual_exec_publica ?? t.percentual ?? 0).toFixed(2)}%
+                        </td>
+                        <td className="text-center px-2 py-2 border-l border-white/[0.04] tabular-nums text-teal-400 font-semibold">
+                          {(t.percentual_fonomecanico ?? 0).toFixed(2)}%
+                        </td>
+                        <td className="text-center px-2 py-2 border-l border-white/[0.04] tabular-nums text-amber-400 font-semibold">
+                          {(t.percentual_sincronizacao ?? 0).toFixed(2)}%
+                        </td>
+                        <td className="text-center px-3 py-2 border-l border-white/[0.04]">
+                          {t.contrato_file ? (
+                            <button className="text-[10px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">
+                              visualizar
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-white/20">x</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-white/[0.03] border-t border-white/[0.08] font-bold text-[10px]">
+                      <td colSpan={5} className="px-3 py-2.5 text-right text-white/40 uppercase tracking-wide">total</td>
+                      <td className="text-center px-2 py-2.5 border-l border-white/[0.06] text-cyan-400 tabular-nums">{sumExec.toFixed(2)}%</td>
+                      <td className="text-center px-2 py-2.5 border-l border-white/[0.06] text-teal-400 tabular-nums">{sumFono.toFixed(2)}%</td>
+                      <td className="text-center px-2 py-2.5 border-l border-white/[0.06] text-amber-400 tabular-nums">{sumSync.toFixed(2)}%</td>
+                      <td className="border-l border-white/[0.06]" />
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             )
           })()}
