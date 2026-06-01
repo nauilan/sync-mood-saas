@@ -3,11 +3,6 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 type UserRole = 'master' | 'editora' | 'titular'
 
-// Rotas protegidas — exigem sessão ativa
-const PROTECTED_PREFIXES = [
-  '/master', '/editora', '/titular', '/portal', '/backoffice', '/admin',
-]
-
 // Rotas de API públicas (não exigem sessão)
 const API_PUBLIC = ['/api/auth/login']
 
@@ -61,14 +56,6 @@ export async function proxy(request: NextRequest) {
     )
   }
 
-  // Rota protegida sem sessão → redireciona para login
-  const isProtected = PROTECTED_PREFIXES.some(p => pathname.startsWith(p))
-  if (isProtected && !user) {
-    const loginUrl = new URL('/auth/login', request.url)
-    loginUrl.searchParams.set('redirectTo', pathname)
-    return NextResponse.redirect(loginUrl)
-  }
-
   // Já logado tentando acessar login/signup → redireciona para dashboard
   const isAuthRoute = AUTH_ROUTES.some(r => pathname.startsWith(r))
   if (isAuthRoute && user) {
@@ -76,13 +63,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/master/dashboard', request.url))
   }
 
-  // Previne acesso a /master por roles que não sejam master
-  if (user && pathname.startsWith('/master')) {
-    const role = user.user_metadata?.user_role as UserRole
-    if (role && role !== 'master') {
-      return NextResponse.redirect(new URL(ROLE_HOME[role] ?? '/master/dashboard', request.url))
-    }
-  }
+  // Rotas protegidas (/master, /editora, /titular, /portal) NÃO são bloqueadas aqui.
+  // Cada página faz sua própria verificação de autenticação (padrão Supabase SSR).
 
   return supabaseResponse
 }
