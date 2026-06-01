@@ -103,6 +103,7 @@ function BadgeRole({ role, tipo }: { role: string; tipo: 'autor' | 'editora' }) 
 // Linha de autor dentro de um link
 function AutorCard({ t }: { t: CwrTitular }) {
   const code = t.submitter_code && t.submitter_code !== t.sequence_code ? t.submitter_code : t.sequence_code
+  const ipiValid = t.ipi && /\d{4,}/.test(t.ipi) ? t.ipi : null
   return (
     <div className="flex flex-wrap items-start gap-3 px-4 py-3 bg-emerald-500/5 border-l-2 border-emerald-500/40">
       <BadgeRole role={t.papel_cwr} tipo="autor" />
@@ -110,7 +111,7 @@ function AutorCard({ t }: { t: CwrTitular }) {
         <p className="text-sm font-semibold text-white leading-tight">{t.nome || '—'}</p>
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
           {code && <span className="text-[10px] font-mono text-amber-400/80 font-bold">{code}</span>}
-          {t.ipi && <span className="text-[10px] font-mono text-white/30">IPI: {t.ipi}</span>}
+          {ipiValid && <span className="text-[10px] font-mono text-white/30">IPI: {ipiValid}</span>}
         </div>
       </div>
       <div className="flex gap-4 shrink-0 text-right">
@@ -131,6 +132,7 @@ function AutorCard({ t }: { t: CwrTitular }) {
 function EditoraCard({ t, label }: { t: CwrTitular; label?: string }) {
   const code = t.submitter_code && t.submitter_code !== t.sequence_code ? t.submitter_code : t.sequence_code
   const role = t.papel_cwr.trim().toUpperCase()
+  const ipiValid = t.ipi && /\d{4,}/.test(t.ipi) ? t.ipi : null
   const bgCls = role === 'E' || role === 'AQ'
     ? 'bg-violet-500/[0.03] border-l-2 border-violet-500/30'
     : 'bg-blue-500/[0.03] border-l-2 border-blue-500/30'
@@ -141,7 +143,7 @@ function EditoraCard({ t, label }: { t: CwrTitular; label?: string }) {
         <p className="text-sm font-medium text-white/80 leading-tight">{t.nome || '—'}</p>
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
           {code && <span className="text-[10px] font-mono text-amber-400/60 font-bold">{code}</span>}
-          {t.ipi && <span className="text-[10px] font-mono text-white/25">IPI: {t.ipi}</span>}
+          {ipiValid && <span className="text-[10px] font-mono text-white/25">IPI: {ipiValid}</span>}
           {label && <span className="text-[10px] text-white/30 italic">{label}</span>}
           <span className={`text-[10px] font-semibold ${t.controlado ? 'text-emerald-400/70' : 'text-orange-400/50'}`}>
             {t.controlado ? 'CONTROLADO' : 'externo'}
@@ -343,39 +345,82 @@ function ObraRow({ obra }: { obra: CwrObra }) {
         </div>
       </button>
 
-      {/* Detalhe — visualização por Links */}
+      {/* Detalhe — tabela estilo planilha */}
       {open && (
         <div className="border-t border-white/10">
-          {links.length > 0 ? (
-            <div className="divide-y divide-white/5">
-              {links.map((link, li) => (
-                <div key={li} className="py-1">
-                  {/* Cabeçalho do link */}
-                  <div className="px-4 py-1.5 flex items-center gap-2 bg-white/[0.015]">
-                    <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">
-                      Link {link.numero}
-                    </span>
-                    <span className="h-px flex-1 bg-white/5" />
-                  </div>
-                  {/* Autor */}
-                  <AutorCard t={link.autor} />
-                  {/* Cadeia editorial */}
-                  {link.editoras.map((ed, ei) => (
-                    <EditoraCard
-                      key={ei}
-                      t={ed}
-                      label={ed.papel_cwr.trim() === 'AM' ? 'Administradora' : ed.papel_cwr.trim() === 'SE' ? 'Sub-editora' : undefined}
-                    />
-                  ))}
-                  {link.editoras.length === 0 && (
-                    <div className="px-4 py-2 ml-6 text-[11px] text-amber-400/50 italic">
-                      Sem editora vinculada via PWR
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
+          {links.length > 0 ? (() => {
+            // Flatten: todos os titulares de todos os links em linha única
+            const CAT_COLOR: Record<string, string> = {
+              CA: 'text-violet-300', C: 'text-violet-300', A: 'text-sky-300',
+              E: 'text-amber-300', AM: 'text-emerald-300', SE: 'text-rose-300',
+              AQ: 'text-teal-300',
+            }
+            return (
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px] border-collapse min-w-[620px]">
+                  <thead>
+                    <tr className="bg-white/[0.03] text-[10px] uppercase tracking-wider text-white/30 font-semibold">
+                      <th className="text-center px-3 py-2 w-10 border-b border-white/[0.06]">link</th>
+                      <th className="text-left px-3 py-2 border-b border-white/[0.06]">nome / razão social</th>
+                      <th className="text-left px-3 py-2 border-b border-white/[0.06]">pseudônimo / fantasia</th>
+                      <th className="text-center px-2 py-2 w-12 border-b border-white/[0.06]">cat.</th>
+                      <th className="text-left px-3 py-2 w-20 border-b border-white/[0.06]">código</th>
+                      <th className="text-center px-2 py-2 w-16 border-b border-l border-white/[0.06] text-cyan-400/60 leading-tight">exec<br/>pública</th>
+                      <th className="text-center px-2 py-2 w-16 border-b border-l border-white/[0.06] text-teal-400/60 leading-tight">mec /<br/>digital</th>
+                      <th className="text-center px-2 py-2 w-16 border-b border-l border-white/[0.06]">ctrl?</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {links.map((link, li) => {
+                      // linha do autor
+                      const autor = link.autor
+                      const autorCode = autor.submitter_code && autor.submitter_code !== autor.sequence_code
+                        ? autor.submitter_code : autor.sequence_code
+                      const rows: Array<{ t: CwrTitular; code: string; li: number }> = [
+                        { t: autor, code: autorCode, li },
+                        ...link.editoras.map(ed => {
+                          const c = ed.submitter_code && ed.submitter_code !== ed.sequence_code
+                            ? ed.submitter_code : ed.sequence_code
+                          return { t: ed, code: c, li }
+                        }),
+                      ]
+                      return rows.map(({ t, code, li: linkIdx }, ri) => (
+                        <tr key={`${li}-${ri}`}
+                          className={`border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors ${ri === 0 ? 'bg-white/[0.01]' : ''}`}>
+                          {ri === 0 && (
+                            <td rowSpan={rows.length} className="text-center px-3 py-2 text-violet-400 font-bold align-middle border-r border-white/[0.04]">
+                              {linkIdx + 1}
+                            </td>
+                          )}
+                          <td className="px-3 py-2">
+                            <p className={`font-medium ${ri === 0 ? 'text-white/90' : 'text-white/60'}`}>{t.nome || '—'}</p>
+                          </td>
+                          <td className="px-3 py-2 text-white/35 italic text-[10px]">—</td>
+                          <td className="text-center px-2 py-2">
+                            <span className={`font-bold text-[10px] ${CAT_COLOR[t.papel_cwr.trim()] ?? 'text-white/40'}`}>
+                              {t.papel_cwr.trim()}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 font-mono text-white/40 text-[10px]">{code || '—'}</td>
+                          <td className="text-center px-2 py-2 border-l border-white/[0.04] tabular-nums text-cyan-400 font-semibold">
+                            {pctFmt(t.pr_pct)}
+                          </td>
+                          <td className="text-center px-2 py-2 border-l border-white/[0.04] tabular-nums text-teal-400 font-semibold">
+                            {pctFmt(t.mr_pct)}
+                          </td>
+                          <td className="text-center px-2 py-2 border-l border-white/[0.04]">
+                            <span className={`text-[10px] font-semibold ${t.controlado ? 'text-emerald-400' : 'text-white/20'}`}>
+                              {t.controlado ? 'sim' : 'não'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          })() : (
             <div className="px-5 py-4 text-sm text-white/30 italic">Nenhum link montado — sem SWR ou PWR</div>
           )}
 

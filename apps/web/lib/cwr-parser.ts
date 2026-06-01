@@ -523,22 +523,57 @@ export function parseCwr(content: string, offsetOverride?: number): CwrParseResu
   const flush = () => {
     if (!current) return
 
-    // Aplicar vínculos PWR: tentar por sequence_code, submitter_code ou IPI
+    // ── FASE 1: Aplicar vínculos PWR pelos campos de sequência/IPI ───────────
     for (const pwr of current.pwr_links) {
       const writer = current.titulares.find(t =>
         (t.tipo === 'SWR' || t.tipo === 'OWR') && (
-          // match por sequence code numérico (padrão CWR 2.1)
+          // match por sequence_code numérico (padrão CWR 2.1: "01", "02")
           (pwr.writer_seq && t.sequence_code === pwr.writer_seq) ||
           (pwr.writer_seq && t.sequence_code === pwr.writer_seq.padStart(2, '0')) ||
-          // match por submitter_code (padrão BR: "HR01")
+          // match zero-padded inverso ("1" → "01")
+          (pwr.writer_seq && pwr.writer_seq.padStart(2, '0') === t.sequence_code) ||
+          // match por submitter_code (padrão BR: "HR01", "JD01")
           (pwr.writer_seq && t.submitter_code && t.submitter_code === pwr.writer_seq) ||
-          // fallback por IPI
-          (pwr.writer_ipi && t.ipi === pwr.writer_ipi && pwr.writer_ipi.length > 3)
+          // match por IPI quando disponível
+          (pwr.writer_ipi && t.ipi && t.ipi === pwr.writer_ipi && pwr.writer_ipi.replace(/\D/g, '').length >= 4)
         )
       )
       if (writer) {
         writer.publisher_ipi = pwr.pub_ipi
         writer.publisher_seq = pwr.pub_code
+      }
+    }
+
+    // ── FASE 2: Fallback posicional — mesmo número de PWRs e SWRs sem link ──
+    const swrsTodos = current.titulares.filter(t => t.tipo === 'SWR' || t.tipo === 'OWR')
+    const swrsSemPub = swrsTodos.filter(t => !t.publisher_seq && !t.publisher_ipi)
+    const pwrsRestantes = current.pwr_links.filter(pwr =>
+      !swrsTodos.some(t => t.publisher_seq === pwr.pub_code || t.publisher_seq === pwr.pub_seq)
+    )
+    if (swrsSemPub.length > 0 && pwrsRestantes.length > 0 &&
+        swrsSemPub.length === pwrsRestantes.length) {
+      // Ordem posicional: o 1º PWR não casado vai para o 1º SWR sem pub, etc.
+      pwrsRestantes.forEach((pwr, i) => {
+        if (swrsSemPub[i]) {
+          swrsSemPub[i].publisher_ipi = pwr.pub_ipi
+          swrsSemPub[i].publisher_seq = pwr.pub_code || pwr.pub_seq
+        }
+      })
+    }
+
+    // ── FASE 3: Fallback único — se existe apenas 1 editora E/AQ, vincula todos ─
+    const swrsAindaSemPub = current.titulares.filter(
+      t => (t.tipo === 'SWR' || t.tipo === 'OWR') && !t.publisher_seq && !t.publisher_ipi
+    )
+    if (swrsAindaSemPub.length > 0) {
+      const editorasE = current.titulares.filter(
+        t => t.tipo === 'SPU' && ['E', 'AQ', 'SE', 'ES'].includes(t.papel_cwr.trim().toUpperCase())
+      )
+      if (editorasE.length === 1) {
+        swrsAindaSemPub.forEach(swr => {
+          swr.publisher_seq = editorasE[0].sequence_code
+          swr.publisher_ipi = editorasE[0].ipi
+        })
       }
     }
 
