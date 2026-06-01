@@ -113,7 +113,7 @@ function ObraDrawer({ obra, onClose }: { obra: any; onClose: () => void }) {
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-xl bg-[#080f1e] border-l border-white/[0.08] shadow-2xl flex flex-col overflow-hidden">
+      <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-2xl bg-[#080f1e] border-l border-white/[0.08] shadow-2xl flex flex-col overflow-hidden">
 
         <div className="flex items-start gap-3 px-5 pt-5 pb-4 border-b border-white/[0.06]">
           <div className="w-10 h-10 rounded-xl bg-violet-500/15 flex items-center justify-center shrink-0">
@@ -208,44 +208,152 @@ function ObraDrawer({ obra, onClose }: { obra: any; onClose: () => void }) {
             </div>
           )}
 
-          {tab === 'titulares' && (
-            <div className="space-y-3">
-              {links.length === 0 && (
-                <div className="flex flex-col items-center gap-2 py-10 text-white/25">
-                  <Users className="w-8 h-8" />
-                  <p className="text-sm">Nenhum link cadastrado</p>
+          {tab === 'titulares' && (() => {
+            // ── Flatten: [{ link, titular }] ──────────────────────────────
+            const rows = links.flatMap((link: any, li: number) =>
+              (link.titulares ?? []).map((t: any) => ({ link, li, t }))
+            )
+            // ── Totais controlados por direito ────────────────────────────
+            const controlled = rows.filter(r => r.t.controlado)
+            const sumExec = controlled.reduce((s: number, r: any) => s + (r.t.percentual_exec_publica ?? r.t.percentual ?? 0), 0)
+            const sumFono = controlled.reduce((s: number, r: any) => s + (r.t.percentual_fonomecanico ?? 0), 0)
+            const sumSync = controlled.reduce((s: number, r: any) => s + (r.t.percentual_sincronizacao ?? 0), 0)
+
+            // ── Cores por categoria ───────────────────────────────────────
+            const PAPEL_BADGE: Record<string, string> = {
+              CA: 'bg-violet-500/20 text-violet-300',
+              C:  'bg-violet-500/20 text-violet-300',
+              A:  'bg-sky-500/20 text-sky-300',
+              E:  'bg-amber-500/20 text-amber-300',
+              AM: 'bg-emerald-500/20 text-emerald-300',
+              SE: 'bg-rose-500/20 text-rose-300',
+              ES: 'bg-orange-500/20 text-orange-300',
+              AQ: 'bg-teal-500/20 text-teal-300',
+            }
+            const badgePapel = (p: string) => PAPEL_BADGE[p] ?? 'bg-white/10 text-white/40'
+
+            // ── Formatar CPF/CNPJ mascarado ───────────────────────────────
+            const fmtDoc = (doc?: string | null, tipo?: string | null) => {
+              if (!doc) return '—'
+              const d = doc.replace(/\D/g, '')
+              if (tipo === 'PJ' || d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
+              if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+              return doc
+            }
+
+            // ── Barra de percentual ───────────────────────────────────────
+            const PctBar = ({ value, color }: { value: number; color: string }) => (
+              <div className="flex flex-col items-center gap-1 flex-1 bg-white/[0.03] rounded-xl p-3">
+                <p className="text-[9px] uppercase tracking-wider text-white/30 text-center leading-tight">{color === 'bg-cyan-500' ? 'Exec. Pública' : color === 'bg-teal-500' ? 'Fono / Digital' : 'Sincronização'}</p>
+                <p className="text-lg font-bold text-white tabular-nums">{value.toFixed(0)}%</p>
+                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(value, 100)}%` }} />
                 </div>
-              )}
-              {links.map((link: any, li: number) => (
-                <div key={link.id || li} className="bg-white/[0.03] rounded-xl p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Link2 className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-                    <span className="text-xs font-semibold text-white/60">{link.descricao || `Link ${li + 1}`}</span>
-                    {link.controlado && (
-                      <span className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300">
-                        Controlado {link.percentual_controlado}%
-                      </span>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    {(link.titulares ?? []).map((t: any, ti: number) => (
-                      <div key={t.id || ti} className="flex items-center gap-2 bg-white/[0.03] rounded-lg px-3 py-2">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 ${AVATARES_CORES[ti % AVATARES_CORES.length]}`}>
-                          {t.nome?.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-white/80 font-medium truncate">{t.nome}</p>
-                          {t.ipi && <p className="text-[10px] font-mono text-white/30">{t.ipi}</p>}
-                        </div>
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-white/5 text-white/40 shrink-0">{t.papel}</span>
-                        <span className="text-xs font-bold text-violet-400 tabular-nums shrink-0 w-10 text-right">{t.percentual ?? 0}%</span>
-                      </div>
-                    ))}
-                  </div>
+              </div>
+            )
+
+            return (
+              <div className="space-y-4">
+                {/* Barras de controle */}
+                <div className="flex gap-2">
+                  <PctBar value={sumExec} color="bg-cyan-500" />
+                  <PctBar value={sumFono} color="bg-teal-500" />
+                  <PctBar value={sumSync} color="bg-amber-500" />
                 </div>
-              ))}
-            </div>
-          )}
+
+                {/* Cabeçalho com data */}
+                {obra.updated_at && (
+                  <div className="flex items-center gap-1.5 text-[10px] text-white/25">
+                    <Calendar className="w-3 h-3" />
+                    Atualizado em {new Date(obra.updated_at).toLocaleDateString('pt-BR')}
+                  </div>
+                )}
+
+                {/* Tabela de integrantes */}
+                {rows.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-10 text-white/25">
+                    <Users className="w-8 h-8" />
+                    <p className="text-sm">Nenhum integrante cadastrado</p>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-xs font-bold text-white/60 uppercase tracking-widest mb-2">Integrantes da Obra</p>
+                    <div className="overflow-x-auto -mx-5 px-5">
+                      <table className="w-full text-[11px] border-collapse min-w-[560px]">
+                        <thead>
+                          <tr className="border-b border-white/[0.08]">
+                            <th className="text-left py-2 pr-2 text-white/30 font-semibold w-8">País</th>
+                            <th className="text-left py-2 pr-2 text-white/30 font-semibold w-10">Link</th>
+                            <th className="text-left py-2 pr-2 text-white/30 font-semibold">Nome / Pseudônimo</th>
+                            <th className="text-left py-2 pr-2 text-white/30 font-semibold w-28">CPF / CNPJ</th>
+                            <th className="text-left py-2 pr-2 text-white/30 font-semibold w-14">Código</th>
+                            <th className="text-left py-2 pr-2 text-white/30 font-semibold w-12">Cat.</th>
+                            <th className="text-right py-2 pr-2 text-cyan-400/60 font-semibold w-12">Exec</th>
+                            <th className="text-right py-2 pr-2 text-teal-400/60 font-semibold w-12">Fono</th>
+                            <th className="text-right py-2 text-amber-400/60 font-semibold w-12">Sync</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rows.map(({ link, li, t }: any, ri: number) => (
+                            <tr key={t.id || ri} className={`border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors ${!t.controlado ? 'opacity-50' : ''}`}>
+                              <td className="py-2 pr-2">
+                                <span className="inline-flex items-center justify-center w-6 h-5 rounded bg-white/10 text-white/50 font-bold text-[9px] tracking-wider">
+                                  {t.pais || 'BR'}
+                                </span>
+                              </td>
+                              <td className="py-2 pr-2">
+                                <span className="inline-flex items-center gap-1 text-[10px] text-violet-400 font-semibold">
+                                  <Link2 className="w-2.5 h-2.5" />{li + 1}
+                                </span>
+                              </td>
+                              <td className="py-2 pr-2">
+                                <p className="text-white/85 font-medium truncate max-w-[160px]">{t.nome}</p>
+                                {(t.pseudonimo_fantasia || t.ipi) && (
+                                  <p className="text-[9px] text-white/30 truncate">
+                                    {t.pseudonimo_fantasia ? `"${t.pseudonimo_fantasia}"` : `IPI ${t.ipi}`}
+                                  </p>
+                                )}
+                              </td>
+                              <td className="py-2 pr-2 font-mono text-white/40 text-[10px]">
+                                {fmtDoc(t.cpf_cnpj, t.tipo_pessoa)}
+                              </td>
+                              <td className="py-2 pr-2">
+                                <span className="font-mono text-white/50 text-[10px]">
+                                  {t.codigo_interno_legado_titular || t.cae || t.ipi?.slice(0,8) || '—'}
+                                </span>
+                              </td>
+                              <td className="py-2 pr-2">
+                                <span className={`inline-block px-1.5 py-0.5 rounded-full text-[10px] font-bold ${badgePapel(t.papel)}`}>
+                                  {t.papel}
+                                </span>
+                              </td>
+                              <td className="py-2 pr-2 text-right tabular-nums text-cyan-400 font-semibold">
+                                {(t.percentual_exec_publica ?? t.percentual ?? 0).toFixed(2)}%
+                              </td>
+                              <td className="py-2 pr-2 text-right tabular-nums text-teal-400 font-semibold">
+                                {(t.percentual_fonomecanico ?? 0).toFixed(2)}%
+                              </td>
+                              <td className="py-2 text-right tabular-nums text-amber-400 font-semibold">
+                                {(t.percentual_sincronizacao ?? 0).toFixed(2)}%
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t border-white/[0.08] bg-white/[0.02]">
+                            <td colSpan={6} className="py-2 pr-2 text-[10px] text-white/30 font-semibold">Total controlado</td>
+                            <td className="py-2 pr-2 text-right text-[10px] font-bold text-cyan-400 tabular-nums">{sumExec.toFixed(2)}%</td>
+                            <td className="py-2 pr-2 text-right text-[10px] font-bold text-teal-400 tabular-nums">{sumFono.toFixed(2)}%</td>
+                            <td className="py-2 text-right text-[10px] font-bold text-amber-400 tabular-nums">{sumSync.toFixed(2)}%</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {tab === 'fonogramas' && (
             <div className="space-y-2">

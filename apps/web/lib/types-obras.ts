@@ -198,6 +198,14 @@ export interface ObraLinkTitular {
   codigo_interno_legado_editora?: string | null
   /** Origem do controle deste vínculo */
   fonte_controle?: FonteControle | null
+  /** CPF (PF) ou CNPJ (PJ) do titular */
+  cpf_cnpj?: string | null
+  /** Tipo de pessoa para formatação de CPF/CNPJ */
+  tipo_pessoa?: 'PF' | 'PJ' | null
+  /** Pseudônimo (autor) ou nome fantasia (editora) */
+  pseudonimo_fantasia?: string | null
+  /** País de filiação do titular */
+  pais?: string | null
 }
 
 export interface Fonograma {
