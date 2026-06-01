@@ -1,4 +1,4 @@
-# Relatório Técnico — Fase A: Migração para Supabase
+﻿# Relatório Técnico — Fase A: Migração para Supabase
 **Data:** 31/05/2026  
 **Status:** Em execução — aguardando ação manual para ativar banco real
 
@@ -123,7 +123,7 @@ Acessar: https://vercel.com/nauilan-s-projects/sync-mood-saas/settings/environme
 | Variável | Valor |
 |---------|-------|
 | NEXT_PUBLIC_SUPABASE_URL | https://tigubwxotanaznqqxogf.supabase.co |
-| NEXT_PUBLIC_SUPABASE_ANON_KEY | sb_publishable_pnyCvafLzScuOZ_leugKNA_BoUohzjq |
+| NEXT_PUBLIC_SUPABASE_ANON_KEY | [REDACTED] |
 | SUPABASE_SERVICE_ROLE_KEY | (usar service role key do Supabase dashboard) |
 | NEXT_PUBLIC_APP_URL | https://sync-mood-saas.vercel.app |
 
