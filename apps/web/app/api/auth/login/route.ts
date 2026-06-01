@@ -98,6 +98,10 @@ export async function POST(req: NextRequest) {
     user:          authData.user,
     role,
     redirectTo,
+  }, {
+    headers: {
+      'Cache-Control': 'no-store, no-cache, private',
+    },
   })
 
   const cookieOpts = {
