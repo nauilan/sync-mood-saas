@@ -69,10 +69,14 @@ export interface CwrParseResult {
   total_obras: number
   obras: CwrObra[]
   erros: string[]
-  /** Offset detectado: 0=Standard, 4=Extended+4, 8=Extended UBEM */
+  /** Offset detectado para NWR: 0=Standard, 4=Extended+4, 8=Extended UBEM */
   offset_detectado: number
+  /** Offset detectado para SPU/SWR/PWR (pode diferir do NWR em formatos BR) */
+  spu_offset_detectado: number
   /** Primeira linha NWR bruta — para diagnóstico de offset */
   debug_nwr_line?: string
+  /** Primeira linha SPU bruta — para diagnóstico de offset SPU */
+  debug_spu_line?: string
   stats: {
     nwr: number
     spu: number
@@ -267,6 +271,58 @@ export function detectarOffsetCwr(content: string): { offset: number; scores: Re
   return { offset, scores }
 }
 
+// ── Detecção de offset para linhas SPU/SWR/PWR ───────────────────────────────
+/**
+ * Detecta o offset para registros SPU/SWR/OWR/PWR independentemente do NWR.
+ *
+ * Estratégia: para cada candidato de offset, testa as posições onde o campo
+ * pub_role (2 chars) seria lido com seq_l=2 ou seq_l=14, e pontua quando
+ * encontrar códigos de papel CWR válidos ("E ", "AM", "SE", "CA", "C ", etc.)
+ */
+const VALID_SPU_ROLES = new Set([
+  'E ', 'AQ', 'PA', 'SE', 'AM', 'ES', 'E\t', 'E\r',
+  'CA', 'C ', 'A ', 'V ', 'AD', 'AQ', 'PA',
+])
+
+function detectSpuOffset(lines: string[]): number {
+  const offs = [0,1,2,3,4,5,6,7,8,9,10,11,12]
+  const scores: Record<number, number> = {}
+  offs.forEach(o => { scores[o] = 0 })
+
+  let count = 0
+  for (const line of lines) {
+    const rec = line.slice(0, 3)
+    if (rec !== 'SPU' && rec !== 'SWR' && rec !== 'OWR') continue
+    if (line.length < 90) continue
+    const recSeq = line.slice(11, 19)
+    if (!/^\d{8}$/.test(recSeq)) continue
+
+    for (const off of offs) {
+      const base = 19 + off
+      if (base + 80 > line.length) continue
+
+      // Tentativa com seq_l=2: role está em base+2+11+45+1 = base+59
+      const role2 = line.slice(base + 59, base + 61)
+      if (VALID_SPU_ROLES.has(role2)) scores[off] += 15
+      else if (/^[A-Z]{2}$/.test(role2)) scores[off] += 3
+      else if (/^\d/.test(role2)) scores[off] -= 10
+
+      // Tentativa com seq_l=14: role está em base+14+11+45+1 = base+71
+      if (base + 75 <= line.length) {
+        const role14 = line.slice(base + 71, base + 73)
+        if (VALID_SPU_ROLES.has(role14)) scores[off] += 15
+        else if (/^[A-Z]{2}$/.test(role14)) scores[off] += 3
+        else if (/^\d/.test(role14)) scores[off] -= 10
+      }
+    }
+    count++
+    if (count >= 20) break
+  }
+
+  if (count === 0) return 0
+  return offs.reduce((best, off) => scores[off] > scores[best] ? off : best, 0)
+}
+
 // ── Detecção dinâmica do tamanho do campo sequência (2 ou 14 chars) ──────────
 // CWR 2.1 padrão: publisher_seq/writer_seq = 2 chars numéricos ("01", "02")
 // CWR Brasil estendido: usa 14 chars alfanuméricos ("ED01", "JD01", "2646326")
@@ -443,9 +499,9 @@ function calcPctControlado(titulares: CwrTitular[]): { pct: number; tem_editora:
 
 export function parseCwr(content: string, offsetOverride?: number): CwrParseResult {
   const lines  = content.split(/\r?\n/).filter(l => l.length >= 3)
-  // Auto-detectar formato: standard (off=0), BR (+4), UBEM (+8)
-  // offsetOverride permite forçar manualmente quando auto-detecção falha
-  const off = offsetOverride !== undefined ? offsetOverride : detectCwrOffset(lines)
+  // Detectar offsets separados: NWR e SPU/SWR/PWR podem ter offsets diferentes em formatos BR
+  const nwrOff = offsetOverride !== undefined ? offsetOverride : detectCwrOffset(lines)
+  const spuOff = offsetOverride !== undefined ? offsetOverride : detectSpuOffset(lines)
 
   const result: CwrParseResult = {
     sender: '',
@@ -453,7 +509,8 @@ export function parseCwr(content: string, offsetOverride?: number): CwrParseResu
     total_obras: 0,
     obras: [],
     erros: [],
-    offset_detectado: off,
+    offset_detectado: nwrOff,
+    spu_offset_detectado: spuOff,
     stats: { nwr: 0, spu: 0, swr: 0, owr: 0, pwr: 0, linhas: lines.length },
   }
 
@@ -500,7 +557,7 @@ export function parseCwr(content: string, offsetOverride?: number): CwrParseResu
 
       if (rec === 'NWR' || rec === 'REV') {
         flush()
-        const nwr = parseNWR(line, off)
+        const nwr = parseNWR(line, nwrOff)
         // Capturar primeira linha NWR bruta para diagnóstico
         if (!result.debug_nwr_line) result.debug_nwr_line = line
         current = { ...nwr, titulares: [], pwr_links: [], linhas_raw: [line], pct_controlado: 0, tem_editora: false }
@@ -513,22 +570,23 @@ export function parseCwr(content: string, offsetOverride?: number): CwrParseResu
       current.linhas_raw.push(line)
 
       if (rec === 'SPU') {
-        current.titulares.push(parseSPU(line, off))
+        if (!result.debug_spu_line) result.debug_spu_line = line
+        current.titulares.push(parseSPU(line, spuOff))
         result.stats.spu++
       } else if (rec === 'SWR') {
-        current.titulares.push(parseSWR(line, 'SWR', off))
+        current.titulares.push(parseSWR(line, 'SWR', spuOff))
         result.stats.swr++
       } else if (rec === 'OWR') {
-        current.titulares.push(parseSWR(line, 'OWR', off))
+        current.titulares.push(parseSWR(line, 'OWR', spuOff))
         result.stats.owr++
       } else if (rec === 'OPU') {
-        current.titulares.push(parseOPU(line, off))
+        current.titulares.push(parseOPU(line, spuOff))
       } else if (rec === 'PWR') {
         // Guardar PWR bruto; os links são aplicados no flush()
-        current.pwr_links.push(parsePWR(line, off))
+        current.pwr_links.push(parsePWR(line, spuOff))
         result.stats.pwr++
       } else if (rec === 'ALT') {
-        current.titulo_alternativo = parseALT(line, off)
+        current.titulo_alternativo = parseALT(line, nwrOff)
       }
       // GRH, GRT, SPT, SWT, PER, REC, TRL — ignorados para prévia
     } catch (err) {

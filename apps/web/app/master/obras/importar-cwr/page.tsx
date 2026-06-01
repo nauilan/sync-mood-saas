@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useRef, useState, useCallback } from 'react'
 import {
@@ -15,13 +15,52 @@ import { saveObrasToSupabase, clearObrasFromSupabase } from '@/lib/save-obras-su
 
 function pctFmt(n: number) { return `${n.toFixed(1)}%` }
 
-function badgePapel(t: CwrTitular) {
-  const base = 'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border '
-  if (!t.controlado)
-    return base + 'border-white/10 bg-white/5 text-white/30'
-  if (t.tipo === 'SPU')
-    return base + 'border-violet-500/40 bg-violet-500/15 text-violet-300'
-  return base + 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+// Monta a estrutura de links a partir dos dados CWR brutos da obra
+interface LinkPreview {
+  numero: number
+  autor: CwrTitular
+  editoras: CwrTitular[]  // E + AM + SE na ordem certa
+}
+
+function buildLinksPreview(obra: CwrObra): LinkPreview[] {
+  const swrs = obra.titulares.filter(t => t.tipo === 'SWR')
+  const spus = obra.titulares.filter(t => t.tipo === 'SPU')
+  const ams  = spus.filter(t => t.papel_cwr.trim() === 'AM')
+
+  const links: LinkPreview[] = []
+
+  swrs.forEach((autor, idx) => {
+    // Encontrar a editora E vinculada a este autor via PWR
+    const pubCode = (autor.publisher_seq || autor.publisher_ipi || '').trim()
+    let editE: CwrTitular | undefined
+
+    if (pubCode) {
+      editE = spus.find(t =>
+        t.papel_cwr.trim() !== 'AM' &&
+        (t.submitter_code.trim() === pubCode || t.sequence_code.trim() === pubCode || t.ipi === pubCode)
+      )
+    }
+
+    // Se não achou via PWR, pegar a primeira E disponível
+    if (!editE) {
+      editE = spus.find(t => t.papel_cwr.trim() === 'E' || t.papel_cwr.trim() === 'AQ')
+    }
+
+    const editoras: CwrTitular[] = []
+    if (editE) editoras.push(editE)
+    // Adicionar todas as AM ao link (são a cadeia administrativa)
+    editoras.push(...ams.filter(am => !editE || am !== editE))
+
+    links.push({ numero: idx + 1, autor, editoras })
+  })
+
+  // Se não há SWR mas há SPU, criar um link genérico por editora
+  if (swrs.length === 0 && spus.length > 0) {
+    const editE = spus.find(t => t.papel_cwr.trim() === 'E')
+    if (editE) links.push({ numero: 1, autor: editE, editoras: ams })
+  }
+
+  return links
 }
 
 // ── Componentes ───────────────────────────────────────────────────────────────
@@ -42,50 +81,83 @@ function KpiCard({ label, value, accent }: { label: string; value: string | numb
   )
 }
 
-function TitularRow({ t }: { t: CwrTitular }) {
-  const codigoPrincipal = t.submitter_code && t.submitter_code !== t.sequence_code
-    ? t.submitter_code
-    : (t.sequence_code || null)
+// Badge de papel CWR colorido
+function BadgeRole({ role, tipo }: { role: string; tipo: 'autor' | 'editora' }) {
+  const r = role.trim().toUpperCase()
+  let cls = 'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold border '
+  if (tipo === 'editora') {
+    if (r === 'E' || r === 'AQ') cls += 'border-violet-500/40 bg-violet-500/20 text-violet-200'
+    else if (r === 'AM') cls += 'border-blue-500/40 bg-blue-500/20 text-blue-200'
+    else if (r === 'SE') cls += 'border-indigo-500/40 bg-indigo-500/20 text-indigo-200'
+    else cls += 'border-white/10 bg-white/5 text-white/50'
+  } else {
+    if (r === 'CA') cls += 'border-emerald-500/40 bg-emerald-500/20 text-emerald-200'
+    else if (r === 'C') cls += 'border-teal-500/40 bg-teal-500/20 text-teal-200'
+    else if (r === 'A') cls += 'border-green-500/40 bg-green-500/20 text-green-200'
+    else cls += 'border-white/10 bg-white/5 text-white/50'
+  }
+  return <span className={cls}>{r}</span>
+}
 
+// Linha de autor dentro de um link
+function AutorCard({ t }: { t: CwrTitular }) {
+  const code = t.submitter_code && t.submitter_code !== t.sequence_code ? t.submitter_code : t.sequence_code
   return (
-    <tr className="border-t border-white/5 hover:bg-white/[0.02]">
-      <td className="py-2 pl-4 pr-2">
-        {/* Papel CWR explícito: CA, AM, E, SE… */}
-        <div className="flex flex-col gap-0.5">
-          <span className={badgePapel(t)}>{t.papel_cwr.trim() || labelPapel(t.papel_cwr)}</span>
-          <span className="text-[9px] text-white/25">{labelPapel(t.papel_cwr)}</span>
+    <div className="flex flex-wrap items-start gap-3 px-4 py-3 bg-emerald-500/5 border-l-2 border-emerald-500/40">
+      <BadgeRole role={t.papel_cwr} tipo="autor" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-white leading-tight">{t.nome || '—'}</p>
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+          {code && <span className="text-[10px] font-mono text-amber-400/80 font-bold">{code}</span>}
+          {t.ipi && <span className="text-[10px] font-mono text-white/30">IPI: {t.ipi}</span>}
         </div>
-      </td>
-      <td className="py-2 px-2">
-        <p className="text-xs text-white/80">{t.nome}</p>
-        {/* Código do titular: JD01, DJ01, ED01, 2646326 */}
-        {codigoPrincipal && (
-          <p className="text-[10px] font-mono text-amber-400/70 font-semibold"
-            title="Código do titular no CWR (submitter code / sequence code)">
-            {codigoPrincipal}
-          </p>
-        )}
-      </td>
-      <td className="py-2 px-2 text-[11px] text-white/40 font-mono">{t.ipi || '—'}</td>
-      <td className="py-2 px-2 text-[11px] font-mono">
-        <span className="text-sky-400/60" title="Sequence code numérico CWR">{t.sequence_code || '—'}</span>
-        {t.publisher_seq && (
-          <span className="ml-1 text-amber-400/50" title="Vinculado via PWR a esta editora">
-            ↗{t.publisher_seq.slice(0, 8)}
+      </div>
+      <div className="flex gap-4 shrink-0 text-right">
+        <div>
+          <p className="text-[9px] uppercase tracking-wider text-white/30">Exec. Pub.</p>
+          <p className="text-xs font-bold text-white tabular-nums">{pctFmt(t.pr_pct)}</p>
+        </div>
+        <div>
+          <p className="text-[9px] uppercase tracking-wider text-white/30">Mecânico</p>
+          <p className="text-xs font-bold text-white tabular-nums">{pctFmt(t.mr_pct)}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Linha de editora dentro de um link
+function EditoraCard({ t, label }: { t: CwrTitular; label?: string }) {
+  const code = t.submitter_code && t.submitter_code !== t.sequence_code ? t.submitter_code : t.sequence_code
+  const role = t.papel_cwr.trim().toUpperCase()
+  const bgCls = role === 'E' || role === 'AQ'
+    ? 'bg-violet-500/[0.03] border-l-2 border-violet-500/30'
+    : 'bg-blue-500/[0.03] border-l-2 border-blue-500/30'
+  return (
+    <div className={`flex flex-wrap items-start gap-3 px-4 py-2.5 ${bgCls} ml-6`}>
+      <BadgeRole role={role} tipo="editora" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-white/80 leading-tight">{t.nome || '—'}</p>
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+          {code && <span className="text-[10px] font-mono text-amber-400/60 font-bold">{code}</span>}
+          {t.ipi && <span className="text-[10px] font-mono text-white/25">IPI: {t.ipi}</span>}
+          {label && <span className="text-[10px] text-white/30 italic">{label}</span>}
+          <span className={`text-[10px] font-semibold ${t.controlado ? 'text-emerald-400/70' : 'text-orange-400/50'}`}>
+            {t.controlado ? 'CONTROLADO' : 'externo'}
           </span>
-        )}
-      </td>
-      <td className="py-2 px-2 text-xs text-center tabular-nums">
-        <span className={t.controlado ? 'text-white/70' : 'text-white/25'}>{pctFmt(t.mr_pct || t.pr_pct)}</span>
-      </td>
-      <td className="py-2 pr-4 text-xs text-center">
-        {t.tipo === 'OWR' || t.tipo === 'OPU'
-          ? <span className="text-white/20 text-[10px] italic">referência</span>
-          : t.controlado
-            ? <span className="text-emerald-400 text-[10px] font-semibold">CONTROLADO</span>
-            : <span className="text-orange-400/60 text-[10px]">externo</span>}
-      </td>
-    </tr>
+        </div>
+      </div>
+      <div className="flex gap-4 shrink-0 text-right">
+        <div>
+          <p className="text-[9px] uppercase tracking-wider text-white/30">Exec. Pub.</p>
+          <p className="text-xs font-bold text-white/70 tabular-nums">{pctFmt(t.pr_pct)}</p>
+        </div>
+        <div>
+          <p className="text-[9px] uppercase tracking-wider text-white/30">Mecânico</p>
+          <p className="text-xs font-bold text-white/70 tabular-nums">{pctFmt(t.mr_pct)}</p>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -95,11 +167,9 @@ function DiagnosticoTabela({ obras }: { obras: CwrObra[] }) {
   const [aberto, setAberto] = useState(false)
   if (obras.length === 0) return null
 
-  // Verificar obras com problemas: PWR não casados
   const obrasComProblema = obras.filter(o => {
     const swrsSemPub = o.titulares.filter(t => t.tipo === 'SWR' && !t.publisher_seq && !t.publisher_ipi)
-    const pwrsSemMatch = o.pwr_links.length > 0 && swrsSemPub.length > 0
-    return pwrsSemMatch
+    return o.pwr_links.length > 0 && swrsSemPub.length > 0
   })
 
   return (
@@ -137,15 +207,12 @@ function DiagnosticoTabela({ obras }: { obras: CwrObra[] }) {
               const spus = o.titulares.filter(t => t.tipo === 'SPU')
               const swrs = o.titulares.filter(t => t.tipo === 'SWR')
               const owrs = o.titulares.filter(t => t.tipo === 'OWR')
-              // SWR com link PWR casado
               const swrsComLink = swrs.filter(t => t.publisher_seq || t.publisher_ipi)
-              // SWR sem link PWR
               const swrsSemLink = swrs.filter(t => !t.publisher_seq && !t.publisher_ipi)
               const pwrNaoCasado = o.pwr_links.length > 0 && swrsSemLink.length > 0
               const erros: string[] = []
               if (pwrNaoCasado) erros.push(`PWR não casado: ${swrsSemLink.length} SWR sem editora`)
-              if (o.pwr_links.length === 0 && swrs.length > 0 && spus.length > 0)
-                erros.push('Sem registros PWR')
+              if (o.pwr_links.length === 0 && swrs.length > 0 && spus.length > 0) erros.push('Sem registros PWR')
               if (!o.titulo) erros.push('Título vazio')
 
               return (
@@ -158,46 +225,35 @@ function DiagnosticoTabela({ obras }: { obras: CwrObra[] }) {
                   </td>
                   <td className="py-1.5 px-2 font-mono text-violet-300/70">{o.codigo_interno_legado || o.codigo || '—'}</td>
                   <td className="py-1.5 px-2 font-mono">
-                    {o.iswc
-                      ? <span className="text-emerald-400/70">{o.iswc}</span>
+                    {o.iswc ? <span className="text-emerald-400/70">{o.iswc}</span> : <span className="text-white/20">—</span>}
+                  </td>
+                  <td className="py-1.5 px-2 text-center">
+                    {spus.length > 0
+                      ? spus.map((s, si) => (
+                          <span key={si} className={`block text-[9px] truncate max-w-[90px] ${s.controlado ? 'text-violet-300' : 'text-white/30'}`}
+                            title={`${s.nome} [${s.papel_cwr.trim()}] seq:${s.sequence_code} sub:${s.submitter_code}`}>
+                            {s.submitter_code?.slice(0,8) || s.nome.slice(0, 10)}
+                          </span>
+                        ))
                       : <span className="text-white/20">—</span>}
                   </td>
                   <td className="py-1.5 px-2 text-center">
-                    <div className="flex flex-col gap-0.5">
-                      {spus.length > 0
-                        ? spus.map((s, si) => (
-                            <span key={si} className={`block text-[9px] truncate max-w-[90px] ${s.controlado ? 'text-violet-300' : 'text-white/30'}`}
-                              title={`${s.nome} [${s.papel_cwr.trim()}] seq:${s.sequence_code} sub:${s.submitter_code}`}>
-                              {s.nome.slice(0, 12)}
-                            </span>
-                          ))
-                        : <span className="text-white/20">—</span>}
-                    </div>
-                  </td>
-                  <td className="py-1.5 px-2 text-center">
-                    <div className="flex flex-col gap-0.5">
-                      {swrs.map((s, si) => (
-                        <span key={si} className={`block text-[9px] truncate max-w-[90px] ${swrsComLink.includes(s) ? 'text-emerald-400/70' : 'text-amber-400/50'}`}
-                          title={`${s.nome} seq:${s.sequence_code} sub:${s.submitter_code}${s.publisher_seq ? ' → ' + s.publisher_seq : ' (sem PWR)'}`}>
-                          {s.submitter_code && s.submitter_code !== s.sequence_code ? s.submitter_code : ''}
-                          {' '}{s.nome.split(' ').pop()?.slice(0, 8)}
-                          {swrsComLink.includes(s) ? ' ✓' : ''}
-                        </span>
-                      ))}
-                      {owrs.length > 0 && (
-                        <span className="text-[9px] text-white/20">{owrs.length} OWR</span>
-                      )}
-                      {swrs.length === 0 && owrs.length === 0 && <span className="text-white/20">—</span>}
-                    </div>
+                    {swrs.map((s, si) => (
+                      <span key={si} className={`block text-[9px] truncate max-w-[90px] ${swrsComLink.includes(s) ? 'text-emerald-400/70' : 'text-amber-400/50'}`}
+                        title={`${s.nome} seq:${s.sequence_code} sub:${s.submitter_code}${s.publisher_seq ? ' → ' + s.publisher_seq : ' (sem PWR)'}`}>
+                        {s.submitter_code?.slice(0,8) || ''} {s.nome.split(' ').pop()?.slice(0, 8)}
+                        {swrsComLink.includes(s) ? ' ✓' : ''}
+                      </span>
+                    ))}
+                    {owrs.length > 0 && <span className="text-[9px] text-white/20">{owrs.length} OWR</span>}
+                    {swrs.length === 0 && owrs.length === 0 && <span className="text-white/20">—</span>}
                   </td>
                   <td className="py-1.5 px-2 text-center">
                     {o.pwr_links.length > 0 ? (
                       <span className={`text-[10px] font-mono ${pwrNaoCasado ? 'text-red-400' : 'text-sky-400/70'}`}>
                         {o.pwr_links.length}{pwrNaoCasado ? ' !' : ' ✓'}
                       </span>
-                    ) : (
-                      <span className="text-white/20">0</span>
-                    )}
+                    ) : <span className="text-white/20">0</span>}
                   </td>
                   <td className="py-1.5 px-2 text-center">
                     <span className={`text-[10px] font-semibold ${swrsComLink.length > 0 ? 'text-emerald-400/70' : 'text-white/30'}`}>
@@ -210,13 +266,9 @@ function DiagnosticoTabela({ obras }: { obras: CwrObra[] }) {
                     </span>
                   </td>
                   <td className="py-1.5 pl-2 text-center">
-                    {erros.length > 0 ? (
-                      <span className="text-[9px] text-red-400" title={erros.join(' · ')}>
-                        ⚠ {erros[0].slice(0, 18)}
-                      </span>
-                    ) : (
-                      <span className="text-[9px] text-emerald-400/60">OK</span>
-                    )}
+                    {erros.length > 0
+                      ? <span className="text-[9px] text-red-400" title={erros.join(' · ')}>⚠ {erros[0].slice(0, 18)}</span>
+                      : <span className="text-[9px] text-emerald-400/60">OK</span>}
                   </td>
                 </tr>
               )
@@ -246,8 +298,8 @@ function DiagnosticoTabela({ obras }: { obras: CwrObra[] }) {
 
 function ObraRow({ obra }: { obra: CwrObra }) {
   const [open, setOpen] = useState(false)
-  const controlados = obra.titulares.filter(t => t.controlado)
-  const naoControlados = obra.titulares.filter(t => !t.controlado)
+  const links = buildLinksPreview(obra)
+  const owrs  = obra.titulares.filter(t => t.tipo === 'OWR' || t.tipo === 'OPU')
 
   return (
     <div className="border border-white/10 rounded-2xl overflow-hidden mb-3">
@@ -259,7 +311,6 @@ function ObraRow({ obra }: { obra: CwrObra }) {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white truncate">{obra.titulo}</p>
           <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-            {/* Código legado — referência principal CWR */}
             <span className="text-[10px] font-mono bg-violet-500/10 text-violet-300 rounded px-1.5 py-0.5"
               title="Código interno legado (preservado do CWR)">
               {obra.codigo_interno_legado || obra.codigo}
@@ -268,20 +319,21 @@ function ObraRow({ obra }: { obra: CwrObra }) {
             {obra.titulo_alternativo && (
               <span className="text-[10px] text-white/30">alt: {obra.titulo_alternativo}</span>
             )}
+            {links.length > 0 && (
+              <span className="text-[10px] text-emerald-400/60">{links.length} link{links.length > 1 ? 's' : ''}</span>
+            )}
             {obra.pwr_links.length > 0 && (
-              <span className="text-[10px] text-amber-400/50" title="Registros PWR desta obra">
-                {obra.pwr_links.length} PWR
-              </span>
+              <span className="text-[10px] text-amber-400/40">{obra.pwr_links.length} PWR</span>
             )}
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-right">
-            <p className="text-[10px] text-white/40">titulares</p>
-            <p className="text-sm font-bold text-white">{obra.titulares.length}</p>
+            <p className="text-[10px] text-white/40">links</p>
+            <p className="text-sm font-bold text-white">{links.length}</p>
           </div>
           <div className="text-right">
-            <p className="text-[10px] text-white/40">% controlado</p>
+            <p className="text-[10px] text-white/40">% ctrl</p>
             <p className={`text-sm font-bold ${obra.tem_editora ? 'text-emerald-400' : 'text-white/30'}`}>
               {pctFmt(obra.pct_controlado)}
             </p>
@@ -290,93 +342,97 @@ function ObraRow({ obra }: { obra: CwrObra }) {
         </div>
       </button>
 
-      {/* Detalhe */}
+      {/* Detalhe — visualização por Links */}
       {open && (
         <div className="border-t border-white/10">
-          {controlados.length > 0 && (
-            <div>
-              <p className="text-[10px] uppercase tracking-widest text-white/30 px-5 py-2 bg-emerald-500/5">
-                Controlados ({controlados.length})
-              </p>
-              <table className="w-full">
-                <thead>
-                  <tr className="text-[10px] uppercase tracking-widest text-white/25">
-                    <th className="pl-4 pr-2 py-1.5 text-left">Papel</th>
-                    <th className="px-2 py-1.5 text-left">Nome</th>
-                    <th className="px-2 py-1.5 text-left">IPI</th>
-                    <th className="px-2 py-1.5 text-left">Seq / PWR</th>
-                    <th className="px-2 py-1.5 text-center">%</th>
-                    <th className="pr-4 py-1.5 text-center">Controle</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {controlados.map((t, i) => <TitularRow key={i} t={t} />)}
-                </tbody>
-              </table>
+          {links.length > 0 ? (
+            <div className="divide-y divide-white/5">
+              {links.map((link, li) => (
+                <div key={li} className="py-1">
+                  {/* Cabeçalho do link */}
+                  <div className="px-4 py-1.5 flex items-center gap-2 bg-white/[0.015]">
+                    <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">
+                      Link {link.numero}
+                    </span>
+                    <span className="h-px flex-1 bg-white/5" />
+                  </div>
+                  {/* Autor */}
+                  <AutorCard t={link.autor} />
+                  {/* Cadeia editorial */}
+                  {link.editoras.map((ed, ei) => (
+                    <EditoraCard
+                      key={ei}
+                      t={ed}
+                      label={ed.papel_cwr.trim() === 'AM' ? 'Administradora' : ed.papel_cwr.trim() === 'SE' ? 'Sub-editora' : undefined}
+                    />
+                  ))}
+                  {link.editoras.length === 0 && (
+                    <div className="px-4 py-2 ml-6 text-[11px] text-amber-400/50 italic">
+                      Sem editora vinculada via PWR
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
+          ) : (
+            <div className="px-5 py-4 text-sm text-white/30 italic">Nenhum link montado — sem SWR ou PWR</div>
           )}
-          {naoControlados.length > 0 && (
+
+          {/* Referências OWR/OPU (não controlados) */}
+          {owrs.length > 0 && (
             <div className="border-t border-white/5">
               <p className="text-[10px] uppercase tracking-widest text-white/20 px-5 py-2">
-                Externos / Referência ({naoControlados.length})
+                Participantes externos / Referência ({owrs.length})
               </p>
-              <table className="w-full">
+              {owrs.map((t, i) => (
+                <div key={i} className="flex flex-wrap items-center gap-3 px-5 py-2 border-t border-white/5">
+                  <span className="text-[10px] font-mono text-white/25 border border-white/10 rounded px-1.5">{t.tipo}</span>
+                  <span className="text-xs text-white/40">{t.nome}</span>
+                  {t.submitter_code && <span className="text-[10px] font-mono text-white/25">{t.submitter_code}</span>}
+                  <span className="text-[10px] text-white/20 italic">não controlado</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Debug bruto — apenas para diagnóstico */}
+          <details className="border-t border-white/5">
+            <summary className="px-5 py-2 text-[10px] text-white/20 cursor-pointer select-none hover:text-white/40">
+              Dados brutos CWR (diagnóstico)
+            </summary>
+            <div className="px-5 pb-3 overflow-x-auto">
+              <table className="w-full text-[10px] font-mono">
                 <thead>
-                  <tr className="text-[10px] uppercase tracking-widest text-white/25">
-                    <th className="pl-4 pr-2 py-1.5 text-left">Papel</th>
-                    <th className="px-2 py-1.5 text-left">Nome</th>
-                    <th className="px-2 py-1.5 text-left">IPI</th>
-                    <th className="px-2 py-1.5 text-left">Seq / PWR</th>
-                    <th className="px-2 py-1.5 text-center">%</th>
-                    <th className="pr-4 py-1.5 text-center">Controle</th>
+                  <tr className="text-white/20 border-b border-white/5">
+                    <th className="py-1 pr-2 text-left">Tipo</th>
+                    <th className="py-1 px-2 text-left">Código</th>
+                    <th className="py-1 px-2 text-left">Nome</th>
+                    <th className="py-1 px-2 text-left">IPI</th>
+                    <th className="py-1 px-2 text-center">Papel</th>
+                    <th className="py-1 px-2 text-center">PR%</th>
+                    <th className="py-1 px-2 text-center">MR%</th>
+                    <th className="py-1 px-2 text-center">seq</th>
+                    <th className="py-1 pl-2 text-left">PWR↗</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {naoControlados.map((t, i) => <TitularRow key={i} t={t} />)}
+                  {obra.titulares.map((t, i) => (
+                    <tr key={i} className="border-t border-white/[0.04]">
+                      <td className="py-1 pr-2 text-white/40">{t.tipo}</td>
+                      <td className="py-1 px-2 text-amber-400/60">{t.submitter_code || '—'}</td>
+                      <td className="py-1 px-2 text-white/50 max-w-[140px] truncate">{t.nome}</td>
+                      <td className="py-1 px-2 text-white/25">{t.ipi || '—'}</td>
+                      <td className="py-1 px-2 text-center text-sky-400/60">{t.papel_cwr.trim()}</td>
+                      <td className="py-1 px-2 text-center text-white/40">{pctFmt(t.pr_pct)}</td>
+                      <td className="py-1 px-2 text-center text-white/40">{pctFmt(t.mr_pct)}</td>
+                      <td className="py-1 px-2 text-center text-white/25">{t.sequence_code || '—'}</td>
+                      <td className="py-1 pl-2 text-emerald-400/40">{t.publisher_seq || '—'}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
-          )}
-          {/* Vínculos PWR — cadeia editorial */}
-          {obra.pwr_links.length > 0 && (
-            <div className="border-t border-white/5 bg-amber-500/[0.02]">
-              <p className="text-[10px] uppercase tracking-widest text-amber-400/40 px-5 py-2">
-                Vínculos PWR ({obra.pwr_links.length}) — cadeia editorial
-              </p>
-              <div className="px-5 pb-3 flex flex-wrap gap-2">
-                {obra.pwr_links.map((pwr, i) => {
-                  const pubCode = (pwr.pub_code || pwr.pub_seq || '').trim()
-                  const wrCode  = pwr.writer_seq.trim()
-                  const pub = obra.titulares.find(t =>
-                    t.tipo === 'SPU' && (
-                      t.submitter_code.trim() === pubCode ||
-                      t.sequence_code.trim() === pubCode ||
-                      t.ipi === pwr.pub_ipi
-                    )
-                  )
-                  const aut = obra.titulares.find(t =>
-                    (t.tipo === 'SWR' || t.tipo === 'OWR') && (
-                      t.submitter_code.trim() === wrCode ||
-                      t.sequence_code.trim() === wrCode ||
-                      t.ipi === pwr.writer_ipi
-                    )
-                  )
-                  return (
-                    <div key={i} className="flex items-center gap-1.5 text-[11px] bg-white/5 rounded-lg px-2.5 py-1.5">
-                      <span className="text-sky-300/70 font-medium">{aut?.nome ?? `Seq ${pwr.writer_seq}`}</span>
-                      <span className="text-white/20">→</span>
-                      <span className={`font-medium ${pub?.controlado ? 'text-emerald-400/70' : 'text-orange-400/50'}`}>
-                        {pub?.nome ?? `Pub ${pwr.pub_code.slice(0, 8)}`}
-                      </span>
-                      {pub?.controlado
-                        ? <span className="text-emerald-400/50 text-[9px]">✓</span>
-                        : <span className="text-white/20 text-[9px]">ext</span>}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
+          </details>
         </div>
       )}
     </div>
@@ -391,8 +447,8 @@ export default function ImportarCwrPage() {
   const [parsing, setParsing] = useState(false)
   const [result, setResult] = useState<CwrParseResult | null>(null)
   const [fileName, setFileName] = useState('')
-  const [fileContent, setFileContent] = useState('')          // para re-parsear com outro offset
-  const [offsetOverride, setOffsetOverride] = useState<number | null>(null)  // null = auto
+  const [fileContent, setFileContent] = useState('')
+  const [offsetOverride, setOffsetOverride] = useState<number | null>(null)
   const [offsetScores, setOffsetScores] = useState<Record<number, number> | null>(null)
   const [search, setSearch] = useState('')
   const [filtro, setFiltro] = useState<'todos' | 'controlados' | 'nao_controlados'>('todos')
@@ -400,7 +456,6 @@ export default function ImportarCwrPage() {
     obras: number; titulares: number; gravacoes: number
     obras_ctrl: number; tit_ctrl: number; tit_nctrl: number
     supabase_ok: boolean; supabase_obras: number; supabase_errs: string[]
-    // estatísticas de rastreabilidade
     com_codigo_legado: number; com_iswc: number; total_pwr: number
   } | null>(null)
   const [importing, setImporting] = useState(false)
@@ -420,13 +475,11 @@ export default function ImportarCwrPage() {
       status: result.erros.length === 0 ? 'sucesso' : 'parcial',
       detalhes: `${result.stats.linhas} linhas · ${result.erros.length} avisos`,
     })
-    // Salvar no Supabase em paralelo (falha silenciosa)
     let sbRes = { obras_saved: 0, titulares_saved: 0, links_saved: 0, errors: [] as string[] }
     try {
       sbRes = await saveObrasToSupabase(converted.obras, converted.titulares)
     } catch { /* silencioso */ }
 
-    // Estatísticas de rastreabilidade
     const com_codigo_legado = converted.obras.filter(o =>
       o.codigo_interno_legado && o.codigo_interno_legado !== o.codigo
     ).length
@@ -461,7 +514,6 @@ export default function ImportarCwrPage() {
       const text = (e.target?.result as string) ?? ''
       setFileContent(text)
       try {
-        // Calcular scores para exibir diagnóstico
         const { offset: autoOff, scores } = detectarOffsetCwr(text)
         setOffsetScores(scores)
         const useOff = offOverride !== undefined ? offOverride : autoOff
@@ -469,12 +521,9 @@ export default function ImportarCwrPage() {
         setResult(parsed)
       } catch (err) {
         setResult({
-          sender: '',
-          creation_date: '',
-          total_obras: 0,
-          obras: [],
+          sender: '', creation_date: '', total_obras: 0, obras: [],
           erros: [`Erro ao processar: ${err}`],
-          offset_detectado: 0,
+          offset_detectado: 0, spu_offset_detectado: 0,
           stats: { nwr: 0, spu: 0, swr: 0, owr: 0, pwr: 0, linhas: 0 },
         })
       } finally {
@@ -484,7 +533,6 @@ export default function ImportarCwrPage() {
     reader.readAsText(file, 'latin1')
   }, [])
 
-  // Re-parsear com offset diferente (sem re-ler o arquivo)
   const reparse = useCallback((off: number) => {
     if (!fileContent) return
     setImportResult(null)
@@ -500,20 +548,17 @@ export default function ImportarCwrPage() {
     processar(file)
   }
 
-  // Limpar dados CWR ruins — localStorage + Supabase
   const [limpandoCwr, setLimpandoCwr] = useState(false)
   const clearCwrData = async () => {
     if (!confirm('Isso vai APAGAR TODAS as obras e titulares do sistema. Confirma?')) return
     setLimpandoCwr(true)
     try {
-      // 1. Limpar localStorage
       localStorage.removeItem(STORE_KEYS.obras)
       localStorage.removeItem(STORE_KEYS.titulares)
       window.dispatchEvent(new Event('storage'))
-      // 2. Limpar Supabase
       const res = await clearObrasFromSupabase()
       if (!res.ok) {
-        alert(`localStorage limpo. Supabase: ${res.error ?? 'erro desconhecido'}\nVeja o console para detalhes.`)
+        alert(`localStorage limpo. Supabase: ${res.error ?? 'erro desconhecido'}`)
       } else {
         alert('Dados apagados com sucesso!\nAgora re-importe o arquivo CWR.')
       }
@@ -547,7 +592,6 @@ export default function ImportarCwrPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          {/* Limpar dados ruins — NUCLEAR: remove obras do localStorage + Supabase */}
           <button
             onClick={clearCwrData}
             disabled={limpandoCwr}
@@ -585,9 +629,7 @@ export default function ImportarCwrPage() {
           onDrop={e => { e.preventDefault(); setDragging(false); onFile(e.dataTransfer.files[0]) }}
           onClick={() => inputRef.current?.click()}
           className={`rounded-2xl border-2 border-dashed transition-all cursor-pointer flex flex-col items-center justify-center py-16 gap-4 ${
-            dragging
-              ? 'border-violet-500 bg-violet-500/10'
-              : 'border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]'
+            dragging ? 'border-violet-500 bg-violet-500/10' : 'border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]'
           }`}
         >
           <div className="w-14 h-14 rounded-2xl border border-white/10 bg-white/5 flex items-center justify-center">
@@ -597,17 +639,11 @@ export default function ImportarCwrPage() {
             <p className="text-sm font-semibold text-white/60">Arraste o arquivo CWR ou clique para selecionar</p>
             <p className="text-xs text-white/30 mt-1">Formatos: .cwr · .txt · CWR 2.1 / 2.2</p>
           </div>
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".cwr,.txt,.V21,.v21"
-            className="hidden"
-            onChange={e => onFile(e.target.files?.[0])}
-          />
+          <input ref={inputRef} type="file" accept=".cwr,.txt,.V21,.v21" className="hidden"
+            onChange={e => onFile(e.target.files?.[0])} />
         </div>
       )}
 
-      {/* Parsing */}
       {parsing && (
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8 flex items-center justify-center gap-4">
           <div className="w-5 h-5 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
@@ -615,7 +651,6 @@ export default function ImportarCwrPage() {
         </div>
       )}
 
-      {/* Erros */}
       {result && result.erros.length > 0 && (
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 space-y-1">
           <p className="text-xs font-semibold text-red-300 flex items-center gap-2">
@@ -627,7 +662,6 @@ export default function ImportarCwrPage() {
         </div>
       )}
 
-      {/* Resultado */}
       {result && (
         <>
           {/* Info do arquivo */}
@@ -640,130 +674,96 @@ export default function ImportarCwrPage() {
                 {result.stats.linhas.toLocaleString('pt-BR')} linhas processadas
               </p>
             </div>
-            <button onClick={() => { setResult(null); setFileName(''); setFileContent(''); setOffsetScores(null); setOffsetOverride(null) }} className="p-1 rounded-lg hover:bg-white/10 transition-colors">
+            <button onClick={() => { setResult(null); setFileName(''); setFileContent(''); setOffsetScores(null); setOffsetOverride(null) }}
+              className="p-1 rounded-lg hover:bg-white/10 transition-colors">
               <X className="w-4 h-4 text-white/30" />
             </button>
           </div>
 
-          {/* Diagnóstico de Offset + Override manual */}
-          {result && (
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 space-y-2">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-[10px] uppercase tracking-widest text-white/30">Formato CWR detectado</span>
-                <span className={`text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full ${
-                  result.offset_detectado === 0 ? 'bg-emerald-500/20 text-emerald-300' :
-                  result.offset_detectado === 4 ? 'bg-amber-500/20 text-amber-300' :
-                  'bg-red-500/20 text-red-300'
-                }`}>
-                  off={result.offset_detectado} {result.offset_detectado === 0 ? '(Standard 2.1)' : result.offset_detectado === 4 ? '(Extended BR +4)' : '(Extended UBEM +8)'}
+          {/* Diagnóstico de Offset */}
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 space-y-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-[10px] uppercase tracking-widest text-white/30">Formato CWR detectado</span>
+              <span className={`text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full ${
+                result.offset_detectado === 0 ? 'bg-emerald-500/20 text-emerald-300' :
+                result.offset_detectado === 4 ? 'bg-amber-500/20 text-amber-300' :
+                'bg-red-500/20 text-red-300'
+              }`}>
+                NWR off={result.offset_detectado}
+              </span>
+              <span className={`text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full ${
+                result.spu_offset_detectado === 0 ? 'bg-emerald-500/20 text-emerald-300' :
+                result.spu_offset_detectado === 8 ? 'bg-violet-500/20 text-violet-300' :
+                'bg-amber-500/20 text-amber-300'
+              }`}>
+                SPU/SWR off={result.spu_offset_detectado}
+              </span>
+              {offsetScores && (
+                <span className="text-[10px] text-white/30 font-mono">
+                  scores NWR: 0={offsetScores[0]} 4={offsetScores[4]} 8={offsetScores[8]}
                 </span>
-                {offsetScores && (
-                  <span className="text-[10px] text-white/30 font-mono">
-                    scores: 0={offsetScores[0]} 4={offsetScores[4]} 8={offsetScores[8]}
-                  </span>
-                )}
-              </div>
-              {/* Override manual — botões 0-8 + campo livre para qualquer valor */}
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] text-white/30">Forçar offset:</span>
-                {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(off => (
-                  <button
-                    key={off}
-                    onClick={() => { setOffsetOverride(off); reparse(off) }}
-                    className={`text-[11px] font-mono px-2 py-0.5 rounded-full border transition-colors ${
-                      (offsetOverride === off || (offsetOverride === null && result.offset_detectado === off))
-                        ? 'border-violet-500/60 bg-violet-500/20 text-violet-300'
-                        : 'border-white/10 bg-white/5 text-white/40 hover:border-white/20'
-                    }`}
-                  >
-                    {off}
-                  </button>
-                ))}
-                <input
-                  type="number"
-                  min={0} max={20}
-                  placeholder="outro…"
-                  className="w-16 text-[11px] font-mono px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-white/60 placeholder:text-white/20 focus:outline-none focus:border-violet-500/40"
-                  onChange={e => {
-                    const v = parseInt(e.target.value, 10)
-                    if (!isNaN(v) && v >= 0 && v <= 20) { setOffsetOverride(v); reparse(v) }
-                  }}
-                />
-                {offsetOverride !== null && (
-                  <button
-                    onClick={() => { setOffsetOverride(null); reparse(result.offset_detectado) }}
-                    className="text-[10px] text-white/30 hover:text-white/60 underline"
-                  >
-                    voltar para auto
-                  </button>
-                )}
-              </div>
+              )}
             </div>
-          )}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] text-white/30">Forçar offset global:</span>
+              {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(off => (
+                <button key={off}
+                  onClick={() => { setOffsetOverride(off); reparse(off) }}
+                  className={`text-[11px] font-mono px-2 py-0.5 rounded-full border transition-colors ${
+                    (offsetOverride === off || (offsetOverride === null && result.offset_detectado === off))
+                      ? 'border-violet-500/60 bg-violet-500/20 text-violet-300'
+                      : 'border-white/10 bg-white/5 text-white/40 hover:border-white/20'
+                  }`}>{off}</button>
+              ))}
+              <input type="number" min={0} max={20} placeholder="outro…"
+                className="w-16 text-[11px] font-mono px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-white/60 placeholder:text-white/20 focus:outline-none focus:border-violet-500/40"
+                onChange={e => {
+                  const v = parseInt(e.target.value, 10)
+                  if (!isNaN(v) && v >= 0 && v <= 20) { setOffsetOverride(v); reparse(v) }
+                }} />
+              {offsetOverride !== null && (
+                <button onClick={() => { setOffsetOverride(null); if (fileContent) { const parsed = parseCwr(fileContent); setResult(parsed) } }}
+                  className="text-[10px] text-white/30 hover:text-white/60 underline">
+                  voltar para auto
+                </button>
+              )}
+            </div>
+          </div>
 
-          {/* Painel diagnóstico — linha NWR bruta + análise de posições */}
-          {result.debug_nwr_line && (
+          {/* Diagnóstico linha bruta */}
+          {(result.debug_nwr_line || result.debug_spu_line) && (
             <details className="rounded-xl border border-amber-500/20 bg-amber-500/5">
               <summary className="px-4 py-2.5 cursor-pointer text-xs text-amber-400/70 font-semibold select-none">
-                Diagnóstico: linha NWR bruta (clique para ver)
+                Diagnóstico: linhas brutas NWR / SPU (clique para ver)
               </summary>
-              <div className="px-4 pb-4 space-y-3">
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-white/30 mb-1">Linha bruta (primeiros 130 chars)</p>
-                  <div className="font-mono text-[10px] text-white/60 bg-black/40 rounded-lg p-3 overflow-x-auto whitespace-nowrap">
-                    <div className="text-white/25 mb-0.5">
-                      {'0         1         2         3         4         5         6         7         8         9         10        11        12   '.slice(0, 130)}
-                    </div>
-                    <div className="text-white/25 mb-1">
-                      {'0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789'.slice(0, 130)}
-                    </div>
-                    <div className="text-amber-300/80">
-                      {result.debug_nwr_line.slice(0, 130)}
+              <div className="px-4 pb-4 space-y-4">
+                {[
+                  { label: 'NWR (linha de obra)', line: result.debug_nwr_line },
+                  { label: 'SPU (linha de editora)', line: result.debug_spu_line },
+                ].filter(d => d.line).map(({ label, line }) => (
+                  <div key={label}>
+                    <p className="text-[10px] uppercase tracking-widest text-white/30 mb-1">{label} — primeiros 150 chars</p>
+                    <div className="font-mono text-[10px] text-white/60 bg-black/40 rounded-lg p-3 overflow-x-auto whitespace-nowrap">
+                      <div className="text-white/25 mb-0.5">{'0         1         2         3         4         5         6         7         8         9         10        11        12        13        14   '.slice(0, 150)}</div>
+                      <div className="text-white/25 mb-1">{'012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789'.slice(0, 150)}</div>
+                      <div className="text-amber-300/80">{line!.slice(0, 150)}</div>
                     </div>
                   </div>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-                  {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(off => {
-                    const line = result.debug_nwr_line!
-                    const titulo  = line.slice(19 + off, 79 + off).trim()
-                    const lang    = line.slice(79 + off, 81 + off).trim()
-                    const codigo  = line.slice(81 + off, 95 + off).trim()
-                    const iswc    = line.slice(95 + off, 106 + off).trim()
-                    const isActive = (offsetOverride ?? result.offset_detectado) === off
-                    const langOk = /^[A-Z]{2}$/.test(lang)
-                    return (
-                      <button key={off}
-                        onClick={() => { setOffsetOverride(off); reparse(off) }}
-                        className={`text-left rounded-lg p-2 space-y-1 transition-all ${isActive ? 'border-2 border-emerald-500/60 bg-emerald-500/10' : 'border border-white/10 bg-white/[0.02] hover:border-white/20'}`}
-                      >
-                        <p className={`text-[10px] font-bold ${isActive ? 'text-emerald-300' : langOk ? 'text-white/50' : 'text-white/25'}`}>
-                          off={off}{isActive && ' ✓'}
-                        </p>
-                        <div className="space-y-0.5 font-mono text-[9px]">
-                          <p className="truncate"><span className="text-white/30">tit: </span><span className={`${titulo ? 'text-white/70' : 'text-white/20'}`}>"{titulo.slice(0, 18) || '(vazio)'}"</span></p>
-                          <p><span className="text-white/30">lang: </span><span className={langOk ? 'text-emerald-400' : 'text-red-400'}>{lang || '??'}</span></p>
-                          <p className="truncate"><span className="text-white/30">cod: </span><span className="text-white/60">{codigo.slice(0,10) || '—'}</span></p>
-                          <p><span className="text-white/30">iswc: </span><span className={/^[Tt]\d/.test(iswc) ? 'text-emerald-400' : iswc ? 'text-amber-400' : 'text-white/20'}>{iswc.slice(0,8) || '—'}</span></p>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
+                ))}
                 <p className="text-[10px] text-white/25 italic">
-                  Se o offset detectado mostrar título truncado, use "Forçar offset" acima para testar os outros valores.
-                  O offset correto é aquele onde lang=2 letras maiúsculas (ex: PT) e título começa com letras do nome da música.
+                  Para SPU: o offset correto é onde o campo role (E, AM, SE) aparece na posição certa.
+                  Off=8 → role está em pos 98 (seq_l=14) ou pos 86 (seq_l=2).
                 </p>
               </div>
             </details>
           )}
 
-          {/* Painel de resultado da importação */}
+          {/* Resultado da importação */}
           {importResult && (
             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5 space-y-4">
               <p className="text-sm font-bold text-emerald-300 flex items-center gap-2">
                 <CheckCircle className="w-4 h-4" /> Sistema atualizado com sucesso
               </p>
-              {/* Cards principais */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
                   <Music className="w-4 h-4 mx-auto mb-1 text-violet-400" />
@@ -781,18 +781,14 @@ export default function ImportarCwrPage() {
                   <Mic2 className="w-4 h-4 mx-auto mb-1 text-amber-400" />
                   <p className="text-lg font-extrabold text-white">{importResult.gravacoes}</p>
                   <p className="text-[10px] text-white/40">Gravações</p>
-                  <p className="text-[10px] text-amber-400">com duração no CWR</p>
                 </div>
               </div>
-              {/* Rastreabilidade */}
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 space-y-2">
-                <p className="text-[10px] uppercase tracking-widest text-amber-400/70 font-semibold">
-                  Rastreabilidade CWR
-                </p>
+                <p className="text-[10px] uppercase tracking-widest text-amber-400/70 font-semibold">Rastreabilidade CWR</p>
                 <div className="grid grid-cols-3 gap-2">
                   <div className="text-center">
                     <p className="text-base font-extrabold text-amber-300">{importResult.com_codigo_legado}</p>
-                    <p className="text-[10px] text-white/40">Cód. legado (AFW2)</p>
+                    <p className="text-[10px] text-white/40">Cód. legado</p>
                   </div>
                   <div className="text-center">
                     <p className="text-base font-extrabold text-emerald-300">{importResult.com_iswc}</p>
@@ -804,27 +800,11 @@ export default function ImportarCwrPage() {
                   </div>
                 </div>
               </div>
-              {/* Status Supabase */}
-              {importResult.supabase_ok ? (
-                <div className="flex items-center gap-2 text-xs text-emerald-400">
-                  <Shield className="w-3.5 h-3.5" />
-                  <span>{importResult.supabase_obras} obras gravadas no banco Supabase</span>
-                </div>
-              ) : importResult.supabase_errs.length > 0 ? (
-                <div className="space-y-1">
-                  <p className="text-[11px] text-amber-400/80 flex items-center gap-1.5">
-                    <Download className="w-3.5 h-3.5" />
-                    Dados salvos em localStorage · Supabase: {importResult.supabase_errs[0]}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-[11px] text-white/30">
-                  Dados salvos em localStorage. Sincronização Supabase em andamento…
-                </p>
-              )}
-              <p className="text-[11px] text-white/30">
-                Disponível em: <span className="text-white/50">Obras · Titulares · Gravações · BackOffice</span>
-              </p>
+              {importResult.supabase_ok
+                ? <div className="flex items-center gap-2 text-xs text-emerald-400"><Shield className="w-3.5 h-3.5" /><span>{importResult.supabase_obras} obras gravadas no banco Supabase</span></div>
+                : importResult.supabase_errs.length > 0
+                  ? <p className="text-[11px] text-amber-400/80 flex items-center gap-1.5"><Download className="w-3.5 h-3.5" /> localStorage salvo · Supabase: {importResult.supabase_errs[0]}</p>
+                  : <p className="text-[11px] text-white/30">Dados salvos em localStorage. Sincronização Supabase em andamento…</p>}
             </div>
           )}
 
@@ -839,43 +819,31 @@ export default function ImportarCwrPage() {
 
           {/* Filtros */}
           <div className="flex flex-col sm:flex-row gap-3">
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
+            <input value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Buscar por título ou código…"
-              className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-violet-500/50"
-            />
+              className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-violet-500/50" />
             <div className="flex gap-2">
               {(['todos', 'controlados', 'nao_controlados'] as const).map(f => (
-                <button
-                  key={f}
-                  onClick={() => setFiltro(f)}
+                <button key={f} onClick={() => setFiltro(f)}
                   className={`rounded-xl px-4 py-2.5 text-xs font-semibold border transition-colors ${
-                    filtro === f
-                      ? 'border-violet-500/40 bg-violet-500/20 text-violet-300'
-                      : 'border-white/10 bg-white/5 text-white/50 hover:bg-white/10'
-                  }`}
-                >
+                    filtro === f ? 'border-violet-500/40 bg-violet-500/20 text-violet-300' : 'border-white/10 bg-white/5 text-white/50 hover:bg-white/10'
+                  }`}>
                   {f === 'todos' ? 'Todos' : f === 'controlados' ? 'Controlados' : 'Não controlados'}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Info */}
           <div className="flex items-start gap-2 rounded-xl border border-sky-500/20 bg-sky-500/5 px-4 py-3">
             <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
             <p className="text-xs text-sky-300/70">
-              <strong className="text-sky-300">Clique em cada obra</strong> para ver os titulares.
-              Registros <strong>SPU/SWR controlados</strong> têm editora no mesmo link e serão importados para o catálogo.
-              Registros <strong>OWR/OPU</strong> são não controlados e aparecem apenas para referência.
+              <strong className="text-sky-300">Clique em cada obra</strong> para ver os links com autores e editoras (cadeia editorial).
+              Cada link mostra: Autor (CA/C/A) + Editora E + Administradora AM.
             </p>
           </div>
 
-          {/* ── Diagnóstico de Leitura CWR ──────────────────────────────────── */}
           <DiagnosticoTabela obras={obras_filtradas} />
 
-          {/* Lista de obras */}
           <div>
             <p className="text-xs text-white/30 mb-3">
               Exibindo {obras_filtradas.length} de {result.total_obras} obras
