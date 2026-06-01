@@ -79,6 +79,161 @@ function TitularRow({ t }: { t: CwrTitular }) {
   )
 }
 
+// ── Diagnóstico de leitura CWR — tabela compacta por obra ─────────────────────
+
+function DiagnosticoTabela({ obras }: { obras: CwrObra[] }) {
+  const [aberto, setAberto] = useState(false)
+  if (obras.length === 0) return null
+
+  // Verificar obras com problemas: PWR não casados
+  const obrasComProblema = obras.filter(o => {
+    const swrsSemPub = o.titulares.filter(t => t.tipo === 'SWR' && !t.publisher_seq && !t.publisher_ipi)
+    const pwrsSemMatch = o.pwr_links.length > 0 && swrsSemPub.length > 0
+    return pwrsSemMatch
+  })
+
+  return (
+    <details
+      open={aberto}
+      onToggle={e => setAberto((e.target as HTMLDetailsElement).open)}
+      className="rounded-xl border border-violet-500/20 bg-violet-500/5"
+    >
+      <summary className="px-4 py-3 cursor-pointer select-none flex items-center gap-2">
+        <span className="text-xs font-bold text-violet-300">Diagnóstico de Leitura CWR</span>
+        {obrasComProblema.length > 0 && (
+          <span className="text-[10px] bg-red-500/20 text-red-300 rounded-full px-2 py-0.5 border border-red-500/30">
+            {obrasComProblema.length} com problema PWR
+          </span>
+        )}
+        <span className="text-[10px] text-white/30 ml-auto">{aberto ? 'fechar ▲' : 'ver diagnóstico ▼'}</span>
+      </summary>
+      <div className="px-4 pb-4 overflow-x-auto">
+        <table className="w-full text-[11px] mt-2">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-widest text-white/25 border-b border-white/10">
+              <th className="py-1.5 pr-2 text-left">Título</th>
+              <th className="py-1.5 px-2 text-left">Código</th>
+              <th className="py-1.5 px-2 text-left">ISWC</th>
+              <th className="py-1.5 px-2 text-center">Editoras</th>
+              <th className="py-1.5 px-2 text-center">Autores</th>
+              <th className="py-1.5 px-2 text-center">PWR</th>
+              <th className="py-1.5 px-2 text-center">Links</th>
+              <th className="py-1.5 px-2 text-center">% Ctrl</th>
+              <th className="py-1.5 pl-2 text-center">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {obras.map((o, i) => {
+              const spus = o.titulares.filter(t => t.tipo === 'SPU')
+              const swrs = o.titulares.filter(t => t.tipo === 'SWR')
+              const owrs = o.titulares.filter(t => t.tipo === 'OWR')
+              // SWR com link PWR casado
+              const swrsComLink = swrs.filter(t => t.publisher_seq || t.publisher_ipi)
+              // SWR sem link PWR
+              const swrsSemLink = swrs.filter(t => !t.publisher_seq && !t.publisher_ipi)
+              const pwrNaoCasado = o.pwr_links.length > 0 && swrsSemLink.length > 0
+              const erros: string[] = []
+              if (pwrNaoCasado) erros.push(`PWR não casado: ${swrsSemLink.length} SWR sem editora`)
+              if (o.pwr_links.length === 0 && swrs.length > 0 && spus.length > 0)
+                erros.push('Sem registros PWR')
+              if (!o.titulo) erros.push('Título vazio')
+
+              return (
+                <tr key={i} className={`border-t border-white/5 ${erros.length > 0 ? 'bg-red-500/5' : ''}`}>
+                  <td className="py-1.5 pr-2">
+                    <span className="text-white/80 font-medium">{o.titulo?.slice(0, 30) || '(sem título)'}</span>
+                    {o.titulo_alternativo && (
+                      <span className="block text-[9px] text-white/30 truncate">alt: {o.titulo_alternativo}</span>
+                    )}
+                  </td>
+                  <td className="py-1.5 px-2 font-mono text-violet-300/70">{o.codigo_interno_legado || o.codigo || '—'}</td>
+                  <td className="py-1.5 px-2 font-mono">
+                    {o.iswc
+                      ? <span className="text-emerald-400/70">{o.iswc}</span>
+                      : <span className="text-white/20">—</span>}
+                  </td>
+                  <td className="py-1.5 px-2 text-center">
+                    <div className="flex flex-col gap-0.5">
+                      {spus.length > 0
+                        ? spus.map((s, si) => (
+                            <span key={si} className={`block text-[9px] truncate max-w-[90px] ${s.controlado ? 'text-violet-300' : 'text-white/30'}`}
+                              title={`${s.nome} [${s.papel_cwr.trim()}] seq:${s.sequence_code} sub:${s.submitter_code}`}>
+                              {s.nome.slice(0, 12)}
+                            </span>
+                          ))
+                        : <span className="text-white/20">—</span>}
+                    </div>
+                  </td>
+                  <td className="py-1.5 px-2 text-center">
+                    <div className="flex flex-col gap-0.5">
+                      {swrs.map((s, si) => (
+                        <span key={si} className={`block text-[9px] truncate max-w-[90px] ${swrsComLink.includes(s) ? 'text-emerald-400/70' : 'text-amber-400/50'}`}
+                          title={`${s.nome} seq:${s.sequence_code} sub:${s.submitter_code}${s.publisher_seq ? ' → ' + s.publisher_seq : ' (sem PWR)'}`}>
+                          {s.submitter_code && s.submitter_code !== s.sequence_code ? s.submitter_code : ''}
+                          {' '}{s.nome.split(' ').pop()?.slice(0, 8)}
+                          {swrsComLink.includes(s) ? ' ✓' : ''}
+                        </span>
+                      ))}
+                      {owrs.length > 0 && (
+                        <span className="text-[9px] text-white/20">{owrs.length} OWR</span>
+                      )}
+                      {swrs.length === 0 && owrs.length === 0 && <span className="text-white/20">—</span>}
+                    </div>
+                  </td>
+                  <td className="py-1.5 px-2 text-center">
+                    {o.pwr_links.length > 0 ? (
+                      <span className={`text-[10px] font-mono ${pwrNaoCasado ? 'text-red-400' : 'text-sky-400/70'}`}>
+                        {o.pwr_links.length}{pwrNaoCasado ? ' !' : ' ✓'}
+                      </span>
+                    ) : (
+                      <span className="text-white/20">0</span>
+                    )}
+                  </td>
+                  <td className="py-1.5 px-2 text-center">
+                    <span className={`text-[10px] font-semibold ${swrsComLink.length > 0 ? 'text-emerald-400/70' : 'text-white/30'}`}>
+                      {swrsComLink.length}/{swrs.length}
+                    </span>
+                  </td>
+                  <td className="py-1.5 px-2 text-center tabular-nums">
+                    <span className={`text-[10px] ${o.pct_controlado > 0 ? 'text-emerald-400' : 'text-white/20'}`}>
+                      {o.pct_controlado.toFixed(0)}%
+                    </span>
+                  </td>
+                  <td className="py-1.5 pl-2 text-center">
+                    {erros.length > 0 ? (
+                      <span className="text-[9px] text-red-400" title={erros.join(' · ')}>
+                        ⚠ {erros[0].slice(0, 18)}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-emerald-400/60">OK</span>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        {obrasComProblema.length > 0 && (
+          <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+            <p className="text-[10px] text-red-400 font-semibold mb-1">Obras com PWR não casado:</p>
+            {obrasComProblema.map((o, i) => {
+              const swrsSemLink = o.titulares.filter(t => t.tipo === 'SWR' && !t.publisher_seq && !t.publisher_ipi)
+              return (
+                <div key={i} className="text-[10px] text-red-300/70 font-mono">
+                  {o.titulo?.slice(0, 40)} — SWR sem link: {swrsSemLink.map(s => s.submitter_code || s.sequence_code).join(', ')}
+                  {' | '}PWRs: {o.pwr_links.map(p => `pub:${p.pub_seq||p.pub_code.slice(0,6)}↗wr:${p.writer_seq}`).join(', ')}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </details>
+  )
+}
+
+// ── ObraRow ───────────────────────────────────────────────────────────────────
+
 function ObraRow({ obra }: { obra: CwrObra }) {
   const [open, setOpen] = useState(false)
   const controlados = obra.titulares.filter(t => t.controlado)
@@ -698,6 +853,9 @@ export default function ImportarCwrPage() {
               Registros <strong>OWR/OPU</strong> são não controlados e aparecem apenas para referência.
             </p>
           </div>
+
+          {/* ── Diagnóstico de Leitura CWR ──────────────────────────────────── */}
+          <DiagnosticoTabela obras={obras_filtradas} />
 
           {/* Lista de obras */}
           <div>

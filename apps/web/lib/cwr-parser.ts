@@ -299,7 +299,7 @@ function parseSPU(line: string, off: number = 8): CwrTitular {
   const spu_extra = off >= 8 ? 5 : 0
   const sequence_code  = s(line, 19 + off, 2)
   const ipi            = s(line, 21 + off, 11)
-  const nome           = s(line, 32 + off, 45)
+  const nome_raw       = s(line, 32 + off, 45)
   const pub_unknown    = s(line, 77 + off, 1)
   const pub_role       = s(line, 78 + off, 2)
   const sub_len        = 9 + spu_extra                          // 14 extended, 9 standard
@@ -310,12 +310,24 @@ function parseSPU(line: string, off: number = 8): CwrTitular {
   // O controle definitivo será recalculado em cwr-to-obra.ts
   const controlado     = pub_unknown !== 'Y'
 
+  // Detectar código interno embutido no campo nome (padrão brasileiro: "ED01   EDI MUSIC EDITORA")
+  // Pattern: 2-4 chars alfanuméricos (codigo) + 3+ espaços + nome real
+  let nome = nome_raw
+  let codigo_interno_spu = ''
+  const codeMatch = nome_raw.match(/^([A-Z0-9]{2,8})\s{3,}(.+)/)
+  if (codeMatch) {
+    codigo_interno_spu = codeMatch[1]
+    nome = codeMatch[2].trim()
+  }
+  // Usar submitter_code como código primário se não extraído do nome
+  const seq_key = submitter_code || codigo_interno_spu || sequence_code
+
   return {
     seq: parseInt(sequence_code, 10) || 0,
     tipo: 'SPU',
     nome,
     ipi,
-    submitter_code,
+    submitter_code: seq_key,
     papel_cwr: pub_role,
     papel: papelFromRole(pub_role, 'SPU'),
     pr_pct: pct(pr_pct_raw),
@@ -327,25 +339,37 @@ function parseSPU(line: string, off: number = 8): CwrTitular {
 
 function parseSWR(line: string, tipo: 'SWR' | 'OWR' = 'SWR', off: number = 8): CwrTitular {
   // off=8 (extended) ou off=0 (standard)
-  const sequence_code = s(line, 19 + off, 2)
-  const ipi           = s(line, 21 + off, 11)
-  const last_name     = s(line, 32 + off, 45)
-  const first_name    = s(line, 77 + off, 30)
-  const unknown       = s(line, 107 + off, 1)
-  const writer_role   = s(line, 108 + off, 2)
-  const pr_pct_raw    = s(line, 126 + off, 5)
-  const mr_pct_raw    = s(line, 134 + off, 5)
+  const sequence_code  = s(line, 19 + off, 2)
+  const ipi            = s(line, 21 + off, 11)
+  const last_name_raw  = s(line, 32 + off, 45)
+  const first_name     = s(line, 77 + off, 30)
+  const unknown        = s(line, 107 + off, 1)
+  const writer_role    = s(line, 108 + off, 2)
+  const pr_pct_raw     = s(line, 126 + off, 5)
+  const mr_pct_raw     = s(line, 134 + off, 5)
   // OWR = sempre não controlado; SWR depende do PWR
-  const controlado    = tipo === 'SWR' && unknown !== 'Y'
+  const controlado     = tipo === 'SWR' && unknown !== 'Y'
+
+  // Detectar código interno embutido no campo last_name (padrão brasileiro: "HR01   ALVES DOS REIS")
+  // Pattern: código alfanumérico (2-8 chars) + 3+ espaços + sobrenome real
+  let last_name = last_name_raw
+  let codigo_interno_swr = ''
+  const codeMatch = last_name_raw.match(/^([A-Z]{1,3}\d{1,4})\s{3,}(.+)/)
+  if (codeMatch) {
+    codigo_interno_swr = codeMatch[1]
+    last_name = codeMatch[2].trim()
+  }
 
   const nome = first_name ? `${first_name} ${last_name}` : last_name
+  // Preservar código interno legado (HR01, etc.) no campo submitter_code
+  const submitter_code = codigo_interno_swr || sequence_code
 
   return {
     seq: parseInt(sequence_code, 10) || 0,
     tipo,
     nome,
     ipi,
-    submitter_code: '',
+    submitter_code,
     papel_cwr: writer_role,
     papel: papelFromRole(writer_role, tipo),
     pr_pct: pct(pr_pct_raw),
@@ -428,15 +452,17 @@ export function parseCwr(content: string, offsetOverride?: number): CwrParseResu
   const flush = () => {
     if (!current) return
 
-    // Aplicar vínculos PWR: tentar primeiro por sequence_code, fallback por IPI
+    // Aplicar vínculos PWR: tentar por sequence_code, submitter_code ou IPI
     for (const pwr of current.pwr_links) {
       const writer = current.titulares.find(t =>
         (t.tipo === 'SWR' || t.tipo === 'OWR') && (
-          // match por sequence code (prioritário)
+          // match por sequence code numérico (padrão CWR 2.1)
           (pwr.writer_seq && t.sequence_code === pwr.writer_seq) ||
           (pwr.writer_seq && t.sequence_code === pwr.writer_seq.padStart(2, '0')) ||
+          // match por submitter_code (padrão BR: "HR01")
+          (pwr.writer_seq && t.submitter_code && t.submitter_code === pwr.writer_seq) ||
           // fallback por IPI
-          (pwr.writer_ipi && t.ipi === pwr.writer_ipi)
+          (pwr.writer_ipi && t.ipi === pwr.writer_ipi && pwr.writer_ipi.length > 3)
         )
       )
       if (writer) {
