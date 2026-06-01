@@ -180,88 +180,90 @@ function toObraLinkTitular(
 }
 
 // ── Agrupar titulares em links ────────────────────────────────────────────────
-// Um ObraLink = 1 cadeia editorial: Autor + Editora E + AM + SE (quando houver)
-// A ligação é feita via PWR (publisher_seq / publisher_ipi do SWR)
+// REGRA: 1 link por AUTOR (SWR/OWR).
+// Cada link contém: o autor + a cadeia editorial dele (E + AM + SE).
+// Exemplo esperado:
+//   LINK 1 — ARIOSTO 37.5% + TOP SHOW AM 2.5% + EDI MUSIC E 10%
+//   LINK 2 — LUAN    37.5% + TOP SHOW AM 2.5% + EDI MUSIC E 10%
+
+function editoraMatch(autor: CwrTitular, editora: CwrTitular): boolean {
+  if (autor.publisher_seq) {
+    return (
+      autor.publisher_seq === editora.submitter_code ||
+      autor.publisher_seq === editora.sequence_code ||
+      autor.publisher_seq.slice(0, 2) === editora.sequence_code
+    )
+  }
+  if (autor.publisher_ipi && editora.ipi && autor.publisher_ipi === editora.ipi) return true
+  return false
+}
 
 function buildLinks(
   obraId: string,
   titulares: CwrTitular[],
-  pwrLinks: import('./cwr-parser').CwrPwrLink[]
+  _pwrLinks: import('./cwr-parser').CwrPwrLink[]
 ): ObraLink[] {
-  const editoras = titulares.filter(t => t.tipo === 'SPU' || t.tipo === 'OPU')
-  const autores  = titulares.filter(t => t.tipo === 'SWR' || t.tipo === 'OWR')
+  const spus   = titulares.filter(t => t.tipo === 'SPU' || t.tipo === 'OPU')
+  const autores = titulares.filter(t => t.tipo === 'SWR' || t.tipo === 'OWR')
 
-  // Sem editora: 1 link não controlado
-  if (editoras.length === 0) {
+  const editorasE  = spus.filter(e => { const p = e.papel_cwr.trim().toUpperCase(); return p === 'E' || p === 'AQ' })
+  const admins     = spus.filter(e => e.papel_cwr.trim().toUpperCase() === 'AM')
+  const subeds     = spus.filter(e => e.papel_cwr.trim().toUpperCase() === 'SE')
+
+  // Sem autores e sem editoras → link vazio
+  if (autores.length === 0 && spus.length === 0) return []
+
+  // Sem autores → 1 link só com editoras
+  if (autores.length === 0) {
     const linkId = uid()
-    const totalPct = autores.reduce((s, a) => s + (a.mr_pct || a.pr_pct), 0)
-    return [{
-      id: linkId,
-      obra_id: obraId,
-      ordem: 1,
-      descricao: 'Link sem editora (não controlado)',
-      controlado: false,
-      percentual_controlado: 0,
-      titulares: autores.map(t => toObraLinkTitular(t, linkId)),
-    }]
+    const pct = spus.filter(s => s.controlado).reduce((sum, s) => sum + (s.mr_pct || s.pr_pct), 0)
+    return [{ id: linkId, obra_id: obraId, ordem: 1, descricao: 'Link 1 (editoras)', controlado: spus.some(s => s.controlado), percentual_controlado: Math.min(100, Math.round(pct * 10) / 10), titulares: spus.map(s => toObraLinkTitular(s, linkId)) }]
   }
 
-  // Com editoras: 1 link por editora principal (papel E ou AM direto)
-  // Identificar qual SPU é a editora original (E) e qual é AM
-  const editorasOriginais = editoras.filter(e => {
-    const p = e.papel_cwr.trim().toUpperCase()
-    return p === 'E' || p === 'AQ'
-  })
-  const admins = editoras.filter(e => e.papel_cwr.trim().toUpperCase() === 'AM')
-  const subeds = editoras.filter(e => e.papel_cwr.trim().toUpperCase() === 'SE')
+  // Sem editoras → 1 link por autor, não controlado
+  if (spus.length === 0) {
+    return autores.map((autor, idx) => {
+      const linkId = uid()
+      const pct = autor.mr_pct || autor.pr_pct
+      return { id: linkId, obra_id: obraId, ordem: idx + 1, descricao: `Link ${idx + 1} — ${autor.nome}`, controlado: false, percentual_controlado: 0, titulares: [toObraLinkTitular(autor, linkId)] }
+    })
+  }
 
-  // Quando não há editora original (somente AM), usar AM como base do link
-  const basesLink = editorasOriginais.length > 0
-    ? editorasOriginais
-    : admins.length > 0 ? admins : editoras
-
+  // CASO PRINCIPAL: 1 link por autor, cada um com sua cadeia editorial
   const links: ObraLink[] = []
 
-  basesLink.forEach((editora, idx) => {
+  autores.forEach((autor, idx) => {
     const linkId = uid()
 
-    // Autores deste link = autores cujo publisher_seq / publisher_ipi aponta para esta editora
-    const autoresDeste = autores.filter(autor => {
-      if (autor.publisher_seq) {
-        // Tentar match por sequence code (prioritário)
-        return (
-          autor.publisher_seq === editora.submitter_code ||
-          autor.publisher_seq === editora.sequence_code ||
-          autor.publisher_seq.slice(0, 2) === editora.sequence_code
-        )
-      }
-      if (autor.publisher_ipi && editora.ipi) {
-        return autor.publisher_ipi === editora.ipi
-      }
-      // Fallback: se só há 1 editora, todos os autores pertencem a ela
-      return basesLink.length === 1
-    })
+    // Editora E deste autor (via PWR match)
+    let editoraDoAutor = editorasE.find(e => editoraMatch(autor, e))
+    // Fallback: se 1 única editora E, todos os autores pertencem a ela
+    if (!editoraDoAutor && editorasE.length === 1) editoraDoAutor = editorasE[0]
+    // Fallback final: primeira SPU disponível
+    if (!editoraDoAutor && editorasE.length === 0 && admins.length > 0) editoraDoAutor = admins[0]
 
-    // Admins vinculadas a esta editora (toda AM de um grupo com 1 editora)
-    const adminsDeste = admins.filter(am => {
-      // Se AM tem IPI que algum autor aponta, é parte da cadeia
-      // Na maioria dos casos 1 AM para todos
-      return admins.length === 1 || am.ipi === editora.ipi
-    })
+    // AM vinculada a esta editora (ou todas se só há 1)
+    const adminsDesta = admins.length === 1 ? admins : (editoraDoAutor
+      ? admins.filter(am => am.ipi === editoraDoAutor!.ipi || !editoraDoAutor!.ipi)
+      : admins)
 
-    const membros: CwrTitular[] = [editora, ...adminsDeste, ...subeds, ...autoresDeste]
+    // Montar membros: autor (primeiro) + editora E + AM + SE
+    const membros: CwrTitular[] = [autor]
+    if (editoraDoAutor) membros.push(editoraDoAutor)
+    adminsDesta.forEach(am => { if (!membros.includes(am)) membros.push(am) })
+    subeds.forEach(se => { if (!membros.includes(se)) membros.push(se) })
 
-    // Percentual controlado = soma dos membros que são controlados
     const pctControlado = membros
       .filter(m => m.controlado)
       .reduce((sum, m) => sum + (m.mr_pct || m.pr_pct), 0)
 
+    const nomeAutor = autor.nome.split(' ').slice(0, 2).join(' ')
     links.push({
       id: linkId,
       obra_id: obraId,
       ordem: idx + 1,
-      descricao: `Link ${idx + 1} — ${editora.nome}`,
-      controlado: editora.controlado || adminsDeste.some(a => a.controlado),
+      descricao: `Link ${idx + 1} — ${nomeAutor}`,
+      controlado: membros.some(m => m.controlado),
       percentual_controlado: Math.min(100, Math.round(pctControlado * 10) / 10),
       titulares: membros.map(t => toObraLinkTitular(t, linkId)),
     })
