@@ -9,6 +9,7 @@ import {
   AlignLeft, Link2, Hash, Globe, Calendar, Clock,
   ExternalLink, Edit3, Copy, ChevronDown, ChevronUp,
   Send, Database, Tag, ShieldCheck, ShieldAlert, Loader2,
+  Save, FileSpreadsheet, FileText, Check,
 } from 'lucide-react'
 import { MOCK_OBRAS, MOCK_OBRAS_LINKS, MOCK_OBRAS_FONOGRAMAS, KPI_OBRAS } from '@/lib/mock-obras'
 import { STORE_KEYS, clearAllStores } from '@/lib/store'
@@ -92,9 +93,15 @@ function Highlight({ text, query }: { text: string; query: string }) {
 }
 
 // ─── Drawer de detalhes da obra ──────────────────────────────────────────────
-function ObraDrawer({ obra, onClose }: { obra: any; onClose: () => void }) {
+function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => void }) {
   const [tab, setTab] = useState<'info' | 'titulares' | 'fonogramas' | 'letra'>('info')
   const [letraExpanded, setLetraExpanded] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [obra, setObra] = useState<any>(obraInicial)
+  const [editData, setEditData] = useState<any>({})
+
   const links = normalizarLinksObra(obra._links ?? MOCK_OBRAS_LINKS[obra.id] ?? [])
   const fonogramas = MOCK_OBRAS_FONOGRAMAS?.[obra.id] ?? []
   const editora = MOCK_EDITORAS.find(e => e.id === obra.editora_id)
@@ -102,6 +109,154 @@ function ObraDrawer({ obra, onClose }: { obra: any; onClose: () => void }) {
     ?? links.flatMap((l: any) => l.titulares ?? [])
         .find((t: any) => ['editora_original', 'administradora'].includes(t.papel))?.nome
     ?? null
+
+  const startEdit = () => {
+    setEditData({
+      titulo: obra.titulo ?? '',
+      titulo_alternativo: obra.titulo_alternativo ?? '',
+      subtitulo: obra.subtitulo ?? '',
+      idioma: obra.idioma ?? '',
+      genero: obra.genero ?? '',
+      ano_criacao: obra.ano_criacao ?? '',
+      duracao: obra.duracao ?? '',
+      iswc: obra.iswc ?? '',
+      codigo_interno_legado: obra.codigo_interno_legado ?? '',
+      codigo_obra_cwr_original: obra.codigo_obra_cwr_original ?? '',
+      backoffice_song_id: obra.backoffice_song_id ?? '',
+      backoffice_work_id: obra.backoffice_work_id ?? '',
+      letra: obra.letra ?? '',
+    })
+    setIsEditing(true)
+  }
+
+  const cancelEdit = () => { setIsEditing(false); setEditData({}) }
+
+  const saveEdit = async () => {
+    setSaving(true)
+    try {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      if (url && key && !url.includes('placeholder') && obra.id) {
+        const sb = createClient(url, key)
+        await sb.from('obras').update(editData).eq('id', obra.id)
+      }
+      setObra((prev: any) => ({ ...prev, ...editData }))
+      setIsEditing(false)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (e) {
+      console.error('Erro ao salvar:', e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ── Exportar Excel (CSV) ───────────────────────────────────────────────────
+  const exportExcel = () => {
+    const fmt2 = (n: number) => n.toFixed(2) + '%'
+    const sinteticoFono = (li: number, t: any): number => {
+      const lt = (links[li] as any)?.titulares ?? []
+      const hasAM = lt.some((x: any) => ['AM','administradora'].includes(x.papel) || (x.papel??'').toUpperCase()==='AM')
+      const papel = (t.papel??'').toUpperCase()
+      if (hasAM) return (papel==='AM'||t.papel==='administradora') ? (t.percentual_fonomecanico??0) : 0
+      if (papel==='E'||t.papel==='editora_original'||papel==='AQ')
+        return lt.reduce((s: number, x: any) => s+(x.percentual_fonomecanico??0), 0)
+      return 0
+    }
+    const rows: string[] = []
+    rows.push('CADASTRO DE OBRA')
+    rows.push(`Título;${obra.titulo}`)
+    rows.push(`Código Sync Mood;${obra.codigo}`)
+    rows.push(`Cód. Legado;${obra.codigo_interno_legado||''}`)
+    rows.push(`ISWC;${obra.iswc||''}`)
+    rows.push(`Idioma;${obra.idioma||''}`)
+    rows.push(`Gênero;${obra.genero||''}`)
+    rows.push(`Ano;${obra.ano_criacao||''}`)
+    rows.push(`Duração;${obra.duracao||''}`)
+    rows.push(`Editora;${editoraNome||''}`)
+    rows.push(`Status;${obra.status||''}`)
+    rows.push('')
+    rows.push('TITULARES')
+    rows.push('Link;Nome;Pseudônimo;CPF/CNPJ;Papel;Código;% Exec Pública;% Fono/Digital;Controlado')
+    const allRows = links.flatMap((link: any, li: number) =>
+      (link.titulares??[]).map((t: any) => ({ li, t }))
+    )
+    let sumExec = 0, sumFono = 0
+    allRows.forEach(({ li, t }: any) => {
+      const ep = (t.percentual_exec_publica??t.percentual??0)
+      const fn = sinteticoFono(li, t)
+      sumExec += ep; sumFono += fn
+      const doc = t.cpf_cnpj ? t.cpf_cnpj.replace(/\D/g,'') : ''
+      rows.push([li+1, t.nome, t.pseudonimo_fantasia||'', doc, t.papel||'',
+        t.codigo_interno_legado_titular||'', fmt2(ep), fmt2(fn), t.controlado?'sim':'não'].join(';'))
+    })
+    rows.push(['TOTAL','','','','','', fmt2(sumExec), fmt2(sumFono), ''].join(';'))
+    const bom = '\uFEFF'
+    const blob = new Blob([bom + rows.join('\n')], { type: 'text/csv;charset=utf-8' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+    a.download = `${obra.titulo.replace(/[^a-zA-Z0-9]/g,'_')}_cadastro.csv`; a.click()
+  }
+
+  // ── Exportar PDF (print) ───────────────────────────────────────────────────
+  const exportPdf = () => {
+    const sinteticoFono = (li: number, t: any): number => {
+      const lt = (links[li] as any)?.titulares ?? []
+      const hasAM = lt.some((x: any) => ['AM','administradora'].includes(x.papel)||(x.papel??'').toUpperCase()==='AM')
+      const papel = (t.papel??'').toUpperCase()
+      if (hasAM) return (papel==='AM'||t.papel==='administradora')?(t.percentual_fonomecanico??0):0
+      if (papel==='E'||t.papel==='editora_original'||papel==='AQ')
+        return lt.reduce((s:number,x:any)=>s+(x.percentual_fonomecanico??0),0)
+      return 0
+    }
+    const allRows = links.flatMap((link: any, li: number) =>
+      (link.titulares??[]).map((t: any) => ({ li, t }))
+    )
+    let sumExec = 0, sumFono = 0
+    const trRows = allRows.map(({ li, t }: any) => {
+      const ep = (t.percentual_exec_publica??t.percentual??0)
+      const fn = sinteticoFono(li, t)
+      sumExec += ep; sumFono += fn
+      const doc = t.cpf_cnpj ? t.cpf_cnpj.replace(/\D/g,'') : '—'
+      return `<tr>
+        <td>${li+1}</td><td>${t.nome||''}</td><td>${t.pseudonimo_fantasia||'—'}</td>
+        <td>${doc}</td><td><b>${t.papel||''}</b></td>
+        <td>${t.codigo_interno_legado_titular||'—'}</td>
+        <td>${ep.toFixed(2)}%</td><td>${fn.toFixed(2)}%</td>
+        <td>${t.controlado?'✓':'—'}</td></tr>`
+    }).join('')
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Cadastro - ${obra.titulo}</title>
+<style>body{font-family:Arial,sans-serif;font-size:11px;margin:20px;color:#111}
+h1{font-size:16px;margin-bottom:4px}h2{font-size:12px;margin:16px 0 6px;border-bottom:1px solid #ccc;padding-bottom:2px}
+.meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;margin-bottom:12px}
+.meta div{border:1px solid #e5e5e5;padding:6px 8px;border-radius:4px}
+.meta label{font-size:9px;color:#666;text-transform:uppercase;display:block}
+table{width:100%;border-collapse:collapse;margin-top:8px}
+th{background:#f0f0f0;padding:5px 6px;text-align:left;font-size:10px;border:1px solid #ddd}
+td{padding:4px 6px;border:1px solid #eee;font-size:10px}
+tfoot td{background:#f7f7f7;font-weight:bold}
+@media print{@page{size:A4 landscape;margin:12mm}}</style></head><body>
+<h1>${obra.titulo}</h1>
+<p style="color:#555;font-size:10px">Código: ${obra.codigo} | ISWC: ${obra.iswc||'Pendente'} | Status: ${obra.status||''}</p>
+<div class="meta">
+  <div><label>Cód. Legado</label>${obra.codigo_interno_legado||'—'}</div>
+  <div><label>Idioma</label>${obra.idioma||'—'}</div>
+  <div><label>Gênero</label>${obra.genero||'—'}</div>
+  <div><label>Ano</label>${obra.ano_criacao||'—'}</div>
+  <div><label>Duração</label>${obra.duracao||'—'}</div>
+  <div><label>Editora</label>${editoraNome||'—'}</div>
+</div>
+<h2>Titulares</h2>
+<table><thead><tr>
+  <th>Link</th><th>Nome</th><th>Pseudônimo</th><th>CPF/CNPJ</th>
+  <th>Papel</th><th>Código</th><th>% Exec</th><th>% Fono/Digital</th><th>Ctrl</th>
+</tr></thead><tbody>${trRows}</tbody>
+<tfoot><tr><td colspan="6" style="text-align:right">TOTAL</td>
+  <td>${sumExec.toFixed(2)}%</td><td>${sumFono.toFixed(2)}%</td><td></td></tr></tfoot>
+</table></body></html>`
+    const w = window.open('', '_blank')
+    if (w) { w.document.write(html); w.document.close(); w.print() }
+  }
 
   const TABS = [
     { id: 'info',       label: 'Informações',  icon: Hash },
@@ -136,11 +291,13 @@ function ObraDrawer({ obra, onClose }: { obra: any; onClose: () => void }) {
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <Link href="/master/obras/nova"
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 text-white/30 hover:text-violet-400 transition-colors"
-              title="Editar obra">
-              <Edit3 className="w-4 h-4" />
-            </Link>
+            {!isEditing && (
+              <button onClick={startEdit}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-violet-500/10 text-white/30 hover:text-violet-400 transition-colors"
+                title="Editar obra">
+                <Edit3 className="w-4 h-4" />
+              </button>
+            )}
             <button onClick={onClose}
               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 text-white/30 hover:text-white/70 transition-colors">
               <X className="w-5 h-5" />
@@ -162,28 +319,42 @@ function ObraDrawer({ obra, onClose }: { obra: any; onClose: () => void }) {
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {tab === 'info' && (
             <div className="space-y-4">
+              {isEditing && (
+                <div className="bg-violet-500/5 border border-violet-500/20 rounded-xl p-3 mb-1 text-xs text-violet-300 flex items-center gap-2">
+                  <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                  Modo edição ativo — altere os campos e clique em Salvar
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: 'Título', value: obra.titulo },
-                  { label: 'Código Sync Mood', value: obra.codigo, mono: true },
-                  { label: 'Cód. Legado (CWR)', value: obra.codigo_interno_legado || '—', mono: true },
-                  { label: 'Cód. CWR Original', value: obra.codigo_obra_cwr_original || '—', mono: true },
-                  { label: 'Título Alternativo', value: obra.titulo_alternativo || '—' },
-                  { label: 'Subtítulo', value: obra.subtitulo || '—' },
-                  { label: 'Idioma', value: obra.idioma || '—', icon: Globe },
-                  { label: 'Gênero', value: obra.genero || '—' },
-                  { label: 'Ano de Criação', value: obra.ano_criacao || '—', icon: Calendar },
-                  { label: 'Duração', value: obra.duracao || '—', icon: Clock },
-                  { label: 'ISWC', value: obra.iswc || 'Pendente', mono: true },
-                  { label: 'Editora', value: editora?.nome_fantasia || editoraNome || '—' },
-                  { label: 'BackOffice Song ID', value: obra.backoffice_song_id || '—', mono: true },
-                  { label: 'BackOffice Work ID', value: obra.backoffice_work_id || '—', mono: true },
-                ].map(item => (
+                {([
+                  { label: 'Título', key: 'titulo', value: obra.titulo, editable: true },
+                  { label: 'Código Sync Mood', key: null, value: obra.codigo, mono: true, editable: false },
+                  { label: 'Cód. Legado (CWR)', key: 'codigo_interno_legado', value: obra.codigo_interno_legado || '—', mono: true, editable: true },
+                  { label: 'Cód. CWR Original', key: 'codigo_obra_cwr_original', value: obra.codigo_obra_cwr_original || '—', mono: true, editable: true },
+                  { label: 'Título Alternativo', key: 'titulo_alternativo', value: obra.titulo_alternativo || '—', editable: true },
+                  { label: 'Subtítulo', key: 'subtitulo', value: obra.subtitulo || '—', editable: true },
+                  { label: 'Idioma', key: 'idioma', value: obra.idioma || '—', editable: true },
+                  { label: 'Gênero', key: 'genero', value: obra.genero || '—', editable: true },
+                  { label: 'Ano de Criação', key: 'ano_criacao', value: obra.ano_criacao || '—', editable: true },
+                  { label: 'Duração', key: 'duracao', value: obra.duracao || '—', editable: true },
+                  { label: 'ISWC', key: 'iswc', value: obra.iswc || 'Pendente', mono: true, editable: true },
+                  { label: 'Editora', key: null, value: editora?.nome_fantasia || editoraNome || '—', editable: false },
+                  { label: 'BackOffice Song ID', key: 'backoffice_song_id', value: obra.backoffice_song_id || '—', mono: true, editable: true },
+                  { label: 'BackOffice Work ID', key: 'backoffice_work_id', value: obra.backoffice_work_id || '—', mono: true, editable: true },
+                ] as any[]).map(item => (
                   <div key={item.label} className="bg-white/[0.03] rounded-xl p-3 space-y-0.5">
                     <p className="text-[10px] text-white/30 uppercase tracking-wide">{item.label}</p>
-                    <p className={`text-sm text-white/80 font-medium ${item.mono ? 'font-mono' : ''}`}>
-                      {item.value}
-                    </p>
+                    {isEditing && item.editable && item.key ? (
+                      <input
+                        value={editData[item.key] ?? ''}
+                        onChange={e => setEditData((prev: any) => ({ ...prev, [item.key]: e.target.value }))}
+                        className={`w-full bg-white/5 border border-violet-500/30 rounded-lg px-2 py-1 text-sm text-white/90 outline-none focus:border-violet-400 transition-colors ${item.mono ? 'font-mono' : ''}`}
+                      />
+                    ) : (
+                      <p className={`text-sm text-white/80 font-medium ${item.mono ? 'font-mono' : ''}`}>
+                        {item.value}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -383,15 +554,39 @@ function ObraDrawer({ obra, onClose }: { obra: any; onClose: () => void }) {
           )}
         </div>
 
-        <div className="px-5 py-4 border-t border-white/[0.06] flex items-center gap-2">
-          <button onClick={onClose}
-            className="flex-1 h-9 rounded-xl bg-white/5 border border-white/[0.06] text-sm text-white/50 hover:text-white/70 transition-colors">
-            Fechar
-          </button>
-          <Link href="/master/obras/nova"
-            className="flex items-center justify-center gap-1.5 flex-1 h-9 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-semibold text-white transition-colors">
-            <ExternalLink className="w-3.5 h-3.5" /> Editar Obra
-          </Link>
+        <div className="px-5 py-4 border-t border-white/[0.06] flex items-center gap-2 flex-wrap">
+          {isEditing ? (
+            <>
+              <button onClick={cancelEdit}
+                className="flex-1 h-9 rounded-xl bg-white/5 border border-white/[0.06] text-sm text-white/50 hover:text-white/70 transition-colors">
+                Cancelar
+              </button>
+              <button onClick={saveEdit} disabled={saving}
+                className="flex items-center justify-center gap-1.5 flex-1 h-9 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-semibold text-white transition-colors disabled:opacity-60">
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : saved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                {saving ? 'Salvando...' : saved ? 'Salvo!' : 'Salvar'}
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={onClose}
+                className="flex-1 h-9 rounded-xl bg-white/5 border border-white/[0.06] text-sm text-white/50 hover:text-white/70 transition-colors">
+                Fechar
+              </button>
+              <button onClick={exportExcel} title="Exportar Excel"
+                className="flex items-center justify-center gap-1.5 px-3 h-9 rounded-xl bg-emerald-600/20 border border-emerald-500/20 text-sm font-semibold text-emerald-400 hover:bg-emerald-600/30 transition-colors">
+                <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
+              </button>
+              <button onClick={exportPdf} title="Exportar PDF"
+                className="flex items-center justify-center gap-1.5 px-3 h-9 rounded-xl bg-rose-600/20 border border-rose-500/20 text-sm font-semibold text-rose-400 hover:bg-rose-600/30 transition-colors">
+                <FileText className="w-3.5 h-3.5" /> PDF
+              </button>
+              <button onClick={startEdit}
+                className="flex items-center justify-center gap-1.5 flex-1 h-9 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-semibold text-white transition-colors">
+                <Edit3 className="w-3.5 h-3.5" /> Editar Obra
+              </button>
+            </>
+          )}
         </div>
       </div>
     </>
