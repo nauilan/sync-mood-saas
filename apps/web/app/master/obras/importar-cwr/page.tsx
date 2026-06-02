@@ -392,17 +392,23 @@ function calcSintetico(link: LinkPreview, t: CwrTitular) {
 function downloadCsv(obra: CwrObra, links: LinkPreview[]) {
   const fmt = (n: number) => n > 0 ? n.toFixed(2).replace('.', ',') + '%' : '0,00%'
   const rows: string[] = [
-    ['Link', 'Tipo', 'Código', 'Nome', 'Papel', 'IPI', 'Exec Pública', 'MEC/Digital', 'Controlado'].join(';'),
+    ['Link', 'Tipo', 'Código', 'Nome', 'Pseudônimo', 'CPF/CNPJ', 'Papel', 'IPI', 'Exec Pública', 'MEC/Digital', 'Controlado'].join(';'),
   ]
+  let totalExec = 0
+  let totalMec = 0
   links.forEach(link => {
     const all = [link.autor, ...link.editoras]
     all.forEach(t => {
       const sint = calcSintetico(link, t)
+      totalExec += sint.execPub
+      totalMec  += sint.fono
       rows.push([
         link.externo ? 'ext' : link.numero,
         t.tipo,
         t.submitter_code || t.sequence_code || '',
         t.nome,
+        '',        // Pseudônimo — campo livre para preenchimento manual
+        '',        // CPF/CNPJ — campo livre para preenchimento manual
         t.papel_cwr.trim(),
         t.ipi || '',
         fmt(sint.execPub),
@@ -411,6 +417,8 @@ function downloadCsv(obra: CwrObra, links: LinkPreview[]) {
       ].join(';'))
     })
   })
+  // Linha de total — deve somar 100% em cada coluna de percentual
+  rows.push(['TOTAL', '', '', '', '', '', '', '', fmt(totalExec), fmt(totalMec), ''].join(';'))
   const bom = '\uFEFF'
   const blob = new Blob([bom + rows.join('\n')], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
