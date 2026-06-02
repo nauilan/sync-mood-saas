@@ -1,6 +1,7 @@
 // ============================================================
 // lib/cwr-parser.ts — Parser CWR 2.1 client-side
 // Suporta: HDR, NWR, SPU, SPT, SWR, SWT, OWR, OPU, PWR, ALT, PER, REC, GRH, GRT, TRL
+// SPT parseado para extrair percentuais reais (pr_own) dos publishers.
 // Captura sequence codes de SPU/SWR e vínculos completos de PWR
 // O controle editorial (controlado=true/false) é determinado em cwr-to-obra.ts,
 // não aqui, pois depende do cadastro interno de editoras controladas.
@@ -34,6 +35,20 @@ export interface CwrTitular {
   sequence_code: string
 }
 
+/** Registro SPT — percentuais reais do publisher por território */
+export interface CwrSptShare {
+  /** Código do sub-publisher (igual a SPU.submitter_code). Ex: "ED01", "2646326" */
+  sub_publisher_code: string
+  /** PR ownership share (0-100). Ex: "01250" → 12.50 */
+  pr_own: number
+  /** PR collect share (0-100) */
+  pr_coll: number
+  /** MR collect share (0-100) */
+  mr_coll: number
+  /** Território numérico CWR. Ex: "0076" = Brasil */
+  territory: string
+}
+
 /** Registro PWR bruto — preservado para montagem de links por sequence code */
 export interface CwrPwrLink {
   pub_ipi: string       // IPI da editora
@@ -57,6 +72,7 @@ export interface CwrObra {
   version_type: string     // ORI | MOD
   titulares: CwrTitular[]
   pwr_links: CwrPwrLink[]  // todos os registros PWR da obra
+  spt_shares: CwrSptShare[] // registros SPT — % reais por publisher/território
   linhas_raw: string[]     // linhas originais do grupo
   // calculados após parse
   pct_controlado: number   // soma dos % controlados normalizada
@@ -564,6 +580,28 @@ function parseALT(line: string, off: number = 8): string {
   return s(line, 19 + off, 60)
 }
 
+// ── Parse SPT ─────────────────────────────────────────────────────────────────
+/**
+ * SPT — Sub-Publisher Territory (formato BR real, 58 chars):
+ *   pos 0-2:   "SPT"
+ *   pos 3-10:  tx_seq (8)
+ *   pos 11-18: rec_seq (8)
+ *   pos 19-33: sub_publisher_code (15, padded) — "ED01      " ou "2646326     "
+ *   pos 34-38: pr_own (5)   — ownership PR. Ex: "01250" = 12.50%
+ *   pos 39-43: pr_coll (5)  — collect PR.  Ex: "05000" = 50.00%
+ *   pos 44-48: mr_coll (5)  — collect MR.  Ex: "05000" = 50.00%
+ *   pos 49:    incl indicator ("I"/"E")
+ *   pos 50-53: territory (4 chars). "0076" = Brasil
+ */
+function parseSPT(line: string): CwrSptShare {
+  const sub_publisher_code = s(line, 19, 15)
+  const pr_own  = pct(s(line, 34, 5))
+  const pr_coll = pct(s(line, 39, 5))
+  const mr_coll = pct(s(line, 44, 5))
+  const territory = line.length > 53 ? s(line, 50, 4) : ''
+  return { sub_publisher_code, pr_own, pr_coll, mr_coll, territory }
+}
+
 // ── Cálculo de percentual controlado ─────────────────────────────────────────
 
 function calcPctControlado(titulares: CwrTitular[]): { pct: number; tem_editora: boolean } {
@@ -654,6 +692,30 @@ export function parseCwr(content: string, offsetOverride?: number): CwrParseResu
       }
     }
 
+    // ── FASE 4: Aplicar percentuais SPT nas editoras (corrige AM com pr_pct=0) ─
+    // O SPU ownership do AM é 0, mas o percentual real está no SPT pr_own.
+    for (const titular of current.titulares) {
+      if (titular.tipo !== 'SPU') continue
+      if (titular.pr_pct > 0 && titular.mr_pct > 0) continue  // já tem % correto
+
+      // Buscar SPT que corresponde a este publisher (por submitter_code)
+      const sptMatch = current.spt_shares.find(spt =>
+        spt.sub_publisher_code === titular.submitter_code ||
+        spt.sub_publisher_code === titular.sequence_code
+      )
+      if (!sptMatch) continue
+
+      if (titular.pr_pct === 0 && sptMatch.pr_own > 0) {
+        titular.pr_pct = sptMatch.pr_own
+      }
+      if (titular.mr_pct === 0 && sptMatch.mr_coll > 0) {
+        titular.mr_pct = sptMatch.mr_coll
+      } else if (titular.mr_pct === 0 && sptMatch.pr_own > 0) {
+        // fallback: usar pr_own também para MR quando não há mr_coll
+        titular.mr_pct = sptMatch.pr_own
+      }
+    }
+
     const { pct, tem_editora } = calcPctControlado(current.titulares)
     current.pct_controlado = pct
     current.tem_editora = tem_editora
@@ -676,7 +738,7 @@ export function parseCwr(content: string, offsetOverride?: number): CwrParseResu
         const nwr = parseNWR(line, nwrOff)
         // Capturar primeira linha NWR bruta para diagnóstico
         if (!result.debug_nwr_line) result.debug_nwr_line = line
-        current = { ...nwr, titulares: [], pwr_links: [], linhas_raw: [line], pct_controlado: 0, tem_editora: false }
+        current = { ...nwr, titulares: [], pwr_links: [], spt_shares: [], linhas_raw: [line], pct_controlado: 0, tem_editora: false }
         result.stats.nwr++
         continue
       }
@@ -701,10 +763,13 @@ export function parseCwr(content: string, offsetOverride?: number): CwrParseResu
         // Guardar PWR bruto; os links são aplicados no flush()
         current.pwr_links.push(parsePWR(line, spuOff))
         result.stats.pwr++
+      } else if (rec === 'SPT') {
+        // Guardar SPT — contém os % reais do publisher por território
+        current.spt_shares.push(parseSPT(line))
       } else if (rec === 'ALT') {
         current.titulo_alternativo = parseALT(line, nwrOff)
       }
-      // GRH, GRT, SPT, SWT, PER, REC, TRL — ignorados para prévia
+      // GRH, GRT, SWT, PER, REC, TRL — ignorados para prévia
     } catch (err) {
       result.erros.push(`Linha "${line.slice(0, 20)}…": ${err}`)
     }
