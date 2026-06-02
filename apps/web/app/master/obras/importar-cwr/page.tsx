@@ -23,10 +23,25 @@ interface LinkPreview {
   editoras: CwrTitular[]  // E + AM + SE na ordem certa
 }
 
+// Deduplica uma lista de CwrTitular por IPI → sequence_code → nome
+function deduplicarEditoras(list: CwrTitular[]): CwrTitular[] {
+  const seen = new Set<string>()
+  return list.filter(t => {
+    const key = t.ipi?.trim() || t.submitter_code?.trim() || t.sequence_code?.trim() || t.nome?.trim() || ''
+    if (!key) return true
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 function buildLinksPreview(obra: CwrObra): LinkPreview[] {
   const swrs = obra.titulares.filter(t => t.tipo === 'SWR')
   const spus = obra.titulares.filter(t => t.tipo === 'SPU')
-  const ams  = spus.filter(t => t.papel_cwr.trim() === 'AM')
+
+  // Deduplica editoras antes de qualquer agrupamento
+  const spusUniq = deduplicarEditoras(spus)
+  const ams = spusUniq.filter(t => t.papel_cwr.trim() === 'AM')
 
   const links: LinkPreview[] = []
 
@@ -36,7 +51,7 @@ function buildLinksPreview(obra: CwrObra): LinkPreview[] {
     let editE: CwrTitular | undefined
 
     if (pubCode) {
-      editE = spus.find(t =>
+      editE = spusUniq.find(t =>
         t.papel_cwr.trim() !== 'AM' &&
         (t.submitter_code.trim() === pubCode || t.sequence_code.trim() === pubCode || t.ipi === pubCode)
       )
@@ -44,20 +59,20 @@ function buildLinksPreview(obra: CwrObra): LinkPreview[] {
 
     // Se não achou via PWR, pegar a primeira E disponível
     if (!editE) {
-      editE = spus.find(t => t.papel_cwr.trim() === 'E' || t.papel_cwr.trim() === 'AQ')
+      editE = spusUniq.find(t => t.papel_cwr.trim() === 'E' || t.papel_cwr.trim() === 'AQ')
     }
 
     const editoras: CwrTitular[] = []
     if (editE) editoras.push(editE)
-    // Adicionar todas as AM ao link (são a cadeia administrativa)
-    editoras.push(...ams.filter(am => !editE || am !== editE))
+    // Adicionar AMs deduplicadas ao link
+    editoras.push(...ams.filter(am => am !== editE))
 
     links.push({ numero: idx + 1, autor, editoras })
   })
 
   // Se não há SWR mas há SPU, criar um link genérico por editora
   if (swrs.length === 0 && spus.length > 0) {
-    const editE = spus.find(t => t.papel_cwr.trim() === 'E')
+    const editE = spusUniq.find(t => t.papel_cwr.trim() === 'E')
     if (editE) links.push({ numero: 1, autor: editE, editoras: ams })
   }
 

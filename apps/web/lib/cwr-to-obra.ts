@@ -105,6 +105,18 @@ function isPessoaJuridica(papel: CwrPapel): boolean {
   return papel === 'editora_original' || papel === 'administradora' || papel === 'subeditora'
 }
 
+/** Deduplica lista de CwrTitular por IPI → submitter_code → sequence_code → nome */
+function deduplicarTitulares(list: CwrTitular[]): CwrTitular[] {
+  const seen = new Set<string>()
+  return list.filter(t => {
+    const key = t.ipi?.trim() || t.submitter_code?.trim() || t.sequence_code?.trim() || t.nome?.trim() || ''
+    if (!key) return true
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 // ── Regra de controle editorial ───────────────────────────────────────────────
 
 /**
@@ -203,8 +215,11 @@ function buildLinks(
   titulares: CwrTitular[],
   _pwrLinks: import('./cwr-parser').CwrPwrLink[]
 ): ObraLink[] {
-  const spus   = titulares.filter(t => t.tipo === 'SPU' || t.tipo === 'OPU')
-  const autores = titulares.filter(t => t.tipo === 'SWR' || t.tipo === 'OWR')
+  const spusTodos = titulares.filter(t => t.tipo === 'SPU' || t.tipo === 'OPU')
+  const autores   = titulares.filter(t => t.tipo === 'SWR' || t.tipo === 'OWR')
+
+  // Deduplica editoras por IPI/código para evitar repetição de AM
+  const spus      = deduplicarTitulares(spusTodos)
 
   const editorasE  = spus.filter(e => { const p = e.papel_cwr.trim().toUpperCase(); return p === 'E' || p === 'AQ' })
   const admins     = spus.filter(e => e.papel_cwr.trim().toUpperCase() === 'AM')
