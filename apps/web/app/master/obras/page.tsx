@@ -221,9 +221,27 @@ function ObraDrawer({ obra, onClose }: { obra: any; onClose: () => void }) {
                 return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
               return doc
             }
+            // Regra sintética: quando há AM no link, CA e E ficam 0 no fono/sinc (AM absorve tudo)
+            // Sem AM: E absorve (soma CA+E), CA fica 0
+            const sinteticoFono = (li: number, t: any): number => {
+              const linkTitulares = (links[li] as any)?.titulares ?? []
+              const hasAM = linkTitulares.some((lt: any) =>
+                ['AM', 'administradora'].includes(lt.papel) || lt.papel?.toUpperCase() === 'AM'
+              )
+              const papel = (t.papel ?? '').toUpperCase()
+              if (hasAM) {
+                if (papel === 'AM' || t.papel === 'administradora') return t.percentual_fonomecanico ?? 0
+                return 0
+              } else {
+                if (papel === 'E' || t.papel === 'editora_original' || papel === 'AQ') {
+                  return linkTitulares.reduce((s: number, lt: any) => s + (lt.percentual_fonomecanico ?? 0), 0)
+                }
+                return 0
+              }
+            }
             const sumExec = rows.reduce((s: number, r: any) => s + (r.t.percentual_exec_publica ?? r.t.percentual ?? 0), 0)
-            const sumFono = rows.reduce((s: number, r: any) => s + (r.t.percentual_fonomecanico ?? 0), 0)
-            const sumSync = rows.reduce((s: number, r: any) => s + (r.t.percentual_sincronizacao ?? 0), 0)
+            const sumFono = rows.reduce((s: number, r: any) => s + sinteticoFono(r.li, r.t), 0)
+            const sumSync = rows.reduce((s: number, r: any) => s + sinteticoFono(r.li, r.t), 0)
             const CAT_COLOR: Record<string, string> = {
               CA: 'text-violet-300', C: 'text-violet-300', A: 'text-sky-300',
               E: 'text-amber-300', AM: 'text-emerald-300', SE: 'text-rose-300',
@@ -274,11 +292,11 @@ function ObraDrawer({ obra, onClose }: { obra: any; onClose: () => void }) {
                         <td className="text-center px-2 py-2 border-l border-white/[0.04] tabular-nums text-cyan-400 font-semibold">
                           {(t.percentual_exec_publica ?? t.percentual ?? 0).toFixed(2)}%
                         </td>
-                        <td className="text-center px-2 py-2 border-l border-white/[0.04] tabular-nums text-teal-400 font-semibold">
-                          {(t.percentual_fonomecanico ?? 0).toFixed(2)}%
+                        <td className={`text-center px-2 py-2 border-l border-white/[0.04] tabular-nums font-semibold ${sinteticoFono(li, t) > 0 ? 'text-teal-400' : 'text-white/20'}`}>
+                          {sinteticoFono(li, t).toFixed(2)}%
                         </td>
-                        <td className="text-center px-2 py-2 border-l border-white/[0.04] tabular-nums text-amber-400 font-semibold">
-                          {(t.percentual_sincronizacao ?? 0).toFixed(2)}%
+                        <td className={`text-center px-2 py-2 border-l border-white/[0.04] tabular-nums font-semibold ${sinteticoFono(li, t) > 0 ? 'text-amber-400' : 'text-white/20'}`}>
+                          {sinteticoFono(li, t).toFixed(2)}%
                         </td>
                         <td className="text-center px-3 py-2 border-l border-white/[0.04]">
                           {t.contrato_file ? (
