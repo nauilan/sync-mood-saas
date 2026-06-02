@@ -529,13 +529,14 @@ function parsePWR(line: string, off: number = 0): CwrPwrLink {
   //              writer_code (pos 101) ↔ SWR.submitter_code (sequence_code)
   const base = 19 + off
 
-  // Tentar layout BR: pub_code 9 chars a pos 19, writer_code 9 chars a pos 101
-  if (line.length >= 110 + off) {
+  // Layout BR: pub_code 9 chars a pos 19, writer_code 9 chars a pos 101
+  // Identificado pelo comprimento da linha (= 110 chars para este formato TSL/ECAD)
+  // Válido para códigos alfanuméricos (HR01, ED01) E numéricos (2780022, 8961236)
+  if (line.length >= 108 + off) {
     const pub_code_br    = s(line, base, 9)       // pos 19
     const writer_code_br = s(line, base + 82, 9)  // pos 101
-
-    // Validar: writer_code deve conter letra (HR01, JD01, DJ01, etc.)
-    if (/[A-Za-z]/.test(writer_code_br) || /[A-Za-z]/.test(pub_code_br)) {
+    // Aceitar se writer_code ou pub_code são não-vazios
+    if (pub_code_br.length > 0 && writer_code_br.length > 0) {
       return {
         pub_ipi: '',
         pub_code: pub_code_br,
