@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Building2, Users, Music, FileText, Shield, ArrowRight, Star } from 'lucide-react'
+import { Building2, Users, Music, FileText, Shield, ArrowRight, Star, CheckCircle, XCircle } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import { Badge } from '@/components/ui/badge'
 import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
@@ -39,10 +39,32 @@ function EditoraCard({ editora, idx }: { editora: EditoraAdministrada; idx: numb
                   <Star className="w-2.5 h-2.5" /> Administradora
                 </span>
               )}
+              {/* Tipo editora */}
+              {editora.tipo_editora && editora.tipo_editora !== 'master' && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                  editora.tipo_editora === 'administrada'
+                    ? 'bg-sky-500/10 text-sky-300'
+                    : 'bg-white/5 text-white/40'
+                }`}>
+                  {editora.tipo_editora}
+                </span>
+              )}
+              {/* Controlada */}
+              {editora.controlada !== undefined && (
+                <span className={`flex items-center gap-0.5 text-[10px] ${editora.controlada ? 'text-emerald-400' : 'text-white/30'}`}>
+                  {editora.controlada
+                    ? <CheckCircle className="w-3 h-3" />
+                    : <XCircle className="w-3 h-3" />}
+                  {editora.controlada ? 'Controlada' : 'Externa'}
+                </span>
+              )}
               <Badge variant={editora.ativa ? 'emerald' : 'rose'}>{editora.ativa ? 'Ativa' : 'Inativa'}</Badge>
             </div>
             <p className="text-xs text-white/30 truncate">{editora.razao_social}</p>
             {editora.cnpj && <p className="text-xs text-white/20 font-mono">{editora.cnpj}</p>}
+            {editora.codigo_publisher_cwr && (
+              <p className="text-[10px] font-mono text-amber-400/60 mt-0.5">CWR: {editora.codigo_publisher_cwr}</p>
+            )}
           </div>
           <ArrowRight className="w-4 h-4 text-white/10 group-hover:text-white/30 transition-colors flex-shrink-0 mt-1" />
         </div>
