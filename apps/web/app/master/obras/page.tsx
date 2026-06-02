@@ -101,6 +101,7 @@ function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => 
   const [saved, setSaved] = useState(false)
   const [obra, setObra] = useState<any>(obraInicial)
   const [editData, setEditData] = useState<any>({})
+  const [modoView, setModoView] = useState<'sintetico' | 'analitico'>('sintetico')
 
   const links = normalizarLinksObra(obra._links ?? MOCK_OBRAS_LINKS[obra.id] ?? [])
   const fonogramas = MOCK_OBRAS_FONOGRAMAS?.[obra.id] ?? []
@@ -392,30 +393,35 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                 return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
               return doc
             }
-            // Regra sintética: quando há AM no link, CA e E ficam 0 no fono/sinc (AM absorve tudo)
-            // Sem AM: E absorve (soma CA+E), CA fica 0
             const sinteticoFono = (li: number, t: any): number => {
-              const linkTitulares = (links[li] as any)?.titulares ?? []
-              const hasAM = linkTitulares.some((lt: any) =>
-                ['AM', 'administradora'].includes(lt.papel) || lt.papel?.toUpperCase() === 'AM'
+              const lt = (links[li] as any)?.titulares ?? []
+              const hasAM = lt.some((x: any) =>
+                ['AM', 'administradora'].includes(x.papel) || (x.papel ?? '').toUpperCase() === 'AM'
               )
               const papel = (t.papel ?? '').toUpperCase()
               if (hasAM) {
                 if (papel === 'AM' || t.papel === 'administradora') return t.percentual_fonomecanico ?? 0
                 return 0
               } else {
-                if (papel === 'E' || t.papel === 'editora_original' || papel === 'AQ') {
-                  return linkTitulares.reduce((s: number, lt: any) => s + (lt.percentual_fonomecanico ?? 0), 0)
-                }
+                if (papel === 'E' || t.papel === 'editora_original' || papel === 'AQ')
+                  return lt.reduce((s: number, x: any) => s + (x.percentual_fonomecanico ?? 0), 0)
                 return 0
               }
             }
-            const sumExec = rows.reduce((s: number, r: any) => s + (r.t.percentual_exec_publica ?? r.t.percentual ?? 0), 0)
-            const sumFono = rows.reduce((s: number, r: any) => s + sinteticoFono(r.li, r.t), 0)
-            const sumSync = rows.reduce((s: number, r: any) => s + sinteticoFono(r.li, r.t), 0)
+            const calcFono = (li: number, t: any) =>
+              modoView === 'sintetico' ? sinteticoFono(li, t) : (t.percentual_fonomecanico ?? 0)
+            const calcExec = (t: any) => (t.percentual_exec_publica ?? t.percentual ?? 0)
+            const sumExec = rows.reduce((s: number, r: any) => s + calcExec(r.t), 0)
+            const sumFono = rows.reduce((s: number, r: any) => s + calcFono(r.li, r.t), 0)
+            const CAT_LABEL: Record<string, string> = {
+              compositor: 'CA', compositorautor: 'CA', CA: 'CA', C: 'C', A: 'A',
+              editora_original: 'E', administradora: 'AM', subeditora: 'SE',
+              AM: 'AM', E: 'E', SE: 'SE',
+            }
             const CAT_COLOR: Record<string, string> = {
-              CA: 'text-violet-300', C: 'text-violet-300', A: 'text-sky-300',
-              E: 'text-amber-300', AM: 'text-emerald-300', SE: 'text-rose-300',
+              CA: 'text-violet-300 bg-violet-500/10', C: 'text-violet-300 bg-violet-500/10',
+              A: 'text-sky-300 bg-sky-500/10', E: 'text-amber-300 bg-amber-500/10',
+              AM: 'text-emerald-300 bg-emerald-500/10', SE: 'text-rose-300 bg-rose-500/10',
             }
             return rows.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-10 text-white/25">
@@ -423,15 +429,36 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                 <p className="text-sm">Nenhum integrante cadastrado</p>
               </div>
             ) : (
-              <div className="overflow-x-auto -mx-5">
+              <>
+                {/* Toggle Sintético / Analítico */}
+                <div className="flex items-center gap-2 px-5 pb-3">
+                  <div className="flex bg-white/[0.04] rounded-lg p-0.5 gap-0.5">
+                    {(['sintetico', 'analitico'] as const).map(v => (
+                      <button key={v} onClick={() => setModoView(v)}
+                        className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                          modoView === v
+                            ? 'bg-violet-600 text-white shadow-sm'
+                            : 'text-white/40 hover:text-white/70'
+                        }`}>
+                        {v === 'sintetico' ? 'Sintético' : 'Analítico'}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="text-[10px] text-white/25">
+                    {modoView === 'sintetico'
+                      ? 'MEC/Sinc: CA=0%, E=0% — AM absorve total do link'
+                      : 'Valores individuais de cada participante'}
+                  </span>
+                </div>
+                <div className="overflow-x-auto -mx-5">
                 <table className="w-full text-[11px] border-collapse min-w-[620px]">
                   <thead>
                     <tr className="bg-white/[0.04] text-white/40 font-semibold text-[10px] uppercase tracking-wide">
-                      <th className="text-center px-3 py-2.5 w-10 border-b border-white/[0.06]">link</th>
+                      <th className="text-center px-3 py-2.5 w-10 border-b border-white/[0.06]">lnk</th>
                       <th className="text-left px-3 py-2.5 border-b border-white/[0.06]">autor / editora</th>
                       <th className="text-left px-3 py-2.5 border-b border-white/[0.06]">pseudônimo</th>
-                      <th className="text-center px-3 py-2.5 w-14 border-b border-white/[0.06]">cat.</th>
-                      <th className="text-left px-3 py-2.5 w-32 border-b border-white/[0.06]">cpf / cnpj</th>
+                      <th className="text-center px-3 py-2.5 w-12 border-b border-white/[0.06]">cat.</th>
+                      <th className="text-left px-3 py-2.5 w-28 border-b border-white/[0.06]">cpf / cnpj</th>
                       <th className="text-center px-2 py-2.5 w-16 border-b border-l border-white/[0.06] text-cyan-400/60 leading-tight">% exec<br/>pública</th>
                       <th className="text-center px-2 py-2.5 w-16 border-b border-l border-white/[0.06] text-teal-400/60 leading-tight">% fono/<br/>digital</th>
                       <th className="text-center px-2 py-2.5 w-16 border-b border-l border-white/[0.06] text-amber-400/60 leading-tight">% sinc-<br/>roniz.</th>
@@ -439,59 +466,59 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map(({ li, t }: any, ri: number) => (
-                      <tr key={t.id || ri}
-                        className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors">
-                        <td className="text-center px-3 py-2 text-violet-400 font-bold">{li + 1}</td>
-                        <td className="px-3 py-2">
-                          <p className="text-white/80 font-medium">{t.nome}</p>
-                          {t.codigo_interno_legado_titular && (
-                            <p className="text-[9px] font-mono text-white/25">{t.codigo_interno_legado_titular}</p>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-white/45 italic">
-                          {t.pseudonimo_fantasia || '—'}
-                        </td>
-                        <td className="text-center px-3 py-2">
-                          <span className={`font-bold uppercase ${CAT_COLOR[t.papel] ?? 'text-white/40'}`}>
-                            {t.papel}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 font-mono text-white/40 text-[10px]">
-                          {fmtDoc(t.cpf_cnpj, t.tipo_pessoa)}
-                        </td>
-                        <td className="text-center px-2 py-2 border-l border-white/[0.04] tabular-nums text-cyan-400 font-semibold">
-                          {(t.percentual_exec_publica ?? t.percentual ?? 0).toFixed(2)}%
-                        </td>
-                        <td className={`text-center px-2 py-2 border-l border-white/[0.04] tabular-nums font-semibold ${sinteticoFono(li, t) > 0 ? 'text-teal-400' : 'text-white/20'}`}>
-                          {sinteticoFono(li, t).toFixed(2)}%
-                        </td>
-                        <td className={`text-center px-2 py-2 border-l border-white/[0.04] tabular-nums font-semibold ${sinteticoFono(li, t) > 0 ? 'text-amber-400' : 'text-white/20'}`}>
-                          {sinteticoFono(li, t).toFixed(2)}%
-                        </td>
-                        <td className="text-center px-3 py-2 border-l border-white/[0.04]">
-                          {t.contrato_file ? (
-                            <button className="text-[10px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">
-                              visualizar
-                            </button>
-                          ) : (
-                            <span className="text-[10px] text-white/20">x</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {rows.map(({ li, t }: any, ri: number) => {
+                      const ep = calcExec(t)
+                      const fn = calcFono(li, t)
+                      const catKey = CAT_LABEL[(t.papel ?? '').replace(/\s/g,'').toLowerCase()] ?? t.papel ?? '—'
+                      return (
+                        <tr key={t.id || ri}
+                          className="border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors">
+                          <td className="text-center px-3 py-2 text-violet-400 font-bold">{li + 1}</td>
+                          <td className="px-3 py-2">
+                            <p className="text-white/80 font-medium">{t.nome}</p>
+                            {t.codigo_interno_legado_titular && (
+                              <p className="text-[9px] font-mono text-white/25">{t.codigo_interno_legado_titular}</p>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-white/45 italic">{t.pseudonimo_fantasia || '—'}</td>
+                          <td className="text-center px-3 py-2">
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${CAT_COLOR[catKey] ?? 'text-white/40 bg-white/5'}`}>
+                              {catKey}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 font-mono text-white/40 text-[10px]">{fmtDoc(t.cpf_cnpj, t.tipo_pessoa)}</td>
+                          <td className="text-center px-2 py-2 border-l border-white/[0.04] tabular-nums text-cyan-400 font-semibold">
+                            {ep.toFixed(2)}%
+                          </td>
+                          <td className={`text-center px-2 py-2 border-l border-white/[0.04] tabular-nums font-semibold ${fn > 0 ? 'text-teal-400' : 'text-white/20'}`}>
+                            {fn.toFixed(2)}%
+                          </td>
+                          <td className={`text-center px-2 py-2 border-l border-white/[0.04] tabular-nums font-semibold ${fn > 0 ? 'text-amber-400' : 'text-white/20'}`}>
+                            {fn.toFixed(2)}%
+                          </td>
+                          <td className="text-center px-3 py-2 border-l border-white/[0.04]">
+                            {t.contrato_file ? (
+                              <span className="text-[10px] font-semibold text-emerald-400">✓</span>
+                            ) : (
+                              <span className="text-[10px] text-amber-500/60 font-semibold" title="Sem contrato">⚠</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                   <tfoot>
                     <tr className="bg-white/[0.03] border-t border-white/[0.08] font-bold text-[10px]">
                       <td colSpan={5} className="px-3 py-2.5 text-right text-white/40 uppercase tracking-wide">total</td>
                       <td className="text-center px-2 py-2.5 border-l border-white/[0.06] text-cyan-400 tabular-nums">{sumExec.toFixed(2)}%</td>
                       <td className="text-center px-2 py-2.5 border-l border-white/[0.06] text-teal-400 tabular-nums">{sumFono.toFixed(2)}%</td>
-                      <td className="text-center px-2 py-2.5 border-l border-white/[0.06] text-amber-400 tabular-nums">{sumSync.toFixed(2)}%</td>
+                      <td className="text-center px-2 py-2.5 border-l border-white/[0.06] text-amber-400 tabular-nums">{sumFono.toFixed(2)}%</td>
                       <td className="border-l border-white/[0.06]" />
                     </tr>
                   </tfoot>
                 </table>
               </div>
+              </>
             )
           })()}
 
