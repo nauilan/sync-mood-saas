@@ -17,8 +17,9 @@ export interface CwrTitular {
   submitter_code: string
   papel_cwr: string        // E, SE, AQ, CA, C, A, V, AD, AM…
   papel: CwrPapel
-  pr_pct: number           // percentual performance (0-100)
-  mr_pct: number           // percentual mechanical (0-100)
+  pr_pct: number           // exec pública — ownership individual (SPT pr_own sobrescreve SPU header)
+  mr_pct: number           // MEC ownership individual (SPU header = o quanto este participante RECEBE)
+  mr_coll: number          // MEC collection (SPT mr_coll) — só AM/SE: total que coletam em nome do link
   /**
    * Controle provisório (baseado apenas no campo pub_unknown do CWR).
    * O controle definitivo é recalculado em cwr-to-obra.ts usando
@@ -413,7 +414,7 @@ function parseSPU(line: string, off: number = 0): CwrTitular {
       submitter_code: sub_id_br || seq_num,
       papel_cwr: role_br.trim(),
       papel: papelFromRole(role_br, 'SPU'),
-      pr_pct: pct(pr_pct_raw), mr_pct: pct(mr_pct_raw),
+      pr_pct: pct(pr_pct_raw), mr_pct: pct(mr_pct_raw), mr_coll: 0,
       controlado, sequence_code: seq_num,
     }
   }
@@ -443,7 +444,7 @@ function parseSPU(line: string, off: number = 0): CwrTitular {
     tipo: 'SPU', nome, ipi,
     submitter_code: code, papel_cwr: pub_role,
     papel: papelFromRole(pub_role, 'SPU'),
-    pr_pct: pct(pr_pct_raw), mr_pct: pct(mr_pct_raw),
+    pr_pct: pct(pr_pct_raw), mr_pct: pct(mr_pct_raw), mr_coll: 0,
     controlado: pub_unknown !== 'Y', sequence_code,
   }
 }
@@ -483,7 +484,7 @@ function parseSWR(line: string, tipo: 'SWR' | 'OWR' = 'SWR', off: number = 0): C
       submitter_code: sub_code_br,
       papel_cwr: role_br.trim(),
       papel: papelFromRole(role_br, tipo),
-      pr_pct: pct(pr_pct_raw), mr_pct: pct(mr_pct_raw),
+      pr_pct: pct(pr_pct_raw), mr_pct: pct(mr_pct_raw), mr_coll: 0,
       controlado, sequence_code: sub_code_br,
     }
   }
@@ -510,7 +511,7 @@ function parseSWR(line: string, tipo: 'SWR' | 'OWR' = 'SWR', off: number = 0): C
     seq: parseInt(sequence_code.replace(/\D/g, ''), 10) || 0,
     tipo, nome, ipi, submitter_code,
     papel_cwr: writer_role, papel: papelFromRole(writer_role, tipo),
-    pr_pct: pct(pr_pct_raw), mr_pct: pct(mr_pct_raw),
+    pr_pct: pct(pr_pct_raw), mr_pct: pct(mr_pct_raw), mr_coll: 0,
     controlado: controlado_fb, sequence_code,
   }
 }
@@ -529,7 +530,7 @@ function parseOPU(line: string, off: number = 0): CwrTitular {
     seq: parseInt(sequence_code.replace(/\D/g, ''), 10) || 0,
     tipo: 'OPU', nome, ipi, submitter_code,
     papel_cwr: 'E ', papel: 'editora_original',
-    pr_pct: 0, mr_pct: 0, controlado: false, sequence_code,
+    pr_pct: 0, mr_pct: 0, mr_coll: 0, controlado: false, sequence_code,
   }
 }
 
@@ -692,30 +693,6 @@ export function parseCwr(content: string, offsetOverride?: number): CwrParseResu
       }
     }
 
-    // ── FASE 4: Aplicar percentuais SPT nas editoras (corrige AM com pr_pct=0) ─
-    // O SPU ownership do AM é 0, mas o percentual real está no SPT pr_own.
-    for (const titular of current.titulares) {
-      if (titular.tipo !== 'SPU') continue
-      if (titular.pr_pct > 0 && titular.mr_pct > 0) continue  // já tem % correto
-
-      // Buscar SPT que corresponde a este publisher (por submitter_code)
-      const sptMatch = current.spt_shares.find(spt =>
-        spt.sub_publisher_code === titular.submitter_code ||
-        spt.sub_publisher_code === titular.sequence_code
-      )
-      if (!sptMatch) continue
-
-      if (titular.pr_pct === 0 && sptMatch.pr_own > 0) {
-        titular.pr_pct = sptMatch.pr_own
-      }
-      if (titular.mr_pct === 0 && sptMatch.mr_coll > 0) {
-        titular.mr_pct = sptMatch.mr_coll
-      } else if (titular.mr_pct === 0 && sptMatch.pr_own > 0) {
-        // fallback: usar pr_own também para MR quando não há mr_coll
-        titular.mr_pct = sptMatch.pr_own
-      }
-    }
-
     const { pct, tem_editora } = calcPctControlado(current.titulares)
     current.pct_controlado = pct
     current.tem_editora = tem_editora
@@ -764,8 +741,29 @@ export function parseCwr(content: string, offsetOverride?: number): CwrParseResu
         current.pwr_links.push(parsePWR(line, spuOff))
         result.stats.pwr++
       } else if (rec === 'SPT') {
-        // Guardar SPT — contém os % reais do publisher por território
-        current.spt_shares.push(parseSPT(line))
+        // Aplicar SPT diretamente ao último SPU inserido (SPT sempre segue seu SPU).
+        // Regra de prioridade:
+        //   1. Território Brasil (0076) → sempre sobrescreve
+        //   2. Outro território → só aplica se o campo ainda estiver zerado (não sobrescreve valor já válido)
+        const sptData = parseSPT(line)
+        current.spt_shares.push(sptData)
+        const isBrasil = sptData.territory === '0076'
+        for (let si = current.titulares.length - 1; si >= 0; si--) {
+          const lastSpu = current.titulares[si]
+          if (lastSpu.tipo !== 'SPU') continue
+          // pr_own → pr_pct
+          if (sptData.pr_own > 0 && (isBrasil || lastSpu.pr_pct === 0)) {
+            lastSpu.pr_pct = sptData.pr_own
+          }
+          // mr_coll → campo separado (AM coleta mecânico em nome do link; NÃO é o ownership individual)
+          // mr_pct permanece como ownership individual real (vindo do SPU header)
+          const mrSrc = sptData.mr_coll > 0 ? sptData.mr_coll
+                      : (sptData.pr_coll > 0 && lastSpu.papel_cwr.trim() === 'AM' ? sptData.pr_coll : 0)
+          if (mrSrc > 0 && (isBrasil || lastSpu.mr_coll === 0)) {
+            lastSpu.mr_coll = mrSrc
+          }
+          break
+        }
       } else if (rec === 'ALT') {
         current.titulo_alternativo = parseALT(line, nwrOff)
       }

@@ -21,60 +21,90 @@ interface LinkPreview {
   numero: number
   autor: CwrTitular
   editoras: CwrTitular[]  // E + AM + SE na ordem certa
-}
-
-// Deduplica uma lista de CwrTitular por IPI → sequence_code → nome
-function deduplicarEditoras(list: CwrTitular[]): CwrTitular[] {
-  const seen = new Set<string>()
-  return list.filter(t => {
-    const key = t.ipi?.trim() || t.submitter_code?.trim() || t.sequence_code?.trim() || t.nome?.trim() || ''
-    if (!key) return true
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+  externo?: boolean        // true para OWR
 }
 
 function buildLinksPreview(obra: CwrObra): LinkPreview[] {
   const swrs = obra.titulares.filter(t => t.tipo === 'SWR')
+  const owrs = obra.titulares.filter(t => t.tipo === 'OWR' || t.tipo === 'OPU')
   const spus = obra.titulares.filter(t => t.tipo === 'SPU')
-
-  // Deduplica editoras antes de qualquer agrupamento
-  const spusUniq = deduplicarEditoras(spus)
-  const ams = spusUniq.filter(t => t.papel_cwr.trim() === 'AM')
-
   const links: LinkPreview[] = []
 
-  swrs.forEach((autor, idx) => {
-    // Encontrar a editora E vinculada a este autor via PWR
-    const pubCode = (autor.publisher_seq || autor.publisher_ipi || '').trim()
-    let editE: CwrTitular | undefined
+  // Agrupar SPUs por submitter_code — pode haver múltiplas instâncias do mesmo código
+  // Ex: ED01[0] → link 1 (5.34%), ED01[1] → link 2 (6.68%)
+  const spuByCode = new Map<string, CwrTitular[]>()
+  for (const spu of spus) {
+    const key = spu.submitter_code.trim() || spu.sequence_code.trim() || spu.ipi.trim()
+    if (!key) continue
+    const arr = spuByCode.get(key) ?? []
+    arr.push(spu)
+    spuByCode.set(key, arr)
+  }
 
+  swrs.forEach((autor, idx) => {
+    // Para cada SWR, buscar o publisher via publisher_seq (já preenchido pelo PWR parser)
+    // Se houver múltiplas instâncias do mesmo publisher, usar a idx-ésima
+    const pubCode = (autor.publisher_seq || autor.publisher_ipi || '').trim()
+
+    let editE: CwrTitular | undefined
     if (pubCode) {
-      editE = spusUniq.find(t =>
-        t.papel_cwr.trim() !== 'AM' &&
-        (t.submitter_code.trim() === pubCode || t.sequence_code.trim() === pubCode || t.ipi === pubCode)
-      )
+      const candidates = spuByCode.get(pubCode) ?? []
+      if (candidates.length > 0) {
+        editE = candidates[Math.min(idx, candidates.length - 1)]
+      }
+    }
+    // Fallback: primeira E/AQ disponível (mesmo critério idx)
+    if (!editE) {
+      for (const [, list] of spuByCode) {
+        const candidate = list[Math.min(idx, list.length - 1)]
+        if (['E', 'AQ'].includes(candidate.papel_cwr.trim())) { editE = candidate; break }
+      }
     }
 
-    // Se não achou via PWR, pegar a primeira E disponível
-    if (!editE) {
-      editE = spusUniq.find(t => t.papel_cwr.trim() === 'E' || t.papel_cwr.trim() === 'AQ')
+    // AMs — se houver múltiplas instâncias, usar a idx-ésima
+    const amSeen = new Set<string>()
+    const ams: CwrTitular[] = []
+    for (const spu of spus) {
+      if (spu.papel_cwr.trim() !== 'AM') continue
+      const code = spu.submitter_code.trim() || spu.ipi.trim()
+      if (amSeen.has(code)) continue
+      amSeen.add(code)
+      const list = spuByCode.get(code) ?? []
+      if (list.length > 0) ams.push(list[Math.min(idx, list.length - 1)])
+    }
+
+    // Subeditoras SE — mesma lógica
+    const seSeen = new Set<string>()
+    const ses: CwrTitular[] = []
+    for (const spu of spus) {
+      if (spu.papel_cwr.trim() !== 'SE') continue
+      const code = spu.submitter_code.trim() || spu.ipi.trim()
+      if (seSeen.has(code)) continue
+      seSeen.add(code)
+      const list = spuByCode.get(code) ?? []
+      if (list.length > 0) ses.push(list[Math.min(idx, list.length - 1)])
     }
 
     const editoras: CwrTitular[] = []
     if (editE) editoras.push(editE)
-    // Adicionar AMs deduplicadas ao link
     editoras.push(...ams.filter(am => am !== editE))
+    editoras.push(...ses.filter(se => se !== editE))
 
     links.push({ numero: idx + 1, autor, editoras })
   })
 
   // Se não há SWR mas há SPU, criar um link genérico por editora
   if (swrs.length === 0 && spus.length > 0) {
-    const editE = spusUniq.find(t => t.papel_cwr.trim() === 'E')
-    if (editE) links.push({ numero: 1, autor: editE, editoras: ams })
+    const editE = spus.find(t => ['E', 'AQ'].includes(t.papel_cwr.trim()))
+    const ams = spus.filter(t => t.papel_cwr.trim() === 'AM')
+    const ses = spus.filter(t => t.papel_cwr.trim() === 'SE')
+    if (editE) links.push({ numero: 1, autor: editE, editoras: [...ams, ...ses] })
   }
+
+  // OWR como links externos (sem editora controlada)
+  owrs.forEach((owr, idx) => {
+    links.push({ numero: swrs.length + idx + 1, autor: owr, editoras: [], externo: true })
+  })
 
   return links
 }
@@ -337,45 +367,66 @@ function CatBadge({ role }: { role: string }) {
 }
 
 // ── helper: percentuais sintéticos ───────────────────────────────────────────
+// Sintético: Exec Pública = pr_pct individual; MEC/Digital = AM coleta tudo (mr_coll do AM)
 function calcSintetico(link: LinkPreview, t: CwrTitular) {
   const role = t.papel_cwr.trim().toUpperCase()
-  const hasAM = link.editoras.some(ed => ed.papel_cwr.trim().toUpperCase() === 'AM')
-  const totalMr = link.autor.mr_pct + link.editoras.reduce((s, e) => s + e.mr_pct, 0)
   const execPub = t.pr_pct
   let fono = 0
-  if (hasAM && role === 'AM') { fono = totalMr }
-  else if (!hasAM && (role === 'E' || role === 'AQ')) { fono = totalMr }
+  // Na visão sintética, AM absorve toda a coleta mecânica (mr_coll = campo de coleta do SPT)
+  const am = link.editoras.find(ed => ed.papel_cwr.trim().toUpperCase() === 'AM')
+  const hasAM = !!am
+  if (hasAM) {
+    if (role === 'AM') fono = t.mr_coll  // AM mostra mr_coll (total que coleta do link)
+    else fono = 0                         // CA, E → 0 (AM coleta por eles)
+  } else if (role === 'E' || role === 'AQ') {
+    // Sem AM: editora absorve toda a mecânica do link
+    const totalMr = link.autor.mr_pct + link.editoras.reduce((s, e) => s + e.mr_pct, 0)
+    fono = totalMr
+  }
+  // OWR externo: mostra seus próprios percentuais integralmente
+  if (link.externo) { fono = t.mr_pct }
   return { execPub, fono, sinc: fono }
 }
 
-// ── download CSV ─────────────────────────────────────────────────────────────
+// ── Download CSV da obra ──────────────────────────────────────────────────────
 function downloadCsv(obra: CwrObra, links: LinkPreview[]) {
+  const fmt = (n: number) => n > 0 ? n.toFixed(2).replace('.', ',') + '%' : '0,00%'
   const rows: string[] = [
-    ['Link', 'Nome / Razão Social', 'Pseudônimo / Fantasia', 'Cat.', 'CPF / CNPJ', 'IPI/CAE', '% Exec. Pública', '% Fono/Digital', '% Sinc.', 'Controlado', 'Contrato'].join(';')
+    ['Link', 'Tipo', 'Código', 'Nome', 'Papel', 'IPI', 'Exec Pública', 'MEC/Digital', 'Controlado'].join(';'),
   ]
   links.forEach(link => {
     const all = [link.autor, ...link.editoras]
     all.forEach(t => {
-      const s = calcSintetico(link, t)
+      const sint = calcSintetico(link, t)
       rows.push([
-        link.numero, t.nome, '—', t.papel_cwr.trim(), '—', t.ipi || '—',
-        s.execPub.toFixed(2), s.fono.toFixed(2), s.sinc.toFixed(2),
-        t.controlado ? 'Sim' : 'Não', '—'
+        link.externo ? 'ext' : link.numero,
+        t.tipo,
+        t.submitter_code || t.sequence_code || '',
+        t.nome,
+        t.papel_cwr.trim(),
+        t.ipi || '',
+        fmt(sint.execPub),
+        fmt(sint.fono),
+        t.controlado ? 'sim' : 'não',
       ].join(';'))
     })
   })
-  const blob = new Blob(['\ufeff' + rows.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const bom = '\uFEFF'
+  const blob = new Blob([bom + rows.join('\n')], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
-  const a = document.createElement('a'); a.href = url; a.download = `titulares-${obra.codigo || 'obra'}.csv`; a.click()
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${obra.titulo.replace(/[^a-zA-Z0-9]/g, '_')}_titulares.csv`
+  a.click()
   URL.revokeObjectURL(url)
 }
 
+
 function ObraRow({ obra }: { obra: CwrObra }) {
   const [open, setOpen] = useState(false)
-  const [innerTab, setInnerTab] = useState<'titulares' | 'info' | 'fonogramas' | 'letra'>('titulares')
+  const [innerTab, setInnerTab] = useState<'titulares' | 'info'>('titulares')
   const [modoView, setModoView] = useState<'sintetico' | 'analitico'>('sintetico')
   const links = buildLinksPreview(obra)
-  const owrs  = obra.titulares.filter(t => t.tipo === 'OWR' || t.tipo === 'OPU')
 
   return (
     <div className="border border-white/10 rounded-2xl overflow-hidden mb-3">
@@ -421,14 +472,55 @@ function ObraRow({ obra }: { obra: CwrObra }) {
       {/* Detalhe — tabela estilo planilha */}
       {open && (
         <div className="border-t border-white/10">
-          {links.length > 0 ? (() => {
-            // Flatten: todos os titulares de todos os links em linha única
+          {/* Barra de abas + controles */}
+          <div className="flex items-center justify-between px-5 py-2 border-b border-white/[0.06] flex-wrap gap-2">
+            <div className="flex items-center gap-1">
+              {([
+                { key: 'titulares', label: 'Titulares / Links' },
+                { key: 'info',      label: 'Info da Obra' },
+              ] as const).map(tab => (
+                <button key={tab.key}
+                  onClick={() => setInnerTab(tab.key)}
+                  className={`px-3 py-1 rounded text-[10px] font-semibold transition-colors ${
+                    innerTab === tab.key
+                      ? 'bg-white/10 text-white'
+                      : 'text-white/30 hover:text-white/60'
+                  }`}>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              {innerTab === 'titulares' && ((['sintetico', 'analitico'] as const).map(m => (
+                <button key={m}
+                  onClick={() => setModoView(m)}
+                  className={`px-2.5 py-1 rounded text-[10px] font-semibold transition-colors ${
+                    modoView === m
+                      ? 'bg-violet-600 text-white'
+                      : 'bg-white/5 text-white/40 hover:bg-white/10'
+                  }`}>
+                  {m === 'sintetico' ? 'Sintético' : 'Analítico'}
+                </button>
+              )))}
+              <button
+                onClick={() => downloadCsv(obra, links)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-semibold bg-white/5 text-white/40 hover:bg-emerald-600/30 hover:text-emerald-300 transition-colors border border-white/10"
+                title="Baixar planilha de titulares">
+                <Download className="w-3 h-3" />
+                CSV
+              </button>
+            </div>
+          </div>
+
+          {/* Aba Titulares */}
+          {innerTab === 'titulares' && links.length > 0 ? (() => {
             const CAT_COLOR: Record<string, string> = {
               CA: 'text-violet-300', C: 'text-violet-300', A: 'text-sky-300',
               E: 'text-amber-300', AM: 'text-emerald-300', SE: 'text-rose-300',
               AQ: 'text-teal-300',
             }
             return (
+              <div>
               <div className="overflow-x-auto">
                 <table className="w-full text-[11px] border-collapse min-w-[620px]">
                   <thead>
@@ -447,6 +539,7 @@ function ObraRow({ obra }: { obra: CwrObra }) {
                     {links.map((link, li) => {
                       // linha do autor
                       const autor = link.autor
+                      const isExterno = link.externo === true
                       const autorCode = autor.submitter_code && autor.submitter_code !== autor.sequence_code
                         ? autor.submitter_code : autor.sequence_code
                       const rows: Array<{ t: CwrTitular; code: string; li: number }> = [
@@ -457,58 +550,79 @@ function ObraRow({ obra }: { obra: CwrObra }) {
                           return { t: ed, code: c, li }
                         }),
                       ]
-                      return rows.map(({ t, code, li: linkIdx }, ri) => (
-                        <tr key={`${li}-${ri}`}
-                          className={`border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors ${ri === 0 ? 'bg-white/[0.01]' : ''}`}>
-                          {ri === 0 && (
-                            <td rowSpan={rows.length} className="text-center px-3 py-2 text-violet-400 font-bold align-middle border-r border-white/[0.04]">
-                              {linkIdx + 1}
+                      return rows.map(({ t, code, li: linkIdx }, ri) => {
+                        const sint = modoView === 'sintetico' ? calcSintetico(link, t) : null
+                        const execPct = sint ? sint.execPub : t.pr_pct
+                        const mecPct  = sint ? sint.fono    : t.mr_pct
+                        return (
+                          <tr key={`${li}-${ri}`}
+                            className={`border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors ${
+                              isExterno ? 'opacity-60' : ri === 0 ? 'bg-white/[0.01]' : ''
+                            }`}>
+                            {ri === 0 && (
+                              <td rowSpan={rows.length} className={`text-center px-3 py-2 font-bold align-middle border-r border-white/[0.04] ${
+                                isExterno ? 'text-white/20' : 'text-violet-400'
+                              }`}>
+                                {isExterno ? <span className="text-[9px]">ext</span> : linkIdx + 1}
+                              </td>
+                            )}
+                            <td className="px-3 py-2">
+                              <p className={`font-medium ${ri === 0 ? 'text-white/90' : 'text-white/60'}`}>{t.nome || '—'}</p>
                             </td>
-                          )}
-                          <td className="px-3 py-2">
-                            <p className={`font-medium ${ri === 0 ? 'text-white/90' : 'text-white/60'}`}>{t.nome || '—'}</p>
-                          </td>
-                          <td className="px-3 py-2 text-white/35 italic text-[10px]">—</td>
-                          <td className="text-center px-2 py-2">
-                            <span className={`font-bold text-[10px] ${CAT_COLOR[t.papel_cwr.trim()] ?? 'text-white/40'}`}>
-                              {t.papel_cwr.trim()}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 font-mono text-white/40 text-[10px]">{code || '—'}</td>
-                          <td className="text-center px-2 py-2 border-l border-white/[0.04] tabular-nums text-cyan-400 font-semibold">
-                            {pctFmt(t.pr_pct)}
-                          </td>
-                          <td className="text-center px-2 py-2 border-l border-white/[0.04] tabular-nums text-teal-400 font-semibold">
-                            {pctFmt(t.mr_pct)}
-                          </td>
-                          <td className="text-center px-2 py-2 border-l border-white/[0.04]">
-                            <span className={`text-[10px] font-semibold ${t.controlado ? 'text-emerald-400' : 'text-white/20'}`}>
-                              {t.controlado ? 'sim' : 'não'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
+                            <td className="px-3 py-2 text-white/35 italic text-[10px]">—</td>
+                            <td className="text-center px-2 py-2">
+                              <span className={`font-bold text-[10px] ${CAT_COLOR[t.papel_cwr.trim()] ?? 'text-white/40'}`}>
+                                {t.papel_cwr.trim()}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 font-mono text-white/40 text-[10px]">{code || '—'}</td>
+                            <td className={`text-center px-2 py-2 border-l border-white/[0.04] tabular-nums font-semibold ${
+                              execPct > 0 ? 'text-cyan-400' : 'text-white/20'
+                            }`}>
+                              {pctFmt(execPct)}
+                            </td>
+                            <td className={`text-center px-2 py-2 border-l border-white/[0.04] tabular-nums font-semibold ${
+                              mecPct > 0 ? 'text-teal-400' : 'text-white/20'
+                            }`}>
+                              {pctFmt(mecPct)}
+                            </td>
+                            <td className="text-center px-2 py-2 border-l border-white/[0.04]">
+                              <span className={`text-[10px] font-semibold ${t.controlado ? 'text-emerald-400' : 'text-white/20'}`}>
+                                {t.controlado ? 'sim' : 'não'}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })
                     })}
                   </tbody>
                 </table>
               </div>
+              </div>
             )
-          })() : (
+          })() : innerTab === 'titulares' ? (
             <div className="px-5 py-4 text-sm text-white/30 italic">Nenhum link montado — sem SWR ou PWR</div>
-          )}
+          ) : null}
 
-          {/* Referências OWR/OPU (não controlados) */}
-          {owrs.length > 0 && (
-            <div className="border-t border-white/5">
-              <p className="text-[10px] uppercase tracking-widest text-white/20 px-5 py-2">
-                Participantes externos / Referência ({owrs.length})
-              </p>
-              {owrs.map((t, i) => (
-                <div key={i} className="flex flex-wrap items-center gap-3 px-5 py-2 border-t border-white/5">
-                  <span className="text-[10px] font-mono text-white/25 border border-white/10 rounded px-1.5">{t.tipo}</span>
-                  <span className="text-xs text-white/40">{t.nome}</span>
-                  {t.submitter_code && <span className="text-[10px] font-mono text-white/25">{t.submitter_code}</span>}
-                  <span className="text-[10px] text-white/20 italic">não controlado</span>
+          {/* Aba Info da Obra */}
+          {innerTab === 'info' && (
+            <div className="px-5 py-4 grid grid-cols-2 gap-x-8 gap-y-3 text-[11px]">
+              {[
+                ['Título', obra.titulo],
+                ['Título alternativo', obra.titulo_alternativo || '—'],
+                ['Código CWR', obra.codigo],
+                ['Código Legado', obra.codigo_interno_legado || '—'],
+                ['ISWC', obra.iswc || '—'],
+                ['Idioma', obra.lang || '—'],
+                ['Duração', obra.duracao_seg ? `${Math.floor(obra.duracao_seg / 60)}:${String(obra.duracao_seg % 60).padStart(2,'0')}` : '—'],
+                ['% Controlado', pctFmt(obra.pct_controlado)],
+                ['Tem editora', obra.tem_editora ? 'sim' : 'não'],
+                ['Total titulares', obra.titulares.length.toString()],
+                ['Total SPT', obra.spt_shares.length.toString()],
+              ].map(([k, v]) => (
+                <div key={k} className="flex justify-between border-b border-white/[0.04] pb-1">
+                  <span className="text-white/30">{k}</span>
+                  <span className="text-white/70 font-medium text-right">{v}</span>
                 </div>
               ))}
             </div>
