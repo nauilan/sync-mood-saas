@@ -14,7 +14,7 @@ import { saveObrasToSupabase, clearObrasFromSupabase } from '@/lib/save-obras-su
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function pctFmt(n: number) { return `${n.toFixed(1)}%` }
+function pctFmt(n: number) { return `${n.toFixed(2)}%` }
 
 // Monta a estrutura de links a partir dos dados CWR brutos da obra
 interface LinkPreview {
