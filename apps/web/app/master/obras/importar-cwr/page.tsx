@@ -314,8 +314,66 @@ function DiagnosticoTabela({ obras }: { obras: CwrObra[] }) {
 
 // ── ObraRow ───────────────────────────────────────────────────────────────────
 
+// ── CatBadge: sigla da categoria com cor ────────────────────────────────────
+function CatBadge({ role }: { role: string }) {
+  const r = role.trim().toUpperCase()
+  const styles: Record<string, string> = {
+    CA:  'bg-emerald-600/20 border-emerald-500/40 text-emerald-300',
+    C:   'bg-teal-600/20 border-teal-500/40 text-teal-300',
+    A:   'bg-green-600/20 border-green-500/40 text-green-300',
+    E:   'bg-violet-600/20 border-violet-500/40 text-violet-300',
+    AQ:  'bg-violet-600/20 border-violet-500/40 text-violet-300',
+    AM:  'bg-amber-600/20 border-amber-500/40 text-amber-300',
+    SE:  'bg-indigo-600/20 border-indigo-500/40 text-indigo-300',
+    V:   'bg-rose-600/20 border-rose-500/40 text-rose-300',
+    AD:  'bg-pink-600/20 border-pink-500/40 text-pink-300',
+    AR:  'bg-sky-600/20 border-sky-500/40 text-sky-300',
+  }
+  return (
+    <span className={`inline-flex items-center justify-center rounded border px-1.5 py-0 text-[10px] font-bold leading-5 ${styles[r] ?? 'bg-white/5 border-white/10 text-white/40'}`}>
+      {r}
+    </span>
+  )
+}
+
+// ── helper: percentuais sintéticos ───────────────────────────────────────────
+function calcSintetico(link: LinkPreview, t: CwrTitular) {
+  const role = t.papel_cwr.trim().toUpperCase()
+  const hasAM = link.editoras.some(ed => ed.papel_cwr.trim().toUpperCase() === 'AM')
+  const totalMr = link.autor.mr_pct + link.editoras.reduce((s, e) => s + e.mr_pct, 0)
+  const execPub = t.pr_pct
+  let fono = 0
+  if (hasAM && role === 'AM') { fono = totalMr }
+  else if (!hasAM && (role === 'E' || role === 'AQ')) { fono = totalMr }
+  return { execPub, fono, sinc: fono }
+}
+
+// ── download CSV ─────────────────────────────────────────────────────────────
+function downloadCsv(obra: CwrObra, links: LinkPreview[]) {
+  const rows: string[] = [
+    ['Link', 'Nome / Razão Social', 'Pseudônimo / Fantasia', 'Cat.', 'CPF / CNPJ', 'IPI/CAE', '% Exec. Pública', '% Fono/Digital', '% Sinc.', 'Controlado', 'Contrato'].join(';')
+  ]
+  links.forEach(link => {
+    const all = [link.autor, ...link.editoras]
+    all.forEach(t => {
+      const s = calcSintetico(link, t)
+      rows.push([
+        link.numero, t.nome, '—', t.papel_cwr.trim(), '—', t.ipi || '—',
+        s.execPub.toFixed(2), s.fono.toFixed(2), s.sinc.toFixed(2),
+        t.controlado ? 'Sim' : 'Não', '—'
+      ].join(';'))
+    })
+  })
+  const blob = new Blob(['\ufeff' + rows.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url; a.download = `titulares-${obra.codigo || 'obra'}.csv`; a.click()
+  URL.revokeObjectURL(url)
+}
+
 function ObraRow({ obra }: { obra: CwrObra }) {
   const [open, setOpen] = useState(false)
+  const [innerTab, setInnerTab] = useState<'titulares' | 'info' | 'fonogramas' | 'letra'>('titulares')
+  const [modoView, setModoView] = useState<'sintetico' | 'analitico'>('sintetico')
   const links = buildLinksPreview(obra)
   const owrs  = obra.titulares.filter(t => t.tipo === 'OWR' || t.tipo === 'OPU')
 

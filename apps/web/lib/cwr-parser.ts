@@ -357,7 +357,7 @@ function seqFieldLen(line: string, base: number): number {
 
 // ── Record parsers ────────────────────────────────────────────────────────────
 
-function parseNWR(line: string, off: number = 8): Omit<CwrObra, 'titulares' | 'pwr_links' | 'linhas_raw' | 'pct_controlado' | 'tem_editora'> {
+function parseNWR(line: string, off: number = 8): Omit<CwrObra, 'titulares' | 'pwr_links' | 'spt_shares' | 'linhas_raw' | 'pct_controlado' | 'tem_editora'> {
   const tx_seq_raw   = s(line, 11, 8)
   const titulo       = s(line, 19 + off, 60)
   const lang         = s(line, 79 + off, 2)
