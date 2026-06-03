@@ -105,11 +105,19 @@ function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => 
 
   const links = normalizarLinksObra(obra._links ?? MOCK_OBRAS_LINKS[obra.id] ?? [])
 
-  // Detecta link de OWR: todos os autores são não-controlados → não tem cadeia editorial
+  // Detecta link OWR: tem autores MAS nenhuma editora/administradora no link.
+  // Regra: se existe E/AM/SE no link, é cadeia editorial controlada (não OWR).
+  // NÃO usa a.controlado pois pode estar errado em dados de importações antigas.
   const PAPEIS_AUTOR_SET = ['autor', 'compositor', 'versionista', 'adaptador']
+  const PAPEIS_EDITORA_SET = ['editora_original', 'administradora', 'subeditora']
   const isOwrLink = (titulares: any[]): boolean => {
     const autores = titulares.filter(t => PAPEIS_AUTOR_SET.includes(t.papel ?? ''))
-    return autores.length > 0 && autores.every(a => !a.controlado)
+    if (autores.length === 0) return false
+    const hasEditora = titulares.some(t =>
+      PAPEIS_EDITORA_SET.includes(t.papel ?? '') ||
+      ['E', 'AM', 'SE', 'AQ'].includes((t.papel ?? '').toUpperCase())
+    )
+    return !hasEditora  // sem editora = OWR
   }
   // Percentual controlado: soma TODOS os participantes de links não-OWR.
   // Um link não-OWR significa cadeia editorial completa (CA+E+AM) → 100% sob controle.
@@ -779,9 +787,15 @@ export default function ObrasPage() {
     obrasData.forEach(o => {
       const linksRaw = normalizarLinksObra(o._links ?? MOCK_OBRAS_LINKS[o.id] ?? [])
       if (linksRaw.length > 0) {
+        const PAPEIS_EDITORA_RECALC = ['editora_original', 'administradora', 'subeditora']
         const isOwrLk = (titulares: any[]) => {
           const autores = titulares.filter((t: any) => PAPEIS_AUTOR_RECALC.includes(t.papel ?? ''))
-          return autores.length > 0 && autores.every((a: any) => !a.controlado)
+          if (autores.length === 0) return false
+          const hasEditora = titulares.some((t: any) =>
+            PAPEIS_EDITORA_RECALC.includes(t.papel ?? '') ||
+            ['E', 'AM', 'SE', 'AQ'].includes((t.papel ?? '').toUpperCase())
+          )
+          return !hasEditora
         }
         const pctCtrl = parseFloat(
           linksRaw.reduce((total: number, link: any) => {
