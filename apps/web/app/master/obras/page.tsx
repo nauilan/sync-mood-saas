@@ -12,7 +12,7 @@ import {
   Save, FileSpreadsheet, FileText, Check,
 } from 'lucide-react'
 import { MOCK_OBRAS, MOCK_OBRAS_LINKS, MOCK_OBRAS_FONOGRAMAS, KPI_OBRAS } from '@/lib/mock-obras'
-import { STORE_KEYS, clearAllStores } from '@/lib/store'
+import { STORE_KEYS } from '@/lib/store'
 import { useSupabaseQuery } from '@/lib/hooks/use-supabase-query'
 import { createClient } from '@supabase/supabase-js'
 import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
@@ -718,13 +718,16 @@ export default function ObrasPage() {
     } catch { /* silencioso */ }
   }, [])
 
-  // Limpar localStorage + Supabase (nuclear)
+  // Limpar localStorage + Supabase (nuclear) — preserva histórico de importações
   const clearCwrInvalidos = async () => {
     if (!confirm('Isso vai apagar TODAS as obras do armazenamento local. Deseja continuar?')) return
     setLimpando(true)
     try {
-      // 1. Limpar localStorage
-      clearAllStores()
+      // 1. Limpar localStorage de obras/titulares/gravações — sem apagar histórico CWR
+      localStorage.removeItem(STORE_KEYS.obras)
+      localStorage.removeItem(STORE_KEYS.titulares)
+      localStorage.removeItem(STORE_KEYS.gravacoes)
+      window.dispatchEvent(new Event('storage'))
       // 2. Tentar limpar Supabase também
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL
       const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
