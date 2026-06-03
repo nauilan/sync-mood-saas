@@ -684,7 +684,15 @@ function ObraRow({ obra }: { obra: CwrObra }) {
 
 function HistoricoCwr({ historico, onDelete }: { historico: ImportacaoLog[]; onDelete: () => void }) {
   const [deletando, setDeletando] = useState<string | null>(null)
-  const [expandido, setExpandido] = useState<string | null>(null)
+  const [expandidos, setExpandidos] = useState<Set<string>>(new Set())
+
+  const toggle = (id: string) =>
+    setExpandidos(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   const handleDelete = async (log: ImportacaoLog) => {
     if (!confirm(
@@ -745,10 +753,10 @@ function HistoricoCwr({ historico, onDelete }: { historico: ImportacaoLog[]; onD
               {/* Expandir obras */}
               {log.codigos_obras && log.codigos_obras.length > 0 && (
                 <button
-                  onClick={() => setExpandido(expandido === log.id ? null : log.id)}
+                  onClick={() => toggle(log.id)}
                   className="text-[10px] text-white/30 hover:text-white/60 border border-white/10 rounded-lg px-2 py-1.5 hover:bg-white/5 transition-colors"
                 >
-                  {expandido === log.id ? 'fechar ▲' : `ver ${log.codigos_obras.length} obras ▼`}
+                  {expandidos.has(log.id) ? 'fechar ▲' : `ver ${log.codigos_obras.length} obras ▼`}
                 </button>
               )}
               {/* Botão deletar */}
@@ -766,7 +774,7 @@ function HistoricoCwr({ historico, onDelete }: { historico: ImportacaoLog[]; onD
           </div>
 
           {/* Lista de obras (colapsável) */}
-          {expandido === log.id && log.codigos_obras && (
+          {expandidos.has(log.id) && log.codigos_obras && (
             <div className="border-t border-white/[0.06] px-4 pb-3 pt-2">
               <p className="text-[10px] uppercase tracking-widest text-white/25 mb-2">Códigos das obras nesta importação</p>
               <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto">
