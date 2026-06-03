@@ -551,7 +551,7 @@ function parsePWR(line: string, off: number = 0): CwrPwrLink {
   // Válido para códigos alfanuméricos (HR01, ED01) E numéricos (2780022, 8961236)
   if (line.length >= 108 + off) {
     const pub_code_br    = s(line, base, 9)       // pos 19
-    const writer_code_br = s(line, base + 82, 9)  // pos 101
+    const writer_code_br = s(line, base + 81, 9)  // pos 100 (fixed: was 101)
     // Aceitar se writer_code ou pub_code são não-vazios
     if (pub_code_br.length > 0 && writer_code_br.length > 0) {
       return {
@@ -741,33 +741,56 @@ export function parseCwr(content: string, offsetOverride?: number): CwrParseResu
         current.pwr_links.push(parsePWR(line, spuOff))
         result.stats.pwr++
       } else if (rec === 'SPT') {
-        // Aplicar SPT diretamente ao último SPU inserido (SPT sempre segue seu SPU).
-        // Regra de prioridade:
-        //   1. Território Brasil (0076) → sempre sobrescreve
-        //   2. Outro território → só aplica se o campo ainda estiver zerado (não sobrescreve valor já válido)
+        // Aplicar SPT ao SPU correspondente pelo publisher_sequence_code (não por posição)
         const sptData = parseSPT(line)
         current.spt_shares.push(sptData)
         const isBrasil = sptData.territory === '0076'
-        for (let si = current.titulares.length - 1; si >= 0; si--) {
-          const lastSpu = current.titulares[si]
-          if (lastSpu.tipo !== 'SPU') continue
-          // pr_own → pr_pct
-          if (sptData.pr_own > 0 && (isBrasil || lastSpu.pr_pct === 0)) {
-            lastSpu.pr_pct = sptData.pr_own
+        // Encontrar o SPU cujo submitter_code corresponde ao sub_publisher_code do SPT
+        const matchSpu = current.titulares.find(
+          t => t.tipo === 'SPU' && (
+            t.submitter_code === sptData.sub_publisher_code ||
+            t.sequence_code  === sptData.sub_publisher_code
+          )
+        )
+        const spu = matchSpu ?? (() => {
+          // fallback: último SPU inserido (SPT segue seu SPU no CWR)
+          for (let si = current.titulares.length - 1; si >= 0; si--) {
+            if (current.titulares[si].tipo === 'SPU') return current.titulares[si]
           }
-          // mr_coll → campo separado (AM coleta mecânico em nome do link; NÃO é o ownership individual)
-          // mr_pct permanece como ownership individual real (vindo do SPU header)
+          return null
+        })()
+        if (spu) {
+          // pr_own → pr_pct (exec pública territory)
+          if (sptData.pr_own > 0 && (isBrasil || spu.pr_pct === 0)) {
+            spu.pr_pct = sptData.pr_own
+          }
+          // mr_coll → quem coleta mecânico em nome do link
           const mrSrc = sptData.mr_coll > 0 ? sptData.mr_coll
-                      : (sptData.pr_coll > 0 && lastSpu.papel_cwr.trim() === 'AM' ? sptData.pr_coll : 0)
-          if (mrSrc > 0 && (isBrasil || lastSpu.mr_coll === 0)) {
-            lastSpu.mr_coll = mrSrc
+                      : (sptData.pr_coll > 0 && spu.papel_cwr.trim() === 'AM' ? sptData.pr_coll : 0)
+          if (mrSrc > 0 && (isBrasil || spu.mr_coll === 0)) {
+            spu.mr_coll = mrSrc
           }
-          break
+        }
+      } else if (rec === 'SWT') {
+        // SWT — território do autor: usar pr_own para setar pr_pct real do autor
+        const writerSeq = s(line, 19, 9)  // pos 19-27
+        const prOwn     = pct(s(line, 28, 5))  // pos 28-32
+        const mrColl    = pct(s(line, 38, 5))  // pos 38-42
+        const territory = line.slice(44, 48).trim()
+        const isBrasil  = territory === '0076'
+        const swr = current.titulares.find(
+          t => (t.tipo === 'SWR' || t.tipo === 'OWR') && (
+            t.submitter_code === writerSeq || t.sequence_code === writerSeq
+          )
+        )
+        if (swr) {
+          if (prOwn > 0 && (isBrasil || swr.pr_pct === 0)) swr.pr_pct = prOwn
+          if (mrColl > 0 && (isBrasil || swr.mr_coll === 0)) swr.mr_coll = mrColl
         }
       } else if (rec === 'ALT') {
         current.titulo_alternativo = parseALT(line, nwrOff)
       }
-      // GRH, GRT, SWT, PER, REC, TRL — ignorados para prévia
+      // GRH, GRT, PER, REC, TRL — ignorados
     } catch (err) {
       result.erros.push(`Linha "${line.slice(0, 20)}…": ${err}`)
     }
