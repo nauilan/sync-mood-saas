@@ -761,10 +761,30 @@ export default function ObrasPage() {
     orderBy: { column: 'titulo', ascending: true },
   })
 
-  // Catálogo unificado: deduplicado por codigo
+  // Catálogo unificado: deduplicado por codigo, com % controlado recalculado dinamicamente
   const catalogoCompleto = useMemo(() => {
     const map = new Map<string, any>()
-    obrasData.forEach(o => map.set(o.codigo ?? o.codigo_obra ?? o.id, o))
+    const PAPEIS_AUTOR_RECALC = ['autor', 'compositor', 'versionista', 'adaptador']
+    obrasData.forEach(o => {
+      const linksRaw = normalizarLinksObra(o._links ?? MOCK_OBRAS_LINKS[o.id] ?? [])
+      if (linksRaw.length > 0) {
+        const isOwrLk = (titulares: any[]) => {
+          const autores = titulares.filter((t: any) => PAPEIS_AUTOR_RECALC.includes(t.papel ?? ''))
+          return autores.length > 0 && autores.every((a: any) => !a.controlado)
+        }
+        const pctCtrl = parseFloat(
+          linksRaw.reduce((total: number, link: any) => {
+            const lt = link.titulares ?? []
+            if (isOwrLk(lt)) return total
+            return total + lt
+              .filter((t: any) => t.controlado)
+              .reduce((s: number, t: any) => s + (t.percentual_exec_publica ?? t.percentual ?? 0), 0)
+          }, 0).toFixed(2)
+        )
+        o = { ...o, _percentual_controlado: pctCtrl }
+      }
+      map.set(o.codigo ?? o.codigo_obra ?? o.id, o)
+    })
     return Array.from(map.values())
   }, [obrasData])
 
