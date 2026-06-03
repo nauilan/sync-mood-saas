@@ -8,10 +8,6 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    env:
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
     steps:
       - name: Checkout
@@ -25,14 +21,9 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
-      - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+      - name: Deploy to Production
+        run: npx vercel --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
         working-directory: apps/web
-
-      - name: Build project
-        run: vercel build --prod --token=$VERCEL_TOKEN
-        working-directory: apps/web
-
-      - name: Deploy to production
-        run: vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
-        working-directory: apps/web
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
