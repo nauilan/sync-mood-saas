@@ -773,11 +773,17 @@ export function parseCwr(content: string, offsetOverride?: number): CwrParseResu
           if (sptData.pr_own > 0 && (isBrasil || spu.pr_pct === 0)) {
             spu.pr_pct = sptData.pr_own
           }
-          // mr_coll → quem coleta mecânico em nome do link
+          // mr_coll → mr_pct (MEC/digital: quanto este publisher recebe/coleta)
           const mrSrc = sptData.mr_coll > 0 ? sptData.mr_coll
                       : (sptData.pr_coll > 0 && spu.papel_cwr.trim() === 'AM' ? sptData.pr_coll : 0)
           if (mrSrc > 0 && (isBrasil || spu.mr_coll === 0)) {
             spu.mr_coll = mrSrc
+            // Também propagar como mr_pct para o analítico mostrar corretamente
+            if (spu.mr_pct === 0) spu.mr_pct = mrSrc
+          }
+          // Se mr_pct ainda 0 mas pr_pct definido → usar pr_pct como proxy de MEC
+          if (spu.mr_pct === 0 && spu.pr_pct > 0) {
+            spu.mr_pct = spu.pr_pct
           }
         }
       } else if (rec === 'SWT') {

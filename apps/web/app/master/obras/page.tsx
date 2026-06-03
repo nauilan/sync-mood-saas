@@ -501,8 +501,12 @@ tfoot td{background:#f7f7f7;font-weight:bold}
               }
               return 0
             }
-            const calcFono = (li: number, t: any) =>
-              modoView === 'sintetico' ? sinteticoFono(li, t) : (t.percentual_fonomecanico ?? 0)
+            // Analítico: usa mr_pct; se 0, usa pr_pct como proxy (proporção CWR)
+            const calcFono = (li: number, t: any) => {
+              if (modoView === 'sintetico') return sinteticoFono(li, t)
+              const mec = t.percentual_fonomecanico ?? 0
+              return mec > 0 ? mec : (t.percentual_exec_publica ?? t.percentual ?? 0)
+            }
             const calcExec = (t: any) => (t.percentual_exec_publica ?? t.percentual ?? 0)
             const sumExec = rows.reduce((s: number, r: any) => s + calcExec(r.t), 0)
             const sumFono = rows.reduce((s: number, r: any) => s + calcFono(r.li, r.t), 0)
