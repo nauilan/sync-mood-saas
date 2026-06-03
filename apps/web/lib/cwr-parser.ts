@@ -745,13 +745,15 @@ export function parseCwr(content: string, offsetOverride?: number): CwrParseResu
         const sptData = parseSPT(line)
         current.spt_shares.push(sptData)
         const isBrasil = sptData.territory === '0076'
-        // Encontrar o SPU cujo submitter_code corresponde ao sub_publisher_code do SPT
-        const matchSpu = current.titulares.find(
+        // Encontrar o SPU mais recente cujo código corresponde ao do SPT
+        // (findLast para pegar a instância mais recente quando há múltiplos SPUs com o mesmo código)
+        const allSpus = current.titulares.filter(
           t => t.tipo === 'SPU' && (
             t.submitter_code === sptData.sub_publisher_code ||
             t.sequence_code  === sptData.sub_publisher_code
           )
         )
+        const matchSpu = allSpus[allSpus.length - 1] ?? null
         const spu = matchSpu ?? (() => {
           // fallback: último SPU inserido (SPT segue seu SPU no CWR)
           for (let si = current.titulares.length - 1; si >= 0; si--) {
