@@ -78,6 +78,10 @@ export interface CwrObra {
   // calculados após parse
   pct_controlado: number   // soma dos % controlados normalizada
   tem_editora: boolean
+  /** Intérpretes (PER) vinculados à obra */
+  performers: { nome: string; ipi?: string }[]
+  /** Gravações (REC) com ISRC */
+  fonogramas: { isrc: string; titulo?: string; duracao_seg?: number }[]
 }
 
 export interface CwrParseResult {
@@ -358,7 +362,7 @@ function seqFieldLen(line: string, base: number): number {
 
 // ── Record parsers ────────────────────────────────────────────────────────────
 
-function parseNWR(line: string, off: number = 8): Omit<CwrObra, 'titulares' | 'pwr_links' | 'spt_shares' | 'linhas_raw' | 'pct_controlado' | 'tem_editora'> {
+function parseNWR(line: string, off: number = 8): Omit<CwrObra, 'titulares' | 'pwr_links' | 'spt_shares' | 'linhas_raw' | 'pct_controlado' | 'tem_editora' | 'performers' | 'fonogramas'> {
   const tx_seq_raw   = s(line, 11, 8)
   const titulo       = s(line, 19 + off, 60)
   const lang         = s(line, 79 + off, 2)
@@ -611,8 +615,11 @@ function calcPctControlado(titulares: CwrTitular[]): { pct: number; tem_editora:
 
   if (controlados.length === 0) return { pct: 0, tem_editora: false }
 
-  const total = controlados.reduce((sum, t) => sum + (t.mr_pct > 0 ? t.mr_pct : t.pr_pct), 0)
-  return { pct: Math.min(100, Math.round(total * 10) / 10), tem_editora }
+  // % controlado = soma de exec_pública (pr_pct) de TODOS titulares controlados
+  // (CA + E + AM juntos; OWR nunca controlado, já filtrado em cima)
+  const total = controlados.reduce((sum, t) => sum + (t.pr_pct || 0), 0)
+
+  return { pct: Math.min(100, Math.round(total * 100) / 100), tem_editora }
 }
 
 // ── Parser principal ──────────────────────────────────────────────────────────
@@ -715,7 +722,7 @@ export function parseCwr(content: string, offsetOverride?: number): CwrParseResu
         const nwr = parseNWR(line, nwrOff)
         // Capturar primeira linha NWR bruta para diagnóstico
         if (!result.debug_nwr_line) result.debug_nwr_line = line
-        current = { ...nwr, titulares: [], pwr_links: [], spt_shares: [], linhas_raw: [line], pct_controlado: 0, tem_editora: false }
+        current = { ...nwr, titulares: [], pwr_links: [], spt_shares: [], linhas_raw: [line], pct_controlado: 0, tem_editora: false, performers: [], fonogramas: [] }
         result.stats.nwr++
         continue
       }
@@ -791,8 +798,21 @@ export function parseCwr(content: string, offsetOverride?: number): CwrParseResu
         }
       } else if (rec === 'ALT') {
         current.titulo_alternativo = parseALT(line, nwrOff)
+      } else if (rec === 'PER') {
+        // PER: performer — posição fixa
+        const lastName  = s(line, 19, 30)
+        const firstName = s(line, 49, 30)
+        const ipi       = s(line, 79, 11)
+        const nome = [firstName, lastName].filter(Boolean).join(' ').replace(/\t/g, '').trim()
+        if (nome) current.performers.push({ nome, ipi: ipi !== '00000000000' ? ipi : undefined })
+      } else if (rec === 'REC') {
+        // REC: recording — ISRC no formato UBEM está na posição 249 (12 chars)
+        const isrc     = s(line, 249, 12)
+        const durRaw   = s(line, 25, 6)  // release_duration
+        const durSeg   = duracao(durRaw)
+        if (isrc) current.fonogramas.push({ isrc, duracao_seg: durSeg || undefined })
       }
-      // GRH, GRT, PER, REC, TRL — ignorados
+      // GRH, GRT, TRL — ignorados
     } catch (err) {
       result.erros.push(`Linha "${line.slice(0, 20)}…": ${err}`)
     }

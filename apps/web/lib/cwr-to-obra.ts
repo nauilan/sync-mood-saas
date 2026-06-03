@@ -218,68 +218,110 @@ function buildLinks(
   const spusTodos = titulares.filter(t => t.tipo === 'SPU' || t.tipo === 'OPU')
   const autores   = titulares.filter(t => t.tipo === 'SWR' || t.tipo === 'OWR')
 
-  // Deduplica editoras por IPI/código para evitar repetição de AM
-  const spus      = deduplicarTitulares(spusTodos)
+  // Mapa por código: mantém a ordem das instâncias do CWR (1ª instância para autor 1, 2ª para autor 2, etc.)
+  const spusByCode = new Map<string, CwrTitular[]>()
+  for (const spu of spusTodos) {
+    const code = (spu.submitter_code || spu.sequence_code || '').trim()
+    if (!code) continue
+    const arr = spusByCode.get(code) ?? []; arr.push(spu); spusByCode.set(code, arr)
+  }
+  // Contador de uso por código: permite atribuir a i-ésima instância ao i-ésimo autor
+  const spuUsed = new Map<string, number>()
+  const nextSpu = (code: string): CwrTitular | undefined => {
+    const list = spusByCode.get(code) ?? []; if (!list.length) return undefined
+    const used = spuUsed.get(code) ?? 0
+    const spu = list[Math.min(used, list.length - 1)]
+    spuUsed.set(code, used + 1); return spu
+  }
 
-  const editorasE  = spus.filter(e => { const p = e.papel_cwr.trim().toUpperCase(); return p === 'E' || p === 'AQ' })
-  const admins     = spus.filter(e => e.papel_cwr.trim().toUpperCase() === 'AM')
-  const subeds     = spus.filter(e => e.papel_cwr.trim().toUpperCase() === 'SE')
+  // Lista de códigos únicos de AM e SE (mantendo ordem de aparição)
+  const amCodes: string[] = []; const amSeen = new Set<string>()
+  const seCodes: string[] = []; const seSeen = new Set<string>()
+  for (const spu of spusTodos) {
+    const p = spu.papel_cwr.trim().toUpperCase()
+    const code = (spu.submitter_code || spu.sequence_code || '').trim()
+    if (!code) continue
+    if (p === 'AM' && !amSeen.has(code)) { amCodes.push(code); amSeen.add(code) }
+    if (p === 'SE' && !seSeen.has(code)) { seCodes.push(code); seSeen.add(code) }
+  }
+
+  // Lista plana de editoras E/AQ para fallback (sem dedup — usa nextSpu internamente)
+  const editorasETodos = spusTodos.filter(e => { const p = e.papel_cwr.trim().toUpperCase(); return p === 'E' || p === 'AQ' })
 
   // Sem autores e sem editoras → link vazio
-  if (autores.length === 0 && spus.length === 0) return []
+  if (autores.length === 0 && spusTodos.length === 0) return []
 
-  // Sem autores → 1 link só com editoras
+  // Sem autores → 1 link só com editoras (deduplica para não repetir)
   if (autores.length === 0) {
+    const spus = deduplicarTitulares(spusTodos)
     const linkId = uid()
-    const pct = spus.filter(s => s.controlado).reduce((sum, s) => sum + (s.mr_pct || s.pr_pct), 0)
-    return [{ id: linkId, obra_id: obraId, ordem: 1, descricao: 'Link 1 (editoras)', controlado: spus.some(s => s.controlado), percentual_controlado: Math.min(100, Math.round(pct * 10) / 10), titulares: spus.map(s => toObraLinkTitular(s, linkId)) }]
+    const pct = spus.filter(s => s.controlado).reduce((sum, s) => sum + (s.pr_pct || 0), 0)
+    return [{ id: linkId, obra_id: obraId, ordem: 1, descricao: 'Link 1 (editoras)', controlado: spus.some(s => s.controlado), percentual_controlado: Math.min(100, Math.round(pct * 100) / 100), titulares: spus.map(s => toObraLinkTitular(s, linkId)) }]
   }
 
   // Sem editoras → 1 link por autor, não controlado
-  if (spus.length === 0) {
+  if (spusTodos.length === 0) {
     return autores.map((autor, idx) => {
       const linkId = uid()
-      const pct = autor.mr_pct || autor.pr_pct
       return { id: linkId, obra_id: obraId, ordem: idx + 1, descricao: `Link ${idx + 1} — ${autor.nome}`, controlado: false, percentual_controlado: 0, titulares: [toObraLinkTitular(autor, linkId)] }
     })
   }
 
   // CASO PRINCIPAL: 1 link por autor, cada um com sua cadeia editorial
+  // Cada SWR controlado consome a i-ésima instância do seu publisher (E, AM, SE)
   const links: ObraLink[] = []
 
   autores.forEach((autor, idx) => {
     const linkId = uid()
+    const nomeAutor = autor.nome.split(' ').slice(0, 2).join(' ')
 
-    // Editora E deste autor (via PWR match)
-    let editoraDoAutor = editorasE.find(e => editoraMatch(autor, e))
-    // Fallback: se 1 única editora E, todos os autores pertencem a ela
-    if (!editoraDoAutor && editorasE.length === 1) editoraDoAutor = editorasE[0]
-    // Fallback final: primeira SPU disponível
-    if (!editoraDoAutor && editorasE.length === 0 && admins.length > 0) editoraDoAutor = admins[0]
+    // OWR = autor externo/não controlado. Nunca tem cadeia editorial.
+    if (autor.tipo === 'OWR') {
+      links.push({
+        id: linkId,
+        obra_id: obraId,
+        ordem: idx + 1,
+        descricao: `Link ${idx + 1} — ${nomeAutor} (externo)`,
+        controlado: false,
+        percentual_controlado: 0,
+        titulares: [toObraLinkTitular(autor, linkId)],
+      })
+      return
+    }
 
-    // AM vinculada a esta editora (ou todas se só há 1)
-    const adminsDesta = admins.length === 1 ? admins : (editoraDoAutor
-      ? admins.filter(am => am.ipi === editoraDoAutor!.ipi || !editoraDoAutor!.ipi)
-      : admins)
+    // SWR: buscar a instância correta da editora E (via PWR + contador de uso)
+    const pubCode = (autor.publisher_seq || '').trim()
+    let editoraDoAutor: CwrTitular | undefined
+    if (pubCode) {
+      editoraDoAutor = nextSpu(pubCode)
+      // fallback: matching por atributos se nextSpu não encontrou (publisher_seq não coincide com código)
+      if (!editoraDoAutor) editoraDoAutor = editorasETodos.find(e => editoraMatch(autor, e))
+    } else if (editorasETodos.length === 1) {
+      editoraDoAutor = editorasETodos[0]
+    }
+
+    // AM e SE: i-ésima instância para cada código único
+    const adminsDesta: CwrTitular[] = amCodes.map(c => nextSpu(c)!).filter(Boolean)
+    const sesDesta:    CwrTitular[] = seCodes.map(c => nextSpu(c)!).filter(Boolean)
 
     // Montar membros: autor (primeiro) + editora E + AM + SE
     const membros: CwrTitular[] = [autor]
     if (editoraDoAutor) membros.push(editoraDoAutor)
     adminsDesta.forEach(am => { if (!membros.includes(am)) membros.push(am) })
-    subeds.forEach(se => { if (!membros.includes(se)) membros.push(se) })
+    sesDesta.forEach(se => { if (!membros.includes(se)) membros.push(se) })
 
+    // % controlado do link = soma de exec_pública (pr_pct) de todos membros controlados
     const pctControlado = membros
       .filter(m => m.controlado)
-      .reduce((sum, m) => sum + (m.mr_pct || m.pr_pct), 0)
+      .reduce((sum, m) => sum + (m.pr_pct || 0), 0)
 
-    const nomeAutor = autor.nome.split(' ').slice(0, 2).join(' ')
     links.push({
       id: linkId,
       obra_id: obraId,
       ordem: idx + 1,
       descricao: `Link ${idx + 1} — ${nomeAutor}`,
       controlado: membros.some(m => m.controlado),
-      percentual_controlado: Math.min(100, Math.round(pctControlado * 10) / 10),
+      percentual_controlado: Math.min(100, Math.round(pctControlado * 100) / 100),
       titulares: membros.map(t => toObraLinkTitular(t, linkId)),
     })
   })
@@ -339,10 +381,11 @@ function cwrObraToObra(cwr: CwrObra, config: EditoraControlada[]): Obra {
   const obraId = `obra-${slug(cwr.codigo || cwr.titulo)}-${uid()}`
   const links  = buildLinks(obraId, cwr.titulares, cwr.pwr_links)
 
-  // Percentual controlado total da obra
+  // % controlado total da obra = soma de exec_pública (pr_pct) de TODOS os titulares controlados
+  // (CA + E + AM juntos formam o percentual controlado; OWR nunca é controlado)
   const totalControlado = cwr.titulares
     .filter(t => t.controlado)
-    .reduce((sum, t) => sum + (t.mr_pct || t.pr_pct), 0)
+    .reduce((sum, t) => sum + (t.pr_pct || 0), 0)
 
   return {
     id: obraId,
@@ -364,7 +407,10 @@ function cwrObraToObra(cwr: CwrObra, config: EditoraControlada[]): Obra {
     origem_importacao: 'cwr',
     _links: links,
     _links_count: links.length,
-    _percentual_controlado: Math.min(100, Math.round(totalControlado * 10) / 10),
+    _percentual_controlado: Math.min(100, Math.round(totalControlado * 100) / 100),
+    // Intérpretes e ISRCs extraídos do CWR (PER + REC) — armazenados como metadata
+    _performers: cwr.performers?.length ? cwr.performers.map(p => p.nome).join('; ') : undefined,
+    _isrcs: cwr.fonogramas?.length ? cwr.fonogramas.map(f => f.isrc).join('; ') : undefined,
   }
 }
 
@@ -410,22 +456,41 @@ function extractTitulares(obras: CwrObra[]): TitularStore[] {
 // ── Extrair gravações ─────────────────────────────────────────────────────────
 
 function extractGravacoes(obras: Obra[], cwrObras: CwrObra[]): GravacaoStore[] {
-  return cwrObras
-    .filter(cwr => cwr.duracao_seg > 0)
-    .map(cwr => {
-      const obra = obras.find(o => o.codigo === cwr.codigo)
-      return {
+  const result: GravacaoStore[] = []
+  for (const cwr of cwrObras) {
+    const obra = obras.find(o => o.codigo === cwr.codigo)
+    if (!obra?.id) continue
+    const performer = cwr.performers?.map(p => p.nome).join(' / ') || '—'
+    // Se houver REC records com ISRC, criar uma entrada por ISRC
+    if (cwr.fonogramas?.length) {
+      for (const fono of cwr.fonogramas) {
+        result.push({
+          id: uid(),
+          obra_id: obra.id,
+          obra_codigo: cwr.codigo,
+          titulo_fonograma: cwr.titulo,
+          interprete: performer,
+          isrc: fono.isrc || undefined,
+          duracao: fono.duracao_seg ?? (cwr.duracao_seg > 0 ? cwr.duracao_seg : undefined),
+          status: 'cadastrada' as const,
+          created_at: new Date().toISOString(),
+        })
+      }
+    } else if (cwr.duracao_seg > 0 || cwr.performers?.length) {
+      // Fallback: sem REC, ao menos registrar com performer se houver
+      result.push({
         id: uid(),
-        obra_id: obra?.id ?? '',
+        obra_id: obra.id,
         obra_codigo: cwr.codigo,
         titulo_fonograma: cwr.titulo,
-        interprete: '—',
-        duracao: cwr.duracao_seg,
+        interprete: performer,
+        duracao: cwr.duracao_seg > 0 ? cwr.duracao_seg : undefined,
         status: 'cadastrada' as const,
         created_at: new Date().toISOString(),
-      }
-    })
-    .filter(g => g.obra_id)
+      })
+    }
+  }
+  return result
 }
 
 // ── Função principal ──────────────────────────────────────────────────────────

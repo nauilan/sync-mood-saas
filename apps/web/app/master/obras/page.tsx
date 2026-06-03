@@ -104,6 +104,23 @@ function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => 
   const [modoView, setModoView] = useState<'sintetico' | 'analitico'>('sintetico')
 
   const links = normalizarLinksObra(obra._links ?? MOCK_OBRAS_LINKS[obra.id] ?? [])
+
+  // Detecta link de OWR: todos os autores são não-controlados → não tem cadeia editorial
+  const PAPEIS_AUTOR_SET = ['autor', 'compositor', 'versionista', 'adaptador']
+  const isOwrLink = (titulares: any[]): boolean => {
+    const autores = titulares.filter(t => PAPEIS_AUTOR_SET.includes(t.papel ?? ''))
+    return autores.length > 0 && autores.every(a => !a.controlado)
+  }
+  // Percentual controlado calculado dinamicamente (exclui editoras de links OWR)
+  const pctControladoCalc = parseFloat(
+    links.reduce((total: number, link: any) => {
+      const lt = link.titulares ?? []
+      if (isOwrLink(lt)) return total
+      return total + lt.filter((t: any) => t.controlado)
+        .reduce((s: number, t: any) => s + (t.percentual_exec_publica ?? t.percentual ?? 0), 0)
+    }, 0).toFixed(2)
+  )
+
   const fonogramas = MOCK_OBRAS_FONOGRAMAS?.[obra.id] ?? []
   const editora = MOCK_EDITORAS.find(e => e.id === obra.editora_id)
   const editoraNome = editora?.nome_fantasia
@@ -152,16 +169,44 @@ function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => 
     }
   }
 
+  // ── helpers de exibição ───────────────────────────────────────────────────
+  const fmtDuracao = (raw: any): string => {
+    if (!raw) return ''
+    const n = typeof raw === 'string' ? parseInt(raw.replace(/\D/g,''), 10) : Number(raw)
+    if (!n || isNaN(n)) return ''
+    const h = Math.floor(n / 3600), m = Math.floor((n % 3600) / 60), s = n % 60
+    return h > 0
+      ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+      : `${m}:${String(s).padStart(2,'0')}`
+  }
+  const papelSigla = (papel: string): string => {
+    const p = (papel ?? '').toLowerCase()
+    if (['autor','coautor','compositor','compositor_letrista','letrista','autor_nao_controlado'].includes(p)) return 'CA'
+    if (p === 'letrista') return 'LA'
+    if (['editora_original','e','aq'].includes(p)) return 'E'
+    if (['administradora','am'].includes(p)) return 'AM'
+    if (p === 'subpublicadora') return 'SE'
+    return (papel ?? '').toUpperCase()
+  }
+
   // ── Exportar Excel (CSV) ───────────────────────────────────────────────────
   const exportExcel = () => {
     const fmt2 = (n: number) => n.toFixed(2) + '%'
     const sinteticoFono = (li: number, t: any): number => {
       const lt = (links[li] as any)?.titulares ?? []
       const hasAM = lt.some((x: any) => ['AM','administradora'].includes(x.papel) || (x.papel??'').toUpperCase()==='AM')
+      const hasE  = lt.some((x: any) => { const p=(x.papel??'').toUpperCase(); return p==='E'||p==='AQ'||x.papel==='editora_original' })
       const papel = (t.papel??'').toUpperCase()
-      if (hasAM) return (papel==='AM'||t.papel==='administradora') ? (t.percentual_fonomecanico??0) : 0
-      if (papel==='E'||t.papel==='editora_original'||papel==='AQ')
-        return lt.reduce((s: number, x: any) => s+(x.percentual_fonomecanico??0), 0)
+      const linkFono = () => { const s=lt.reduce((acc:number,x:any)=>acc+(x.percentual_fonomecanico??0),0); return s>0?s:lt.reduce((acc:number,x:any)=>acc+(x.percentual_exec_publica??x.percentual??0),0) }
+      if (hasAM) {
+        if (papel==='AM'||t.papel==='administradora') return linkFono()
+        return 0
+      }
+      if (hasE) {
+        if (papel==='E'||t.papel==='editora_original'||papel==='AQ') return linkFono()
+        return 0
+      }
+      // OWR / autor não controlado: não controlamos fono/digital/sinc → 0%
       return 0
     }
     const rows: string[] = []
@@ -173,22 +218,26 @@ function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => 
     rows.push(`Idioma;${obra.idioma||''}`)
     rows.push(`Gênero;${obra.genero||''}`)
     rows.push(`Ano;${obra.ano_criacao||''}`)
-    rows.push(`Duração;${obra.duracao||''}`)
+    rows.push(`Duração;${fmtDuracao(obra.duracao)}`)
     rows.push(`Editora;${editoraNome||''}`)
     rows.push(`Status;${obra.status||''}`)
     rows.push('')
     rows.push('TITULARES')
     rows.push('Link;Nome;Pseudônimo;CPF/CNPJ;Papel;Código;% Exec Pública;% Fono/Digital;Controlado')
-    const allRows = links.flatMap((link: any, li: number) =>
-      (link.titulares??[]).map((t: any) => ({ li, t }))
-    )
+    const allRows = links.flatMap((link: any, li: number) => {
+      const lt = link.titulares ?? []
+      const owr = isOwrLink(lt)
+      return lt
+        .filter((t: any) => !owr || PAPEIS_AUTOR_SET.includes(t.papel ?? ''))
+        .map((t: any) => ({ li, t }))
+    })
     let sumExec = 0, sumFono = 0
     allRows.forEach(({ li, t }: any) => {
       const ep = (t.percentual_exec_publica??t.percentual??0)
       const fn = sinteticoFono(li, t)
       sumExec += ep; sumFono += fn
       const doc = t.cpf_cnpj ? t.cpf_cnpj.replace(/\D/g,'') : ''
-      rows.push([li+1, t.nome, t.pseudonimo_fantasia||'', doc, t.papel||'',
+      rows.push([li+1, t.nome, t.pseudonimo_fantasia||'', doc, papelSigla(t.papel||''),
         t.codigo_interno_legado_titular||'', fmt2(ep), fmt2(fn), t.controlado?'sim':'não'].join(';'))
     })
     rows.push(['TOTAL','','','','','', fmt2(sumExec), fmt2(sumFono), ''].join(';'))
@@ -203,15 +252,26 @@ function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => 
     const sinteticoFono = (li: number, t: any): number => {
       const lt = (links[li] as any)?.titulares ?? []
       const hasAM = lt.some((x: any) => ['AM','administradora'].includes(x.papel)||(x.papel??'').toUpperCase()==='AM')
+      const hasE  = lt.some((x: any) => { const p=(x.papel??'').toUpperCase(); return p==='E'||p==='AQ'||x.papel==='editora_original' })
       const papel = (t.papel??'').toUpperCase()
-      if (hasAM) return (papel==='AM'||t.papel==='administradora')?(t.percentual_fonomecanico??0):0
-      if (papel==='E'||t.papel==='editora_original'||papel==='AQ')
-        return lt.reduce((s:number,x:any)=>s+(x.percentual_fonomecanico??0),0)
+      const linkFono = () => { const s=lt.reduce((a:number,x:any)=>a+(x.percentual_fonomecanico??0),0); return s>0?s:lt.reduce((a:number,x:any)=>a+(x.percentual_exec_publica??x.percentual??0),0) }
+      if (hasAM) {
+        if (papel==='AM'||t.papel==='administradora') return linkFono()
+        return 0
+      }
+      if (hasE) {
+        if (papel==='E'||t.papel==='editora_original'||papel==='AQ') return linkFono()
+        return 0
+      }
       return 0
     }
-    const allRows = links.flatMap((link: any, li: number) =>
-      (link.titulares??[]).map((t: any) => ({ li, t }))
-    )
+    const allRows = links.flatMap((link: any, li: number) => {
+      const lt = link.titulares ?? []
+      const owr = isOwrLink(lt)
+      return lt
+        .filter((t: any) => !owr || PAPEIS_AUTOR_SET.includes(t.papel ?? ''))
+        .map((t: any) => ({ li, t }))
+    })
     let sumExec = 0, sumFono = 0
     const trRows = allRows.map(({ li, t }: any) => {
       const ep = (t.percentual_exec_publica??t.percentual??0)
@@ -220,7 +280,7 @@ function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => 
       const doc = t.cpf_cnpj ? t.cpf_cnpj.replace(/\D/g,'') : '—'
       return `<tr>
         <td>${li+1}</td><td>${t.nome||''}</td><td>${t.pseudonimo_fantasia||'—'}</td>
-        <td>${doc}</td><td><b>${t.papel||''}</b></td>
+        <td>${doc}</td><td><b>${papelSigla(t.papel||'')}</b></td>
         <td>${t.codigo_interno_legado_titular||'—'}</td>
         <td>${ep.toFixed(2)}%</td><td>${fn.toFixed(2)}%</td>
         <td>${t.controlado?'✓':'—'}</td></tr>`
@@ -244,7 +304,7 @@ tfoot td{background:#f7f7f7;font-weight:bold}
   <div><label>Idioma</label>${obra.idioma||'—'}</div>
   <div><label>Gênero</label>${obra.genero||'—'}</div>
   <div><label>Ano</label>${obra.ano_criacao||'—'}</div>
-  <div><label>Duração</label>${obra.duracao||'—'}</div>
+  <div><label>Duração</label>${fmtDuracao(obra.duracao)}</div>
   <div><label>Editora</label>${editoraNome||'—'}</div>
 </div>
 <h2>Titulares</h2>
@@ -362,10 +422,10 @@ tfoot td{background:#f7f7f7;font-weight:bold}
               <div className="bg-white/[0.03] rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-white/40">Percentual Controlado</p>
-                  <span className="text-sm font-bold text-violet-400">{obra._percentual_controlado ?? 0}%</span>
+                  <span className="text-sm font-bold text-violet-400">{pctControladoCalc.toFixed(2)}%</span>
                 </div>
                 <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full rounded-full bg-violet-500" style={{ width: `${obra._percentual_controlado ?? 0}%` }} />
+                  <div className="h-full rounded-full bg-violet-500" style={{ width: `${Math.min(pctControladoCalc, 100)}%` }} />
                 </div>
               </div>
               <div className={`rounded-xl p-4 flex items-center gap-3 ${obra.contrato_file ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-white/[0.03]'}`}>
@@ -381,9 +441,17 @@ tfoot td{background:#f7f7f7;font-weight:bold}
           )}
 
           {tab === 'titulares' && (() => {
-            const rows = links.flatMap((link: any, li: number) =>
-              (link.titulares ?? []).map((t: any) => ({ li, t }))
-            )
+            const rows = links.flatMap((link: any, li: number) => {
+              const lt = link.titulares ?? []
+              const owr = isOwrLink(lt)
+              return lt
+                .filter((t: any) => {
+                  // Link OWR: mostrar apenas o autor externo, ocultar editoras
+                  if (!owr) return true
+                  return PAPEIS_AUTOR_SET.includes(t.papel ?? '')
+                })
+                .map((t: any) => ({ li, t }))
+            })
             const fmtDoc = (doc?: string | null, tipo?: string | null) => {
               if (!doc) return '—'
               const d = doc.replace(/\D/g, '')
@@ -398,15 +466,24 @@ tfoot td{background:#f7f7f7;font-weight:bold}
               const hasAM = lt.some((x: any) =>
                 ['AM', 'administradora'].includes(x.papel) || (x.papel ?? '').toUpperCase() === 'AM'
               )
+              const hasE = lt.some((x: any) => { const p=(x.papel??'').toUpperCase(); return p==='E'||p==='AQ'||x.papel==='editora_original' })
               const papel = (t.papel ?? '').toUpperCase()
+              // Helper: fono total do link. Se todos fono=0, usa exec como proxy
+              const linkFono = () => {
+                const s = lt.reduce((acc: number, x: any) => acc + (x.percentual_fonomecanico ?? 0), 0)
+                if (s > 0) return s
+                return lt.reduce((acc: number, x: any) => acc + (x.percentual_exec_publica ?? x.percentual ?? 0), 0)
+              }
               if (hasAM) {
-                if (papel === 'AM' || t.papel === 'administradora') return t.percentual_fonomecanico ?? 0
-                return 0
-              } else {
-                if (papel === 'E' || t.papel === 'editora_original' || papel === 'AQ')
-                  return lt.reduce((s: number, x: any) => s + (x.percentual_fonomecanico ?? 0), 0)
+                if (papel === 'AM' || t.papel === 'administradora') return linkFono()
                 return 0
               }
+              if (hasE) {
+                if (papel === 'E' || t.papel === 'editora_original' || papel === 'AQ') return linkFono()
+                return 0
+              }
+              // OWR / autor não controlado: 0% em fono/digital/sinc
+              return 0
             }
             const calcFono = (li: number, t: any) =>
               modoView === 'sintetico' ? sinteticoFono(li, t) : (t.percentual_fonomecanico ?? 0)
