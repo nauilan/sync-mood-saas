@@ -84,34 +84,56 @@ export function useSupabaseQuery<T>(
           const { data: rows, error: sbErr } = await query
 
           // Supabase retornou dados — mescla com localStorage para não perder
-          // itens importados localmente (ex: CWR importado mas não salvo no Supabase).
+          // itens importados localmente E para enriquecer rows do Supabase com
+          // campos computados (_links, _percentual_controlado) que só existem no store.
           if (!sbErr && rows && rows.length > 0 && !cancelled) {
             let merged: T[] = rows as T[]
             if (storeKey) {
               try {
                 const stored = getStore<T>(storeKey)
                 if (stored.length > 0) {
-                  // Deduplication: prefere Supabase; adiciona itens do store
-                  // que não existam no Supabase (por id OU codigo OU codigo_obra)
-                  const sbKeys = new Set<string>()
-                  for (const r of rows as any[]) {
-                    if (r.id) sbKeys.add(String(r.id))
-                    if (r.codigo) sbKeys.add(String(r.codigo))
-                    if (r.codigo_obra) sbKeys.add(String(r.codigo_obra))
+                  // Mapa do localStorage por chave de negócio
+                  const storeMap = new Map<string, any>()
+                  for (const s of stored as any[]) {
+                    if (s.codigo)      storeMap.set(String(s.codigo), s)
+                    if (s.codigo_obra) storeMap.set(String(s.codigo_obra), s)
+                    if (s.id)          storeMap.set(String(s.id), s)
                   }
-                  const extra = stored.filter((s: any) => {
-                    const sid   = s.id ? String(s.id) : null
-                    const scod  = s.codigo ? String(s.codigo) : null
-                    const scob  = s.codigo_obra ? String(s.codigo_obra) : null
+
+                  const sbKeys = new Set<string>()
+                  // Enriquecer rows do Supabase com campos computados do store
+                  const enriched = (rows as any[]).map(r => {
+                    if (r.id)         sbKeys.add(String(r.id))
+                    if (r.codigo)     sbKeys.add(String(r.codigo))
+                    if (r.codigo_obra) sbKeys.add(String(r.codigo_obra))
+
+                    // Buscar versão local correspondente
+                    const local = storeMap.get(String(r.codigo ?? r.codigo_obra ?? r.id))
+                    if (!local) return r
+                    // Copiar campos computados do store que o Supabase não tem
+                    const patch: Record<string, unknown> = {}
+                    for (const k of ['_links', '_links_count', '_percentual_controlado',
+                                     '_performers', '_isrcs'] as const) {
+                      if (local[k] !== undefined && r[k] === undefined) patch[k] = local[k]
+                    }
+                    return Object.keys(patch).length ? { ...r, ...patch } : r
+                  })
+
+                  // Adicionar itens do store que não existam no Supabase
+                  const extra = (stored as any[]).filter((s: any) => {
+                    const sid  = s.id ? String(s.id) : null
+                    const scod = s.codigo ? String(s.codigo) : null
+                    const scob = s.codigo_obra ? String(s.codigo_obra) : null
                     return (
                       (!sid  || !sbKeys.has(sid)) &&
                       (!scod || !sbKeys.has(scod)) &&
                       (!scob || !sbKeys.has(scob))
                     )
                   })
-                  if (extra.length > 0) {
-                    merged = [...(rows as T[]), ...extra]
-                  }
+
+                  merged = extra.length > 0
+                    ? [...enriched, ...extra] as T[]
+                    : enriched as T[]
                 }
               } catch { /* silencioso */ }
             }
