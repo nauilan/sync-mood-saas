@@ -111,13 +111,15 @@ function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => 
     const autores = titulares.filter(t => PAPEIS_AUTOR_SET.includes(t.papel ?? ''))
     return autores.length > 0 && autores.every(a => !a.controlado)
   }
-  // Percentual controlado calculado dinamicamente (exclui editoras de links OWR)
+  // Percentual controlado: soma TODOS os participantes de links não-OWR.
+  // Um link não-OWR significa cadeia editorial completa (CA+E+AM) → 100% sob controle.
+  // NÃO filtra por t.controlado pois essa flag pode estar errada em dados antigos.
   const pctControladoCalc = parseFloat(
     links.reduce((total: number, link: any) => {
       const lt = link.titulares ?? []
       if (isOwrLink(lt)) return total
-      return total + lt.filter((t: any) => t.controlado)
-        .reduce((s: number, t: any) => s + (t.percentual_exec_publica ?? t.percentual ?? 0), 0)
+      return total + lt.reduce((s: number, t: any) =>
+        s + (t.percentual_exec_publica ?? t.percentual ?? 0), 0)
     }, 0).toFixed(2)
   )
 
@@ -463,16 +465,23 @@ tfoot td{background:#f7f7f7;font-weight:bold}
             }
             const sinteticoFono = (li: number, t: any): number => {
               const lt = (links[li] as any)?.titulares ?? []
+              // Link OWR → 0% para todos (autor externo, sem controle de fono/sinc)
+              if (isOwrLink(lt)) return 0
               const hasAM = lt.some((x: any) =>
                 ['AM', 'administradora'].includes(x.papel) || (x.papel ?? '').toUpperCase() === 'AM'
               )
               const hasE = lt.some((x: any) => { const p=(x.papel??'').toUpperCase(); return p==='E'||p==='AQ'||x.papel==='editora_original' })
               const papel = (t.papel ?? '').toUpperCase()
-              // Helper: fono total do link. Se todos fono=0, usa exec como proxy
+              // Fono do link = soma dos participantes não-OWR (cadeia controlada)
               const linkFono = () => {
-                const s = lt.reduce((acc: number, x: any) => acc + (x.percentual_fonomecanico ?? 0), 0)
-                if (s > 0) return s
-                return lt.reduce((acc: number, x: any) => acc + (x.percentual_exec_publica ?? x.percentual ?? 0), 0)
+                const cadeia = lt.filter((x: any) =>
+                  !PAPEIS_AUTOR_SET.includes(x.papel ?? '') || !isOwrLink([x])
+                )
+                const s = cadeia.reduce((acc: number, x: any) => acc + (x.percentual_fonomecanico ?? 0), 0)
+                if (s > 0) return parseFloat(s.toFixed(2))
+                return parseFloat(
+                  cadeia.reduce((acc: number, x: any) => acc + (x.percentual_exec_publica ?? x.percentual ?? 0), 0).toFixed(2)
+                )
               }
               if (hasAM) {
                 if (papel === 'AM' || t.papel === 'administradora') return linkFono()
@@ -482,7 +491,6 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                 if (papel === 'E' || t.papel === 'editora_original' || papel === 'AQ') return linkFono()
                 return 0
               }
-              // OWR / autor não controlado: 0% em fono/digital/sinc
               return 0
             }
             const calcFono = (li: number, t: any) =>
@@ -779,9 +787,9 @@ export default function ObrasPage() {
           linksRaw.reduce((total: number, link: any) => {
             const lt = link.titulares ?? []
             if (isOwrLk(lt)) return total
-            return total + lt
-              .filter((t: any) => t.controlado)
-              .reduce((s: number, t: any) => s + (t.percentual_exec_publica ?? t.percentual ?? 0), 0)
+            // Soma TODOS os participantes do link não-OWR (cadeia controlada)
+            return total + lt.reduce((s: number, t: any) =>
+              s + (t.percentual_exec_publica ?? t.percentual ?? 0), 0)
           }, 0).toFixed(2)
         )
         o = { ...o, _percentual_controlado: pctCtrl }
