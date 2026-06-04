@@ -11,7 +11,7 @@ import {
   Send, Database, Tag, ShieldCheck, ShieldAlert, Loader2,
   Save, FileSpreadsheet, FileText, Check,
 } from 'lucide-react'
-import { MOCK_OBRAS, MOCK_OBRAS_LINKS, MOCK_OBRAS_FONOGRAMAS, KPI_OBRAS } from '@/lib/mock-obras'
+import { MOCK_OBRAS, MOCK_OBRAS_LINKS, MOCK_OBRAS_FONOGRAMAS } from '@/lib/mock-obras'
 import { STORE_KEYS } from '@/lib/store'
 import { useSupabaseQuery } from '@/lib/hooks/use-supabase-query'
 import { createClient } from '@supabase/supabase-js'
@@ -904,6 +904,15 @@ export default function ObrasPage() {
     return Array.from(map.values())
   }, [obrasData])
 
+  // KPIs dinâmicos calculados do catálogo real
+  const kpis = useMemo(() => ({
+    total: catalogoCompleto.length,
+    ativas: catalogoCompleto.filter(o => o.status === 'ativa' || o.status === 'validada').length,
+    pre_cadastro: catalogoCompleto.filter(o => o.status === 'pre_cadastro').length,
+    sem_iswc: catalogoCompleto.filter(o => !o.iswc).length,
+    com_fonograma: catalogoCompleto.filter(o => (o._fonogramas_count ?? 0) > 0).length,
+  }), [catalogoCompleto])
+
   // Fechar dropdown ao clicar fora
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -971,11 +980,11 @@ export default function ObrasPage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
-          { label: 'Total Obras', value: KPI_OBRAS.total, color: 'text-white/80', icon: Music },
-          { label: 'Ativas', value: KPI_OBRAS.ativas, color: 'text-emerald-400', icon: CheckCircle2 },
-          { label: 'Pre-cadastro', value: KPI_OBRAS.pre_cadastro, color: 'text-violet-400', icon: AlertCircle },
-          { label: 'Sem ISWC', value: KPI_OBRAS.sem_iswc, color: 'text-amber-400', icon: AlertCircle },
-          { label: 'Com Fonograma', value: KPI_OBRAS.com_fonograma, color: 'text-sky-400', icon: Mic2 },
+          { label: 'Total Obras', value: kpis.total, color: 'text-white/80', icon: Music },
+          { label: 'Ativas', value: kpis.ativas, color: 'text-emerald-400', icon: CheckCircle2 },
+          { label: 'Pre-cadastro', value: kpis.pre_cadastro, color: 'text-violet-400', icon: AlertCircle },
+          { label: 'Sem ISWC', value: kpis.sem_iswc, color: 'text-amber-400', icon: AlertCircle },
+          { label: 'Com Fonograma', value: kpis.com_fonograma, color: 'text-sky-400', icon: Mic2 },
         ].map(stat => (
           <div key={stat.label} className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4 flex flex-col gap-1">
             <div className="flex items-center gap-1.5">
