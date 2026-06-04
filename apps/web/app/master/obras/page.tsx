@@ -19,6 +19,22 @@ import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
 import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, normalizarLinksObra } from '@/lib/types-obras'
 import type { StatusObra } from '@/lib/types-obras'
 
+/** Distribui percentuais garantindo soma = 100,00 (algoritmo largest-remainder, 2 casas) */
+function largestRemainder(values: number[]): number[] {
+  const total = values.reduce((s, v) => s + v, 0)
+  if (total === 0 || values.length === 0) return values.map(() => 0)
+  const raw = values.map(v => (v / total) * 100)
+  const floors = raw.map(v => Math.floor(v * 100) / 100)
+  const deficit = Math.round((100 - floors.reduce((s, v) => s + v, 0)) * 100)
+  const order = raw
+    .map((v, i) => ({ i, frac: (v * 100) - Math.floor(v * 100) }))
+    .sort((a, b) => b.frac - a.frac)
+  const result = [...floors]
+  for (let k = 0; k < deficit && k < order.length; k++)
+    result[order[k].i] = parseFloat((result[order[k].i] + 0.01).toFixed(2))
+  return result
+}
+
 const AVATARES_CORES = [
   'bg-violet-600', 'bg-amber-600', 'bg-emerald-600',
   'bg-sky-600', 'bg-rose-600', 'bg-indigo-600',
@@ -501,20 +517,22 @@ tfoot td{background:#f7f7f7;font-weight:bold}
               }
               return 0
             }
-            // Analítico MEC: soma exec pública de todos os participantes controlados para proporcionar a 100%
-            const totalCtrlExec = rows.reduce((s: number, r: any) => {
+            // Analítico MEC: largest-remainder garante soma exata = 100,00%
+            const ctrlRowsMec = rows.filter((r: any) => {
               const lt2 = (links[r.li] as any)?.titulares ?? []
-              if (isOwrLink(lt2) || !r.t.controlado) return s
-              return s + (r.t.percentual_exec_publica ?? r.t.percentual ?? 0)
-            }, 0)
+              return !isOwrLink(lt2) && r.t.controlado
+            })
+            const mecAnaliticoVals = largestRemainder(
+              ctrlRowsMec.map((r: any) => r.t.percentual_exec_publica ?? r.t.percentual ?? 0)
+            )
+            const mecAnaliticoMap = new Map(ctrlRowsMec.map((r: any, i: number) => [r.t, mecAnaliticoVals[i]]))
             // Analítico: usa proporção da exec pública normalizada a 100% dentro da cadeia controlada
             const calcFono = (li: number, t: any) => {
               if (modoView === 'sintetico') return sinteticoFono(li, t)
               const lt = (links[li] as any)?.titulares ?? []
               if (isOwrLink(lt)) return 0
               if (!t.controlado) return 0
-              const execPct = t.percentual_exec_publica ?? t.percentual ?? 0
-              return totalCtrlExec > 0 ? parseFloat(((execPct / totalCtrlExec) * 100).toFixed(2)) : execPct
+              return mecAnaliticoMap.get(t) ?? 0
             }
             const calcExec = (t: any) => (t.percentual_exec_publica ?? t.percentual ?? 0)
             const sumExec = rows.reduce((s: number, r: any) => s + calcExec(r.t), 0)

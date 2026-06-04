@@ -24,6 +24,22 @@ interface LinkPreview {
   externo?: boolean        // true para OWR
 }
 
+/** Distribui percentuais garantindo soma = 100,00 (algoritmo largest-remainder, 2 casas) */
+function largestRemainder(values: number[]): number[] {
+  const total = values.reduce((s, v) => s + v, 0)
+  if (total === 0 || values.length === 0) return values.map(() => 0)
+  const raw = values.map(v => (v / total) * 100)
+  const floors = raw.map(v => Math.floor(v * 100) / 100)
+  const deficit = Math.round((100 - floors.reduce((s, v) => s + v, 0)) * 100)
+  const order = raw
+    .map((v, i) => ({ i, frac: (v * 100) - Math.floor(v * 100) }))
+    .sort((a, b) => b.frac - a.frac)
+  const result = [...floors]
+  for (let k = 0; k < deficit && k < order.length; k++)
+    result[order[k].i] = parseFloat((result[order[k].i] + 0.01).toFixed(2))
+  return result
+}
+
 function buildLinksPreview(obra: CwrObra): LinkPreview[] {
   const swrs = obra.titulares.filter(t => t.tipo === 'SWR')
   const owrs = obra.titulares.filter(t => t.tipo === 'OWR' || t.tipo === 'OPU')
@@ -527,13 +543,17 @@ function ObraRow({ obra }: { obra: CwrObra }) {
               E: 'text-amber-300', AM: 'text-emerald-300', SE: 'text-rose-300',
               AQ: 'text-teal-300',
             }
-            // Analítico MEC: soma pr_pct de todos os participantes controlados para proporcionar a 100%
-            const totalControlledPct = links.reduce((sum, lnk) => {
-              if (lnk.externo) return sum
-              const a = lnk.autor.controlado ? (lnk.autor.pr_pct || 0) : 0
-              const e = lnk.editoras.reduce((s: number, ed: CwrTitular) => s + (ed.controlado ? (ed.pr_pct || 0) : 0), 0)
-              return sum + a + e
-            }, 0)
+            // Pré-computa MEC analítico com largest-remainder (garante soma = 100,00%)
+            const ctrlItems: Array<{ li: number; code: string; pr_pct: number }> = []
+            links.forEach((lnk, li) => {
+              if (lnk.externo) return
+              if (lnk.autor.controlado) ctrlItems.push({ li, code: 'a', pr_pct: lnk.autor.pr_pct || 0 })
+              lnk.editoras.forEach((ed, ei) => {
+                if (ed.controlado) ctrlItems.push({ li, code: `e${ei}`, pr_pct: ed.pr_pct || 0 })
+              })
+            })
+            const mecVals = largestRemainder(ctrlItems.map(c => c.pr_pct))
+            const mecMap = new Map(ctrlItems.map((c, i) => [`${c.li}_${c.code}`, mecVals[i]]))
             return (
               <div>
               <div className="overflow-x-auto">
@@ -568,13 +588,11 @@ function ObraRow({ obra }: { obra: CwrObra }) {
                       return rows.map(({ t, code, li: linkIdx }, ri) => {
                         const sint = modoView === 'sintetico' ? calcSintetico(link, t) : null
                         const execPct = sint ? sint.execPub : t.pr_pct
-                        // Analítico MEC: participante controlado → pr_pct proporcional a 100%; não controlado → 0%
+                        // Analítico MEC: usa mecMap (largest-remainder); não controlado → 0%
+                        const mecKey = ri === 0 ? `${li}_a` : `${li}_e${ri - 1}`
                         const mecPct = sint
                           ? sint.fono
-                          : (!t.controlado ? 0
-                            : totalControlledPct > 0
-                              ? parseFloat(((t.pr_pct / totalControlledPct) * 100).toFixed(2))
-                              : t.pr_pct)
+                          : (!t.controlado ? 0 : (mecMap.get(mecKey) ?? 0))
                         return (
                           <tr key={`${li}-${ri}`}
                             className={`border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors ${
