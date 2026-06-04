@@ -144,8 +144,22 @@ export async function saveObrasToSupabase(
       }
     }
 
-    // ── 4. Upsert obras ─────────────────────────────────────────────────────
+    // ── 4. Upsert obras — busca IDs existentes primeiro para evitar duplicatas ─
+    const codigos = obras.map(o => o.codigo).filter(Boolean)
+    const { data: existingObras } = await sb
+      .from('obras')
+      .select('id, codigo_obra')
+      .eq('tenant_id', tenantId)
+      .in('codigo_obra', codigos)
+    const existingObraMap = new Map<string, string>()
+    if (existingObras) {
+      for (const r of existingObras as any[]) {
+        if (r.codigo_obra && r.id) existingObraMap.set(r.codigo_obra, r.id)
+      }
+    }
+
     const obrasData = obras.map(o => ({
+      ...(existingObraMap.has(o.codigo) ? { id: existingObraMap.get(o.codigo) } : {}),
       tenant_id: tenantId!,
       titulo: o.titulo,
       titulo_alternativo: o.titulo_original ?? null,
@@ -156,7 +170,6 @@ export async function saveObrasToSupabase(
       origem_cadastro: 'migracao',
       status_iswc: o.iswc ? 'recebido' : 'pendente',
       observacoes: o.observacoes ?? null,
-      // campos migration 012
       codigo_interno_legado: o.codigo_interno_legado ?? null,
       codigo_obra_cwr_original: o.codigo_obra_cwr_original ?? null,
       backoffice_status: 'nao_enviada',
@@ -165,7 +178,7 @@ export async function saveObrasToSupabase(
 
     const { data: insertedObras, error: oErr } = await sb
       .from('obras')
-      .upsert(obrasData, { onConflict: 'tenant_id,codigo_obra', ignoreDuplicates: false })
+      .upsert(obrasData, { onConflict: 'id', ignoreDuplicates: false })
       .select('id, codigo_obra')
 
     if (oErr) {
