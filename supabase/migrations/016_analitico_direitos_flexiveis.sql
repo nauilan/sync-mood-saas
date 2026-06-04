@@ -173,7 +173,11 @@ CREATE TABLE IF NOT EXISTS obras_analitico (
   titular_id              UUID REFERENCES titulares(id) ON DELETE SET NULL,
   editora_id              UUID REFERENCES editoras(id) ON DELETE SET NULL,
   nome_participante       TEXT NOT NULL,
-  tipo_participante_id    UUID NOT NULL REFERENCES tipos_participante(id),
+
+  -- Tipo do participante: código textual (ex: 'autor', 'editora_administrada')
+  -- Corresponde a tipos_participante.codigo — sem FK para performance de insert em lote.
+  -- Validação semântica feita pela bridge; integridade via tipos_participante.codigo UNIQUE.
+  tipo_participante_codigo TEXT NOT NULL DEFAULT 'outro',
 
   -- Percentuais
   -- percentual_sobre_obra: o que move o dinheiro no CC Obra
@@ -233,7 +237,7 @@ CREATE INDEX IF NOT EXISTS idx_analitico_link          ON obras_analitico(obra_l
 CREATE INDEX IF NOT EXISTS idx_analitico_link_origem   ON obras_analitico(obra_link_origem_id);
 CREATE INDEX IF NOT EXISTS idx_analitico_titular       ON obras_analitico(titular_id);
 CREATE INDEX IF NOT EXISTS idx_analitico_editora       ON obras_analitico(editora_id);
-CREATE INDEX IF NOT EXISTS idx_analitico_tipo          ON obras_analitico(tipo_participante_id);
+CREATE INDEX IF NOT EXISTS idx_analitico_tipo          ON obras_analitico(tipo_participante_codigo);
 CREATE INDEX IF NOT EXISTS idx_analitico_direito       ON obras_analitico(tipo_direito_id);
 CREATE INDEX IF NOT EXISTS idx_analitico_territorio    ON obras_analitico(territorio);
 CREATE INDEX IF NOT EXISTS idx_analitico_status        ON obras_analitico(status_calculo);
