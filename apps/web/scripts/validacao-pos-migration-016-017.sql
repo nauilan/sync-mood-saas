@@ -164,13 +164,13 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
--- 9b. Inserir tipo de participante de teste
+-- 9b. Inserir tipo de participante de teste (sem conflito com seeds da 016)
 INSERT INTO tipos_participante (id, codigo, nome)
 VALUES
   ('00000000-0000-0000-0000-000000000010', 'autor',                  'Autor'),
   ('00000000-0000-0000-0000-000000000011', 'editora_administrada',   'Editora Administrada'),
   ('00000000-0000-0000-0000-000000000012', 'editora_administradora', 'Editora Administradora')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (codigo) DO NOTHING;
 
 -- 9c. Verificar se analítico de uma obra existe
 -- (substitua pelo ID de uma obra real do banco)
