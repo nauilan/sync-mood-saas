@@ -420,8 +420,8 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                   { label: 'Cód. CWR Original', key: 'codigo_obra_cwr_original', value: obra.codigo_obra_cwr_original || '—', mono: true, editable: true },
                   { label: 'Título Alternativo', key: 'titulo_alternativo', value: obra.titulo_alternativo || '—', editable: true },
                   { label: 'Subtítulo', key: 'subtitulo', value: obra.subtitulo || '—', editable: true },
-                  { label: 'Idioma', key: 'idioma', value: obra.idioma || '—', editable: true },
-                  { label: 'Gênero', key: 'genero', value: obra.genero || '—', editable: true },
+                  { label: 'Idioma', key: 'idioma', value: obra.idioma || '—', editable: true, tipo: 'idioma' },
+                  { label: 'Gênero', key: 'genero', value: obra.genero || '—', editable: true, tipo: 'genero' },
                   { label: 'Ano de Criação', key: 'ano_criacao', value: obra.ano_criacao || '—', editable: true },
                   { label: 'Duração', key: 'duracao', value: obra.duracao || '—', editable: true },
                   { label: 'ISWC', key: 'iswc', value: obra.iswc || 'Pendente', mono: true, editable: true },
@@ -432,11 +432,77 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                   <div key={item.label} className="bg-white/[0.03] rounded-xl p-3 space-y-0.5">
                     <p className="text-[10px] text-white/30 uppercase tracking-wide">{item.label}</p>
                     {isEditing && item.editable && item.key ? (
+                      item.tipo === 'idioma' ? (
+                        editData['__idioma_custom__'] ? (
+                          <input
+                            autoFocus
+                            value={editData[item.key] ?? ''}
+                            placeholder="Digite o idioma…"
+                            onChange={e => setEditData((prev: any) => ({ ...prev, [item.key]: e.target.value }))}
+                            onBlur={() => setEditData((prev: any) => ({ ...prev, __idioma_custom__: false }))}
+                            className="w-full bg-white/5 border border-violet-500/30 rounded-lg px-2 py-1 text-sm text-white/90 outline-none focus:border-violet-400 transition-colors"
+                          />
+                        ) : (
+                        <select
+                          value={editData[item.key] ?? ''}
+                          onChange={e => {
+                            if (e.target.value === '__outro__') {
+                              setEditData((prev: any) => ({ ...prev, [item.key]: '', __idioma_custom__: true }))
+                            } else {
+                              setEditData((prev: any) => ({ ...prev, [item.key]: e.target.value }))
+                            }
+                          }}
+                          className="w-full bg-white/5 border border-violet-500/30 rounded-lg px-2 py-1 text-sm text-white/90 outline-none focus:border-violet-400 transition-colors"
+                        >
+                          <option value="">— selecionar —</option>
+                          {['PT - Português','EN - Inglês','ES - Espanhol','FR - Francês','IT - Italiano','DE - Alemão','JA - Japonês','ZH - Chinês','AR - Árabe'].map(o => (
+                            <option key={o} value={o}>{o}</option>
+                          ))}
+                          {editData[item.key] && !['PT - Português','EN - Inglês','ES - Espanhol','FR - Francês','IT - Italiano','DE - Alemão','JA - Japonês','ZH - Chinês','AR - Árabe',''].includes(editData[item.key]) && (
+                            <option value={editData[item.key]}>{editData[item.key]}</option>
+                          )}
+                          <option value="__outro__">+ Incluir novo…</option>
+                        </select>
+                        )
+                      ) : item.tipo === 'genero' ? (
+                        editData['__genero_custom__'] ? (
+                          <input
+                            autoFocus
+                            value={editData[item.key] ?? ''}
+                            placeholder="Digite o gênero…"
+                            onChange={e => setEditData((prev: any) => ({ ...prev, [item.key]: e.target.value }))}
+                            onBlur={() => setEditData((prev: any) => ({ ...prev, __genero_custom__: false }))}
+                            className="w-full bg-white/5 border border-violet-500/30 rounded-lg px-2 py-1 text-sm text-white/90 outline-none focus:border-violet-400 transition-colors"
+                          />
+                        ) : (
+                          <select
+                            value={editData[item.key] ?? ''}
+                            onChange={e => {
+                              if (e.target.value === '__outro__') {
+                                setEditData((prev: any) => ({ ...prev, [item.key]: '', __genero_custom__: true }))
+                              } else {
+                                setEditData((prev: any) => ({ ...prev, [item.key]: e.target.value }))
+                              }
+                            }}
+                            className="w-full bg-white/5 border border-violet-500/30 rounded-lg px-2 py-1 text-sm text-white/90 outline-none focus:border-violet-400 transition-colors"
+                          >
+                            <option value="">— selecionar —</option>
+                            {['Sertanejo','Forró','Pagode','Samba','Funk','Axé','MPB','Rock','Pop','Gospel','Hip-Hop','Reggae','Bossa Nova','Baião','Jazz','Blues','Eletrônica','Infantil','Clássico'].map(o => (
+                              <option key={o} value={o}>{o}</option>
+                            ))}
+                            {editData[item.key] && !['Sertanejo','Forró','Pagode','Samba','Funk','Axé','MPB','Rock','Pop','Gospel','Hip-Hop','Reggae','Bossa Nova','Baião','Jazz','Blues','Eletrônica','Infantil','Clássico',''].includes(editData[item.key]) && (
+                              <option value={editData[item.key]}>{editData[item.key]}</option>
+                            )}
+                            <option value="__outro__">+ Incluir novo…</option>
+                          </select>
+                        )
+                      ) : (
                       <input
                         value={editData[item.key] ?? ''}
                         onChange={e => setEditData((prev: any) => ({ ...prev, [item.key]: e.target.value }))}
                         className={`w-full bg-white/5 border border-violet-500/30 rounded-lg px-2 py-1 text-sm text-white/90 outline-none focus:border-violet-400 transition-colors ${item.mono ? 'font-mono' : ''}`}
                       />
+                      )
                     ) : (
                       <p className={`text-sm text-white/80 font-medium ${item.mono ? 'font-mono' : ''}`}>
                         {item.value}
