@@ -496,17 +496,11 @@ tfoot td{background:#f7f7f7;font-weight:bold}
               )
               const hasE = lt.some((x: any) => { const p=(x.papel??'').toUpperCase(); return p==='E'||p==='AQ'||x.papel==='editora_original' })
               const papel = (t.papel ?? '').toUpperCase()
-              // Fono do link = soma dos participantes não-OWR (cadeia controlada)
-              const linkFono = () => {
-                const cadeia = lt.filter((x: any) =>
-                  !PAPEIS_AUTOR_SET.includes(x.papel ?? '') || !isOwrLink([x])
+              // Fono sintético do link = soma de toda a cadeia (usa exec pública como base confiável)
+              const linkFono = () =>
+                parseFloat(
+                  lt.reduce((acc: number, x: any) => acc + (x.percentual_exec_publica ?? x.percentual ?? 0), 0).toFixed(2)
                 )
-                const s = cadeia.reduce((acc: number, x: any) => acc + (x.percentual_fonomecanico ?? 0), 0)
-                if (s > 0) return parseFloat(s.toFixed(2))
-                return parseFloat(
-                  cadeia.reduce((acc: number, x: any) => acc + (x.percentual_exec_publica ?? x.percentual ?? 0), 0).toFixed(2)
-                )
-              }
               if (hasAM) {
                 if (papel === 'AM' || t.papel === 'administradora') return linkFono()
                 return 0
