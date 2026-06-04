@@ -561,7 +561,10 @@ function ObraRow({ obra }: { obra: CwrObra }) {
                       return rows.map(({ t, code, li: linkIdx }, ri) => {
                         const sint = modoView === 'sintetico' ? calcSintetico(link, t) : null
                         const execPct = sint ? sint.execPub : t.pr_pct
-                        const mecPct  = sint ? sint.fono    : t.mr_pct
+                        // Analítico: participante não controlado → 0% em MEC/Digital/Sync (regra geral)
+                        const mecPct = sint
+                          ? sint.fono
+                          : (!t.controlado ? 0 : (t.mr_pct > 0 ? t.mr_pct : t.pr_pct))
                         return (
                           <tr key={`${li}-${ri}`}
                             className={`border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors ${
