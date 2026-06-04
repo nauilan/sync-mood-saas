@@ -115,6 +115,10 @@ export interface Obra {
   _fonogramas_count?: number
   _links_count?: number
   _percentual_controlado?: number  // soma dos links controlados
+  /** Intérpretes extraídos do CWR (PER records), separados por '; ' */
+  _performers?: string
+  /** ISRCs extraídos do CWR (REC records), separados por '; ' */
+  _isrcs?: string
 }
 
 /** Mapeamento de obra com BackOffice — tabela separada para histórico completo */

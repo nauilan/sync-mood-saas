@@ -442,12 +442,33 @@ export default function TitularesPage() {
   const [showFilters, setShowFilters] = useState(false)
 
   // Carrega titulares: Supabase → localStorage → mock
-  const { data: allTitulares } = useSupabaseQuery<TitularComDados>({
+  const { data: rawTitulares } = useSupabaseQuery<TitularComDados>({
     table: 'titulares',
     storeKey: STORE_KEYS.titulares,
     fallback: MOCK_TITULARES,
     orderBy: { column: 'nome_completo', ascending: true },
   })
+  // Normaliza campos: banco usa 'pessoa' e 'status', o tipo usa 'tipo_pessoa' e 'ativo'
+  const allTitulares = useMemo(() => rawTitulares.map((t: any) => ({
+    ...t,
+    tipo_pessoa: t.tipo_pessoa ?? t.pessoa ?? 'PF',
+    ativo: t.ativo !== undefined ? t.ativo : (t.status === 'ativo'),
+    // nome via flat columns (schema 004) ou sub-tabelas (schema 00100)
+    _pf: t._pf ?? (t.tipo_pessoa === 'PF' || t.pessoa === 'PF' ? {
+      nome_completo: t.nome_completo ?? '',
+      cpf: t.cpf_cnpj ?? null,
+      ipi: t.codigo_ipi ?? t.ipi ?? null,
+      cae: t.codigo_cae ?? null,
+      nome_artistico_principal: t.nome_artistico ?? null,
+    } : null),
+    _pj: t._pj ?? (t.tipo_pessoa === 'PJ' || t.pessoa === 'PJ' ? {
+      razao_social: t.nome_completo ?? '',
+      cnpj: t.cpf_cnpj ?? null,
+      nome_fantasia: t.nome_artistico ?? null,
+      ipi: t.codigo_ipi ?? t.ipi ?? null,
+      cae: t.codigo_cae ?? null,
+    } : null),
+  })), [rawTitulares])
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim()
@@ -469,7 +490,7 @@ export default function TitularesPage() {
         || ipi.includes(q)
 
       const matchPessoa = !filterPessoa || t.tipo_pessoa === filterPessoa
-      const matchFuncao = !filterFuncao || t._funcoes?.some(f => f.funcao === filterFuncao)
+      const matchFuncao = !filterFuncao || t._funcoes?.some((f: any) => f.funcao === filterFuncao)
       const matchEditora = !filterEditora || t.editora_id === filterEditora
       const matchStatus = !filterStatus || (filterStatus === 'ativo' ? t.ativo : !t.ativo)
 
@@ -635,7 +656,7 @@ export default function TitularesPage() {
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
                       <div className="flex flex-wrap gap-1">
-                        {(t._funcoes ?? []).slice(0, 2).map(f => (
+                        {(t._funcoes ?? []).slice(0, 2).map((f: any) => (
                           <Badge key={f.id} variant={badge.color} className="text-[10px] px-1.5 py-0">{f.funcao}</Badge>
                         ))}
                         {(t._funcoes ?? []).length > 2 && (

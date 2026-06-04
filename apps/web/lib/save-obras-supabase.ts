@@ -106,7 +106,7 @@ export async function saveObrasToSupabase(
       // campos de migration 012 (cast para any pois database.types.ts ainda não os inclui)
       ...(t.codigo_interno_legado ? { codigo_interno_legado: t.codigo_interno_legado } : {}),
       ...(t.codigo_sequence_cwr   ? { codigo_sequence_cwr: t.codigo_sequence_cwr }   : {}),
-    }))
+    } as any))
 
     if (titularesData.length > 0) {
       const { error: tErr, count } = await sb
