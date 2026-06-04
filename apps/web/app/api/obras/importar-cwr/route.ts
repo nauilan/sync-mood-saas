@@ -1,52 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
-const sanitize = (v: string | undefined) => (v ?? '').replace(/^\uFEFF/, '').trim()
-const SUPABASE_URL = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL)
-const ANON_KEY     = sanitize(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY)
-const SERVICE_KEY  = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY)
-
-function getAuthToken(req: NextRequest): string | null {
-  const auth = req.headers.get('authorization')
-  if (auth?.startsWith('Bearer ')) return auth.slice(7)
-  for (const cookie of req.cookies.getAll()) {
-    if (cookie.name.includes('auth-token') && !cookie.name.includes('.')) {
-      try {
-        const p = JSON.parse(decodeURIComponent(cookie.value))
-        return p?.access_token ?? null
-      } catch { /* ignorar */ }
-    }
-  }
-  return null
-}
-
-async function sbGet(path: string, adminKey: string) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: { apikey: adminKey, Authorization: `Bearer ${adminKey}` },
-  })
-  return r.ok ? r.json() : []
-}
-
-async function sbPost(path: string, body: unknown, adminKey: string, prefer = 'resolution=ignore-duplicates') {
-  return fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    method: 'POST',
-    headers: {
-      apikey: adminKey,
-      Authorization: `Bearer ${adminKey}`,
-      'Content-Type': 'application/json',
-      Prefer: prefer,
-    },
-    body: JSON.stringify(body),
-  })
+function getAdminClient() {
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '').trim()
+  if (!url || !key) return null
+  return createClient(url, key, { auth: { persistSession: false } })
 }
 
 // ── POST /api/obras/importar-cwr ────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  if (!SUPABASE_URL || !ANON_KEY) {
+  const sb = getAdminClient()
+  if (!sb) {
     return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
   }
-
-  // Usa service role para garantir acesso mesmo sem auth cookie
-  const adminKey = SERVICE_KEY || getAuthToken(req) || ANON_KEY
 
   let body: {
     obras: Array<Record<string, unknown>>
@@ -60,20 +27,7 @@ export async function POST(req: NextRequest) {
   let tenantId = body.tenant_id ?? null
 
   if (!tenantId) {
-    const token = getAuthToken(req)
-    if (token && token !== ANON_KEY) {
-      try {
-        const userId = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString()).sub
-        if (userId) {
-          const rows = await sbGet(`usuarios?auth_user_id=eq.${userId}&select=tenant_id&limit=1`, adminKey)
-          tenantId = rows?.[0]?.tenant_id ?? null
-        }
-      } catch { /* ignorar */ }
-    }
-  }
-
-  if (!tenantId) {
-    const rows = await sbGet(`tenants?select=id&limit=1`, adminKey)
+    const { data: rows } = await sb.from('tenants').select('id').limit(1)
     tenantId = rows?.[0]?.id ?? null
   }
 
@@ -94,40 +48,37 @@ export async function POST(req: NextRequest) {
   const todosTitulares = body.titulares ?? []
 
   if (todosTitulares.length > 0) {
-    // Coletar todos os codigos_internos que vêm no CWR
     const codigosNoCwr = todosTitulares
       .map((t: Record<string, unknown>) =>
-        String(t.codigo_interno_legado ?? t.sequence_code ?? t.codigo_sequence_cwr ?? '').trim()
+        String(t.codigo_interno_legado ?? t.codigo_sequence_cwr ?? '').trim()
       )
       .filter(Boolean)
 
-    // Buscar quais já existem no banco por codigo_interno_legado
     let jaExistemCodigos = new Set<string>()
     if (codigosNoCwr.length > 0) {
-      try {
-        const filtro = codigosNoCwr.map(c => `codigo_interno_legado.eq.${encodeURIComponent(c)}`).join(',')
-        const existentes: Array<{ codigo_interno_legado: string }> = await sbGet(
-          `titulares?tenant_id=eq.${tenantId}&select=codigo_interno_legado&or=(${filtro})`,
-          adminKey
-        )
-        jaExistemCodigos = new Set(existentes.map(e => e.codigo_interno_legado?.trim()).filter(Boolean))
-      } catch { /* ignorar — insere tudo e ignora duplicatas */ }
+      const { data: existentes } = await sb
+        .from('titulares')
+        .select('codigo_interno_legado')
+        .eq('tenant_id', tenantId)
+        .in('codigo_interno_legado', codigosNoCwr)
+      jaExistemCodigos = new Set(
+        (existentes ?? []).map((e: any) => e.codigo_interno_legado?.trim()).filter(Boolean)
+      )
     }
 
-    // Separar quem já existe e quem é novo
     const novos = todosTitulares.filter((t: Record<string, unknown>) => {
-      const cod = String(t.codigo_interno_legado ?? t.sequence_code ?? t.codigo_sequence_cwr ?? '').trim()
-      return !cod || !jaExistemCodigos.has(cod) // sem código = inserir tbm
+      const cod = String(t.codigo_interno_legado ?? t.codigo_sequence_cwr ?? '').trim()
+      return !cod || !jaExistemCodigos.has(cod)
     })
 
     result.titulares_ja_existiam = todosTitulares.length - novos.length
 
     if (novos.length > 0) {
-      const payload = novos.map((t: Record<string, unknown>) => {
+      const payload = novos.map((t: Record<string, unknown>, idx: number) => {
         const isPJ = String(t.tipo ?? '').includes('juridica') ||
                      ['E', 'AM', 'AQ', 'SE', 'ES'].includes(String(t.papel ?? '').trim().toUpperCase())
-        const codigoCwr = String(t.codigo_interno_legado ?? t.sequence_code ?? t.codigo_sequence_cwr ?? '').trim()
-        const codigoTitular = codigoCwr || `CWR-${Date.now().toString(36).slice(-4).toUpperCase()}`
+        const codigoCwr = String(t.codigo_interno_legado ?? t.codigo_sequence_cwr ?? '').trim()
+        const codigoTitular = codigoCwr || `CWR-${Date.now().toString(36).slice(-4).toUpperCase()}-${idx}`
         return {
           tenant_id:             tenantId,
           codigo_titular:        codigoTitular,
@@ -138,18 +89,16 @@ export async function POST(req: NextRequest) {
           codigo_ipi:            t.ipi ?? null,
           status:                'ativo',
           codigo_interno_legado: codigoCwr || null,
-          codigo_sequence_cwr:   String(t.codigo_sequence_cwr ?? t.sequence_code ?? '').trim() || null,
+          codigo_sequence_cwr:   String(t.codigo_sequence_cwr ?? '').trim() || null,
           origem_importacao:     'cwr',
         }
       })
 
-      const r = await sbPost(`titulares`, payload, adminKey, 'resolution=ignore-duplicates,count=exact')
-      if (!r.ok) {
-        const err = await r.json()
-        result.errors.push(`Titulares: ${JSON.stringify(err)}`)
-      } else {
-        result.titulares_criados = novos.length
-      }
+      const { error: tErr } = await sb
+        .from('titulares')
+        .upsert(payload as any, { onConflict: 'tenant_id,codigo_titular', ignoreDuplicates: true })
+      if (tErr) result.errors.push(`Titulares: ${tErr.message}`)
+      else result.titulares_criados = novos.length
     }
 
     // ── 2. Pré-cadastrar editoras (PJ) também na tabela `editoras` ─────────────
@@ -160,69 +109,66 @@ export async function POST(req: NextRequest) {
     })
 
     if (editolasCwr.length > 0) {
-      // Buscar editoras já existentes por codigo_publisher_cwr
       const codigosEd = editolasCwr
         .map((t: Record<string, unknown>) =>
-          String(t.codigo_interno_legado ?? t.sequence_code ?? '').trim()
+          String(t.codigo_interno_legado ?? '').trim()
         )
         .filter(Boolean)
 
       let jaExistemEd = new Set<string>()
       if (codigosEd.length > 0) {
-        try {
-          const filtroEd = codigosEd.map(c => `codigo_publisher_cwr.eq.${encodeURIComponent(c)}`).join(',')
-          const existentesEd: Array<{ codigo_publisher_cwr: string }> = await sbGet(
-            `editoras?tenant_id=eq.${tenantId}&select=codigo_publisher_cwr&or=(${filtroEd})`,
-            adminKey
-          )
-          // Também verificar por nome
-          const nomesEd = editolasCwr.map((t: Record<string, unknown>) => String(t.nome ?? '').trim().toUpperCase())
-          const filtroNome = nomesEd.map(n => `nome_fantasia.ilike.${encodeURIComponent(n)}`).join(',')
-          const existentesNome: Array<{ nome_fantasia: string }> = await sbGet(
-            `editoras?tenant_id=eq.${tenantId}&select=nome_fantasia&or=(${filtroNome})`,
-            adminKey
-          )
-          jaExistemEd = new Set([
-            ...existentesEd.map(e => e.codigo_publisher_cwr?.trim()).filter(Boolean),
-          ])
-          const jaExistemNomes = new Set(existentesNome.map(e => e.nome_fantasia?.trim().toUpperCase()).filter(Boolean))
+        const { data: existentesEd } = await sb
+          .from('editoras')
+          .select('codigo_publisher_cwr')
+          .eq('tenant_id', tenantId)
+          .in('codigo_publisher_cwr', codigosEd)
+        jaExistemEd = new Set(
+          (existentesEd ?? []).map((e: any) => e.codigo_publisher_cwr?.trim()).filter(Boolean)
+        )
+      }
 
-          // Filtrar novas editoras
-          const novasEditoras = editolasCwr.filter((t: Record<string, unknown>) => {
-            const cod  = String(t.codigo_interno_legado ?? t.sequence_code ?? '').trim()
-            const nome = String(t.nome ?? '').trim().toUpperCase()
-            return (!cod || !jaExistemEd.has(cod)) && (!nome || !jaExistemNomes.has(nome))
-          })
+      const nomesEd = editolasCwr.map((t: Record<string, unknown>) => String(t.nome ?? '').trim().toUpperCase())
+      let jaExistemNomes = new Set<string>()
+      if (nomesEd.length > 0) {
+        const { data: existentesNome } = await sb
+          .from('editoras')
+          .select('nome_fantasia')
+          .eq('tenant_id', tenantId)
+          .in('nome_fantasia', nomesEd)
+        jaExistemNomes = new Set(
+          (existentesNome ?? []).map((e: any) => e.nome_fantasia?.trim().toUpperCase()).filter(Boolean)
+        )
+      }
 
-          result.editoras_ja_existiam = editolasCwr.length - novasEditoras.length
+      const novasEditoras = editolasCwr.filter((t: Record<string, unknown>) => {
+        const cod  = String(t.codigo_interno_legado ?? '').trim()
+        const nome = String(t.nome ?? '').trim().toUpperCase()
+        return (!cod || !jaExistemEd.has(cod)) && (!nome || !jaExistemNomes.has(nome))
+      })
 
-          if (novasEditoras.length > 0) {
-            const edPayload = novasEditoras.map((t: Record<string, unknown>) => {
-              const papel = String(t.papel ?? '').trim().toUpperCase()
-              return {
-                tenant_id:            tenantId,
-                razao_social:         String(t.nome ?? '').trim(),
-                nome_fantasia:        String(t.nome ?? '').trim(),
-                status:               'ativo',
-                codigo_ipi:           t.ipi ?? null,
-                codigo_publisher_cwr: String(t.codigo_interno_legado ?? t.sequence_code ?? '').trim() || null,
-                tipo_editora:         papel === 'AM' ? 'master' : 'administrada',
-                controlada:           papel === 'AM',
-                origem_importacao:    'cwr',
-              }
-            })
+      result.editoras_ja_existiam = editolasCwr.length - novasEditoras.length
 
-            const rEd = await sbPost(`editoras`, edPayload, adminKey, 'resolution=ignore-duplicates,count=exact')
-            if (!rEd.ok) {
-              const err = await rEd.json()
-              result.errors.push(`Editoras: ${JSON.stringify(err)}`)
-            } else {
-              result.editoras_criadas = novasEditoras.length
-            }
+      if (novasEditoras.length > 0) {
+        const edPayload = novasEditoras.map((t: Record<string, unknown>) => {
+          const papel = String(t.papel ?? '').trim().toUpperCase()
+          return {
+            tenant_id:            tenantId,
+            razao_social:         String(t.nome ?? '').trim(),
+            nome_fantasia:        String(t.nome ?? '').trim(),
+            status:               'ativo',
+            codigo_ipi:           t.ipi ?? null,
+            codigo_publisher_cwr: String(t.codigo_interno_legado ?? '').trim() || null,
+            tipo_editora:         papel === 'AM' ? 'master' : 'administrada',
+            controlada:           papel === 'AM',
+            origem_importacao:    'cwr',
           }
-        } catch (e) {
-          result.errors.push(`Editoras check: ${String(e)}`)
-        }
+        })
+
+        const { error: eErr } = await sb
+          .from('editoras')
+          .upsert(edPayload as any, { ignoreDuplicates: true })
+        if (eErr) result.errors.push(`Editoras: ${eErr.message}`)
+        else result.editoras_criadas = novasEditoras.length
       }
     }
   }
@@ -245,13 +191,12 @@ export async function POST(req: NextRequest) {
       origem_importacao:        'cwr',
     }))
 
-    const r = await sbPost(`obras`, obrasData, adminKey, 'resolution=merge-duplicates,return=representation')
-    const oData = await r.json()
-    if (!r.ok) {
-      result.errors.push(`Obras: ${JSON.stringify(oData)}`)
-    } else {
-      result.obras_saved = Array.isArray(oData) ? oData.length : obrasData.length
-    }
+    const { data: oData, error: oErr } = await sb
+      .from('obras')
+      .upsert(obrasData as any, { onConflict: 'tenant_id,codigo_obra', ignoreDuplicates: false })
+      .select('id')
+    if (oErr) result.errors.push(`Obras: ${oErr.message}`)
+    else result.obras_saved = (oData ?? []).length
   }
 
   return NextResponse.json(result, {
