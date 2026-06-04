@@ -1,0 +1,78 @@
+name: Backup Supabase (Diário)
+
+# Executa todo dia às 03h BRT (06h UTC)
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 03:00 BRT
+  workflow_dispatch:        # Execução manual pelo GitHub
+
+jobs:
+  backup:
+    name: pg_dump → release privado
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── 1. Instala ferramentas ──────────────────────────────────
+      - name: Instalar postgresql-client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+
+      # ── 2. Dump do banco ────────────────────────────────────────
+      - name: Fazer pg_dump
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          FILENAME="sync-mood-backup-${TIMESTAMP}.sql.gz"
+          echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
+
+          pg_dump \
+            --host="${{ secrets.SUPABASE_DB_HOST }}" \
+            --port=5432 \
+            --username=postgres \
+            --dbname=postgres \
+            --no-owner \
+            --no-acl \
+            --format=plain \
+          | gzip > "${FILENAME}"
+
+          echo "Tamanho do dump:"
+          ls -lh "${FILENAME}"
+
+      # ── 3. Upload como artifact (7 dias de retenção) ───────────
+      - name: Salvar como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-${{ env.FILENAME }}
+          path: ${{ env.FILENAME }}
+          retention-days: 7
+
+      # ── 4. Verifica integridade mínima ─────────────────────────
+      - name: Verificar dump
+        run: |
+          SIZE=$(stat -c%s "${{ env.FILENAME }}")
+          echo "Tamanho: ${SIZE} bytes"
+          if [ "${SIZE}" -lt 1024 ]; then
+            echo "ERRO: dump muito pequeno, possível falha."
+            exit 1
+          fi
+          echo "Backup OK: ${{ env.FILENAME }}"
+
+# ── CONFIGURAÇÃO NECESSÁRIA (Secrets no GitHub) ─────────────────
+#
+# Settings → Secrets and variables → Actions → New repository secret:
+#
+#   SUPABASE_DB_HOST     → db.<project-ref>.supabase.co
+#   SUPABASE_DB_PASSWORD → senha do usuário postgres
+#                          (Supabase Dashboard → Settings → Database → Database password)
+#
+# COMO OBTER O HOST:
+#   Supabase Dashboard → Settings → Database → Connection string
+#   Exemplo: db.abcdefghijklmnop.supabase.co
+#
+# RECOMENDADO — backup externo adicional no Cloudflare R2 ou AWS S3:
+#   Adicionar step com aws-cli ou rclone após o step 2.
+#   Exemplo (R2):
+#     rclone copy "${FILENAME}" r2:sync-mood-backups/

@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
-  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '').trim()
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()
   if (!url || !key) return null
   return createClient(url, key, { auth: { persistSession: false } })
 }
@@ -12,28 +12,37 @@ function getAdminClient() {
 export async function POST(req: NextRequest) {
   const sb = getAdminClient()
   if (!sb) {
-    return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
+    return NextResponse.json({ error: 'Supabase não configurado (service_role ausente)' }, { status: 503 })
   }
+
+  // ── Autenticar usuário via JWT ──────────────────────────────────────────────
+  const authHeader = req.headers.get('authorization') ?? ''
+  const token = authHeader.replace('Bearer ', '').trim()
+  if (!token) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  }
+  const { data: { user }, error: authErr } = await sb.auth.getUser(token)
+  if (authErr || !user) {
+    return NextResponse.json({ error: 'Token inválido ou expirado' }, { status: 401 })
+  }
+  const { data: usuario } = await sb.from('usuarios')
+    .select('tenant_id, role')
+    .eq('auth_user_id', user.id)
+    .single()
+  if (!usuario) {
+    return NextResponse.json({ error: 'Usuário não encontrado no sistema' }, { status: 403 })
+  }
+  if (!['master', 'admin', 'editora_administrada', 'atendimento'].includes(usuario.role)) {
+    return NextResponse.json({ error: 'Permissão insuficiente' }, { status: 403 })
+  }
+  const tenantId: string = usuario.tenant_id
 
   let body: {
     obras: Array<Record<string, unknown>>
     titulares: Array<Record<string, unknown>>
-    tenant_id?: string
   }
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'JSON inválido' }, { status: 400 }) }
-
-  // ── Resolver tenant_id ──────────────────────────────────────────────────────
-  let tenantId = body.tenant_id ?? null
-
-  if (!tenantId) {
-    const { data: rows } = await sb.from('tenants').select('id').limit(1)
-    tenantId = rows?.[0]?.id ?? null
-  }
-
-  if (!tenantId) {
-    return NextResponse.json({ error: 'Tenant não encontrado' }, { status: 400 })
-  }
 
   const result = {
     obras_saved: 0,
