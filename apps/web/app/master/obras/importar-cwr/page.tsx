@@ -527,6 +527,13 @@ function ObraRow({ obra }: { obra: CwrObra }) {
               E: 'text-amber-300', AM: 'text-emerald-300', SE: 'text-rose-300',
               AQ: 'text-teal-300',
             }
+            // Analítico MEC: soma pr_pct de todos os participantes controlados para proporcionar a 100%
+            const totalControlledPct = links.reduce((sum, lnk) => {
+              if (lnk.externo) return sum
+              const a = lnk.autor.controlado ? (lnk.autor.pr_pct || 0) : 0
+              const e = lnk.editoras.reduce((s: number, ed: CwrTitular) => s + (ed.controlado ? (ed.pr_pct || 0) : 0), 0)
+              return sum + a + e
+            }, 0)
             return (
               <div>
               <div className="overflow-x-auto">
@@ -561,10 +568,13 @@ function ObraRow({ obra }: { obra: CwrObra }) {
                       return rows.map(({ t, code, li: linkIdx }, ri) => {
                         const sint = modoView === 'sintetico' ? calcSintetico(link, t) : null
                         const execPct = sint ? sint.execPub : t.pr_pct
-                        // Analítico: participante não controlado → 0% em MEC/Digital/Sync (regra geral)
+                        // Analítico MEC: participante controlado → pr_pct proporcional a 100%; não controlado → 0%
                         const mecPct = sint
                           ? sint.fono
-                          : (!t.controlado ? 0 : (t.mr_pct > 0 ? t.mr_pct : t.pr_pct))
+                          : (!t.controlado ? 0
+                            : totalControlledPct > 0
+                              ? parseFloat(((t.pr_pct / totalControlledPct) * 100).toFixed(2))
+                              : t.pr_pct)
                         return (
                           <tr key={`${li}-${ri}`}
                             className={`border-b border-white/[0.04] hover:bg-white/[0.03] transition-colors ${

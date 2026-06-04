@@ -501,15 +501,20 @@ tfoot td{background:#f7f7f7;font-weight:bold}
               }
               return 0
             }
-            // Analítico: usa mr_pct; se 0, usa pr_pct como proxy (proporção CWR)
+            // Analítico MEC: soma exec pública de todos os participantes controlados para proporcionar a 100%
+            const totalCtrlExec = rows.reduce((s: number, r: any) => {
+              const lt2 = (links[r.li] as any)?.titulares ?? []
+              if (isOwrLink(lt2) || !r.t.controlado) return s
+              return s + (r.t.percentual_exec_publica ?? r.t.percentual ?? 0)
+            }, 0)
+            // Analítico: usa proporção da exec pública normalizada a 100% dentro da cadeia controlada
             const calcFono = (li: number, t: any) => {
               if (modoView === 'sintetico') return sinteticoFono(li, t)
-              // Participante não controlado → 0% em MEC/Digital/Sync (regra geral)
               const lt = (links[li] as any)?.titulares ?? []
               if (isOwrLink(lt)) return 0
               if (!t.controlado) return 0
-              const mec = t.percentual_fonomecanico ?? 0
-              return mec > 0 ? mec : (t.percentual_exec_publica ?? t.percentual ?? 0)
+              const execPct = t.percentual_exec_publica ?? t.percentual ?? 0
+              return totalCtrlExec > 0 ? parseFloat(((execPct / totalCtrlExec) * 100).toFixed(2)) : execPct
             }
             const calcExec = (t: any) => (t.percentual_exec_publica ?? t.percentual ?? 0)
             const sumExec = rows.reduce((s: number, r: any) => s + calcExec(r.t), 0)
