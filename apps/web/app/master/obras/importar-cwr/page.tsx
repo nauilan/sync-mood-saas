@@ -3,7 +3,7 @@
 import { useRef, useState, useCallback } from 'react'
 import {
   Upload, FileText, CheckCircle, AlertCircle, ChevronDown, ChevronUp,
-  Music, Users, Shield, X, Download, Info, Database, Mic2,
+  Music, Users, Shield, X, Download, Info, Database, Mic2, Building2, Loader2,
 } from 'lucide-react'
 import { parseCwr, labelPapel, detectarOffsetCwr } from '@/lib/cwr-parser'
 import type { CwrParseResult, CwrObra, CwrTitular } from '@/lib/cwr-parser'
@@ -12,7 +12,58 @@ import { upsertStore, registrarImportacao, deleteImportacao, getStore, STORE_KEY
 import type { ImportacaoLog } from '@/lib/store'
 import { saveObrasToSupabase, clearObrasFromSupabase } from '@/lib/save-obras-supabase'
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Botão: migrar editoras do CWR já importado ────────────────────────────────
+function MigrarEditorasBtn({ tenantId }: { tenantId: string }) {
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [msg, setMsg] = useState('')
+
+  const migrar = async () => {
+    setStatus('loading')
+    try {
+      const res = await fetch('/api/obras/migrar-editoras-cwr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenant_id: tenantId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Erro desconhecido')
+      setMsg(`${data.criadas} editora(s) criada(s) — ${data.ja_existiam ?? 0} já existiam`)
+      setStatus('done')
+    } catch (e: any) {
+      setMsg(e.message)
+      setStatus('error')
+    }
+  }
+
+  if (status === 'done') {
+    return (
+      <span className="flex items-center gap-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-xs text-emerald-400">
+        <CheckCircle className="w-3.5 h-3.5" /> {msg}
+      </span>
+    )
+  }
+  if (status === 'error') {
+    return (
+      <span className="flex items-center gap-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20 px-3 py-2 text-xs text-rose-400">
+        <AlertCircle className="w-3.5 h-3.5" /> {msg}
+      </span>
+    )
+  }
+
+  return (
+    <button
+      onClick={migrar}
+      disabled={status === 'loading'}
+      title="Cria pré-cadastros na tabela Editoras a partir dos titulares PJ já importados do CWR"
+      className="flex items-center gap-1.5 rounded-xl bg-violet-500/10 border border-violet-500/20 px-3 py-2 text-xs text-violet-300 hover:bg-violet-500/20 transition-colors disabled:opacity-50"
+    >
+      {status === 'loading'
+        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando...</>
+        : <><Building2 className="w-3.5 h-3.5" /> Gerar pré-cadastros de Editoras</>
+      }
+    </button>
+  )
+}
 
 function pctFmt(n: number) { return `${n.toFixed(2)}%` }
 
@@ -983,6 +1034,8 @@ export default function ImportarCwrPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* Botão: gerar pré-cadastros de editoras dos titulares já existentes */}
+          <MigrarEditorasBtn tenantId={typeof window !== 'undefined' ? (localStorage.getItem('sm_tenant_id') ?? '') : ''} />
           <button
             onClick={clearCwrData}
             disabled={limpandoCwr}
