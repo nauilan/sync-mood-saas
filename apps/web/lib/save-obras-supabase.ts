@@ -99,10 +99,10 @@ export async function saveObrasToSupabase(
     // onConflict usa (tenant_id, codigo_titular) — unique constraint real da tabela
     const titularesData = titulares.map((t, idx) => {
       const codigoCwr = String(
-        t.codigo_interno_legado ?? t.sequence_code ?? t.codigo_sequence_cwr ?? ''
+        t.codigo_interno_legado ?? t.codigo_sequence_cwr ?? ''
       ).trim()
       const codigoTitular = codigoCwr || `CWR-${Date.now().toString(36).slice(-4).toUpperCase()}-${idx}`
-      const isPJ = t.tipo === 'pessoa_juridica' || ['E','AM','AQ','SE','ES'].includes(String(t.papel ?? '').toUpperCase())
+      const isPJ = t.tipo === 'pessoa_juridica'
 
       return {
         tenant_id:      tenantId!,
