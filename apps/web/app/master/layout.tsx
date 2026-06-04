@@ -4,6 +4,7 @@ import { AppShell } from '@/components/layout/app-shell'
 import { MASTER_NAV } from '@/components/layout/nav-config'
 import { PerfilProvider } from '@/contexts/perfil-context'
 import { AlertasVencimento } from '@/components/ui/alertas-vencimento'
+import { TenantBootstrap } from '@/components/ui/tenant-bootstrap'
 
 const DEMO_MODE = true
 
@@ -11,6 +12,7 @@ export default async function MasterLayout({ children }: { children: React.React
   if (DEMO_MODE) {
     return (
       <PerfilProvider>
+        <TenantBootstrap />
         <AppShell nav={MASTER_NAV} role="master" userName="Marina Lopes" userInitials="ML">
           <AlertasVencimento />
           {children}
