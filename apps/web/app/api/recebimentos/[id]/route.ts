@@ -22,12 +22,14 @@ async function autenticar(req: NextRequest, sb: any): Promise<{ tenant_id: strin
 }
 
 // ── GET /api/recebimentos/[id] — detalhe ──────────────────────────────────────
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const sb = getAdminClient()
   if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
 
   const usuario = await autenticar(req, sb)
   if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  const { id } = await params
 
   const { data, error } = await sb
     .from('recebimentos')
@@ -36,7 +38,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       obra:obra_id ( id, titulo, codigo_interno_legado, iswc ),
       tipo_direito:tipo_direito_id ( id, codigo, nome )
     `)
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
 
@@ -46,7 +48,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const { data: movimentos } = await sb
     .from('cc_obras_movimentos')
     .select('*')
-    .eq('recebimento_id', params.id)
+    .eq('recebimento_id', id)
     .eq('tenant_id', usuario.tenant_id)
     .order('status_movimento', { ascending: true })
 
@@ -54,7 +56,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 // ── PUT /api/recebimentos/[id] — atualizar status/observações ────────────────
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const sb = getAdminClient()
   if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
 
@@ -63,6 +65,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   if (!['master', 'admin', 'financeiro'].includes(usuario.role)) {
     return NextResponse.json({ error: 'Permissão insuficiente' }, { status: 403 })
   }
+
+  const { id } = await params
 
   let body: Record<string, unknown>
   try { body = await req.json() }
@@ -78,7 +82,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const { data, error } = await sb
     .from('recebimentos')
     .update(update)
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .select()
     .single()
@@ -89,7 +93,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
 // ── POST /api/recebimentos/[id]/processar — executar CC Obra ──────────────────
 // Rota especial: /api/recebimentos/[id] com body action='processar'
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const sb = getAdminClient()
   if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
 
@@ -99,11 +103,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: 'Permissão insuficiente' }, { status: 403 })
   }
 
+  const { id } = await params
+
   // Buscar recebimento completo
   const { data: rec, error: recErr } = await sb
     .from('recebimentos')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
 
@@ -136,7 +142,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     await sb.from('recebimentos')
       .update({ status: novoStatus, updated_at: new Date().toISOString() })
-      .eq('id', params.id)
+      .eq('id', id)
 
     return NextResponse.json({ resultado })
   } catch (err: unknown) {

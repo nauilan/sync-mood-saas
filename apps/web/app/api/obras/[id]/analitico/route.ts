@@ -31,10 +31,10 @@ function supabase() {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const sb = supabase()
-  const obra_id = params.id
+  const { id: obra_id } = await params
 
   // ── Tenant ───────────────────────────────────────────────────────────────
   const authHeader = req.headers.get('authorization') ?? ''
@@ -318,10 +318,10 @@ export async function POST(
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const sb = supabase()
-  const obra_id = params.id
+  const { id: obra_id } = await params
 
   const authHeader = req.headers.get('authorization') ?? ''
   const token = authHeader.replace('Bearer ', '')
