@@ -95,51 +95,73 @@ export async function saveObrasToSupabase(
     }
 
     // ── 2. Upsert titulares ─────────────────────────────────────────────────
-    const titularesData = titulares.map(t => ({
-      tenant_id: tenantId!,
-      tipo: t.tipo === 'pessoa_juridica' ? 'editora' : 'autor',
-      nome_completo: t.nome,
-      pessoa: t.tipo === 'pessoa_juridica' ? 'PJ' : 'PF',
-      ipi: t.ipi ?? null,
-      codigo_ipi: t.ipi ?? null,
-      status: 'ativo',
-      // campos de migration 012 (cast para any pois database.types.ts ainda não os inclui)
-      ...(t.codigo_interno_legado ? { codigo_interno_legado: t.codigo_interno_legado } : {}),
-      ...(t.codigo_sequence_cwr   ? { codigo_sequence_cwr: t.codigo_sequence_cwr }   : {}),
-    } as any))
+    // codigo_titular = código CWR (HR01, ED01) ou gerado automaticamente
+    // onConflict usa (tenant_id, codigo_titular) — unique constraint real da tabela
+    const titularesData = titulares.map((t, idx) => {
+      const codigoCwr = String(
+        t.codigo_interno_legado ?? t.sequence_code ?? t.codigo_sequence_cwr ?? ''
+      ).trim()
+      const codigoTitular = codigoCwr || `CWR-${Date.now().toString(36).slice(-4).toUpperCase()}-${idx}`
+      const isPJ = t.tipo === 'pessoa_juridica' || ['E','AM','AQ','SE','ES'].includes(String(t.papel ?? '').toUpperCase())
+
+      return {
+        tenant_id:      tenantId!,
+        codigo_titular: codigoTitular,
+        tipo:           isPJ ? 'editora' : 'autor',
+        nome_completo:  String(t.nome ?? '').trim(),
+        pessoa:         isPJ ? 'PJ' : 'PF',
+        ipi:            t.ipi ?? null,
+        codigo_ipi:     t.ipi ?? null,
+        status:         'ativo',
+        // campos CWR (migration 012/014) — incluídos como any
+        ...(codigoCwr   ? { codigo_interno_legado: codigoCwr }          : {}),
+        ...(t.codigo_sequence_cwr ? { codigo_sequence_cwr: t.codigo_sequence_cwr } : {}),
+      } as any
+    })
 
     if (titularesData.length > 0) {
-      const { error: tErr, count } = await sb
+      // Primeiro: quais códigos já existem?
+      const codigos = titularesData.map((t: any) => t.codigo_titular).filter(Boolean)
+      const { data: existentes } = await sb
         .from('titulares')
-        .upsert(titularesData, {
-          onConflict: 'tenant_id,ipi',
-          ignoreDuplicates: false,
-          count: 'exact',
-        })
-      if (tErr) {
-        // ipi pode ser nulo; tentar sem constraint
-        const { error: tErr2, count: c2 } = await sb
+        .select('id, codigo_titular, ipi')
+        .eq('tenant_id', tenantId)
+        .in('codigo_titular', codigos)
+
+      const existentesCodigos = new Set((existentes ?? []).map((e: any) => e.codigo_titular))
+      const novos = titularesData.filter((t: any) => !existentesCodigos.has(t.codigo_titular))
+
+      result.titulares_saved = (existentes ?? []).length // já existiam
+
+      if (novos.length > 0) {
+        const { error: tErr, data: inserted } = await sb
           .from('titulares')
-          .upsert(titularesData, { ignoreDuplicates: true, count: 'exact' })
-        if (!tErr2) result.titulares_saved = c2 ?? titularesData.length
-        else result.errors.push(`Titulares: ${tErr2.message}`)
-      } else {
-        result.titulares_saved = count ?? titularesData.length
+          .insert(novos)
+          .select('id, codigo_titular, ipi')
+        if (tErr) {
+          result.errors.push(`Titulares insert: ${tErr.message}`)
+        } else {
+          result.titulares_saved += (inserted ?? []).length
+        }
+        // Juntar existentes + novos para o mapa
+        if (inserted) (existentes ?? []).push(...inserted)
       }
     }
 
-    // ── 3. Buscar ids dos titulares recém-inseridos (para usar em links) ────
-    const titularIdMap = new Map<string, string>() // ipi → uuid
-    if (titulares.some(t => t.ipi)) {
-      const ipis = titulares.filter(t => t.ipi).map(t => t.ipi!)
+    // ── 3. Buscar ids dos titulares (para usar em links) ─────────────────────
+    const titularIdMap = new Map<string, string>() // codigo_titular → uuid
+    const titularIpiMap = new Map<string, string>() // ipi → uuid
+    {
+      const codigos = titularesData.map((t: any) => t.codigo_titular).filter(Boolean)
       const { data: rows } = await sb
         .from('titulares')
-        .select('id, ipi')
+        .select('id, codigo_titular, ipi')
         .eq('tenant_id', tenantId)
-        .in('ipi', ipis)
+        .in('codigo_titular', codigos)
       if (rows) {
-        for (const r of rows) {
-          if (r.ipi) titularIdMap.set(r.ipi, r.id)
+        for (const r of rows as any[]) {
+          if (r.codigo_titular) titularIdMap.set(r.codigo_titular, r.id)
+          if (r.ipi) titularIpiMap.set(r.ipi, r.id)
         }
       }
     }
@@ -235,7 +257,13 @@ export async function saveObrasToSupabase(
         })
 
         for (const t of (link.titulares ?? [])) {
-          const titUuid = t.ipi ? titularIdMap.get(t.ipi) ?? null : null
+          // Buscar UUID: primeiro pelo código CWR, depois pelo IPI
+          const codigoCwr = String(
+            t.codigo_interno_legado_titular ?? t.writer_sequence_code ?? t.publisher_sequence_code ?? t.ipi ?? ''
+          ).trim()
+          const titUuid = (codigoCwr ? titularIdMap.get(codigoCwr) : null)
+            ?? (t.ipi ? titularIpiMap.get(t.ipi) : null)
+            ?? null
           const isPJ = ['editora_original', 'administradora', 'subeditora'].includes(t.papel)
 
           linkTitularesToInsert.push({

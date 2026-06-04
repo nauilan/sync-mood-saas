@@ -126,15 +126,18 @@ export async function POST(req: NextRequest) {
       const payload = novos.map((t: Record<string, unknown>) => {
         const isPJ = String(t.tipo ?? '').includes('juridica') ||
                      ['E', 'AM', 'AQ', 'SE', 'ES'].includes(String(t.papel ?? '').trim().toUpperCase())
+        const codigoCwr = String(t.codigo_interno_legado ?? t.sequence_code ?? t.codigo_sequence_cwr ?? '').trim()
+        const codigoTitular = codigoCwr || `CWR-${Date.now().toString(36).slice(-4).toUpperCase()}`
         return {
           tenant_id:             tenantId,
+          codigo_titular:        codigoTitular,
           tipo:                  isPJ ? 'editora' : 'autor',
           pessoa:                isPJ ? 'PJ' : 'PF',
           nome_completo:         String(t.nome ?? '').trim(),
           ipi:                   t.ipi ?? null,
           codigo_ipi:            t.ipi ?? null,
-          status:                'pre_cadastro',
-          codigo_interno_legado: String(t.codigo_interno_legado ?? t.sequence_code ?? t.codigo_sequence_cwr ?? '').trim() || null,
+          status:                'ativo',
+          codigo_interno_legado: codigoCwr || null,
           codigo_sequence_cwr:   String(t.codigo_sequence_cwr ?? t.sequence_code ?? '').trim() || null,
           origem_importacao:     'cwr',
         }
