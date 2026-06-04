@@ -504,6 +504,10 @@ tfoot td{background:#f7f7f7;font-weight:bold}
             // Analítico: usa mr_pct; se 0, usa pr_pct como proxy (proporção CWR)
             const calcFono = (li: number, t: any) => {
               if (modoView === 'sintetico') return sinteticoFono(li, t)
+              // Participante não controlado → 0% em MEC/Digital/Sync (regra geral)
+              const lt = (links[li] as any)?.titulares ?? []
+              if (isOwrLink(lt)) return 0
+              if (!t.controlado) return 0
               const mec = t.percentual_fonomecanico ?? 0
               return mec > 0 ? mec : (t.percentual_exec_publica ?? t.percentual ?? 0)
             }
