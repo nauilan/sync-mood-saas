@@ -21,6 +21,7 @@ export const MASTER_NAV: NavSection[] = [
   ]},
   { title: 'M2 Contratos', items: [
     { label: 'Contratos', href: '/master/contratos', iconName: 'FileText' },
+    { label: 'Negocios entre Editoras', href: '/master/negocios-editoriais', iconName: 'Building2' },
     { label: 'Modelos Juridicos', href: '/master/contratos/modelos', iconName: 'BookOpen' },
     { label: 'Alertas Exclusividade', href: '/master/contratos/alertas', iconName: 'ShieldAlert' },
   ]},
