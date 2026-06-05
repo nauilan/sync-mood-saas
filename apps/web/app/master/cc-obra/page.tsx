@@ -234,7 +234,7 @@ export default function CCObraPage() {
                   <span className="text-xs text-white/40">{obra.data_ultima_movimentacao ? fmtDate(obra.data_ultima_movimentacao) : '—'}</span>
                 </td>
                 <td className="px-4 py-3.5 hidden sm:table-cell">
-                  <BloqueioIndicator count={obra.bloqueios.length} />
+                  <BloqueioIndicator count={(obra.bloqueios ?? []).length} />
                 </td>
                 <td className="px-5 py-3.5">
                   <Link
