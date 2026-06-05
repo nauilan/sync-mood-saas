@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
 
   const totais = {
     total: kpiData?.length ?? 0,
-    em_vigor: kpiData?.filter((c: any) => c.status === 'em_vigor').length ?? 0,
+    em_vigor: kpiData?.filter((c: any) => c.status === 'ativo' || c.status === 'vigente' || c.status === 'em_vigor').length ?? 0,
     vencendo: kpiData?.filter((c: any) => {
       if (!c.vigencia_fim) return false
       const fim = new Date(c.vigencia_fim)
