@@ -37,14 +37,19 @@ export async function GET(req: NextRequest) {
   const offset = (page - 1) * per_page
 
   // Busca cc_obras SEM join — mais confiável no PostgREST
-  const { data: ccObras, error, count } = await sb
+  // Sem range/nullsFirst para evitar edge-cases com campos NULL
+  const { data: ccObras, error } = await sb
     .from('cc_obras')
-    .select('id, obra_id, saldo_atual, saldo_bloqueado, saldo_distribuido, saldo_pendente, moeda, status, updated_at', { count: 'exact' })
+    .select('id, obra_id, saldo_atual, saldo_bloqueado, saldo_distribuido, saldo_pendente, moeda, status, updated_at')
     .eq('tenant_id', tenant_id)
-    .order('updated_at', { ascending: false, nullsFirst: false })
-    .range(offset, offset + per_page - 1)
+    .order('updated_at', { ascending: false })
+    .limit(per_page)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('[cc-obra] query error:', error.message, error.code)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  const count = ccObras?.length ?? 0
 
   // IDs das obras retornadas
   const obraIds = (ccObras ?? []).map((c: any) => c.obra_id).filter(Boolean)
