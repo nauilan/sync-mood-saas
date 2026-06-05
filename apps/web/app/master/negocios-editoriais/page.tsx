@@ -3,11 +3,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { PageHeader } from '@/components/ui/page-header'
 import {
-  Building2, Plus, Edit3, Trash2, X, Save, Check, Loader2,
+  Building2, Plus, Edit3, Trash2, Save, Check, Loader2,
   AlertTriangle, ChevronDown, ChevronUp, FileText, Globe,
   Calendar, Percent, ShieldCheck, Info,
 } from 'lucide-react'
-import { createClient } from '@supabase/supabase-js'
+// (Supabase client removido — carregamento via API routes server-side)
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Editora { id: string; nome_fantasia: string; razao_social: string; cnpj?: string }
@@ -564,35 +564,34 @@ export default function NegociosEditoriaisPage() {
   const [tenantId, setTenantId] = useState<string>('')
   const [filterStatus, setFilterStatus] = useState<string>('')
 
-  // Carrega dados
+  // Carrega dados via API routes (server-side, com token de sessão)
   useEffect(() => {
     const load = async () => {
       setLoading(true)
       try {
-        const url  = process.env.NEXT_PUBLIC_SUPABASE_URL!
-        const key  = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        if (!url || url.includes('placeholder')) { setLoading(false); return }
-        const sb = createClient(url, key)
+        const [resNegocios, resEditoras, resTipos, resMe] = await Promise.all([
+          fetch('/api/negocios-editoriais?limit=200'),
+          fetch('/api/editoras?status=ativo'),
+          fetch('/api/tipos-direito'),
+          fetch('/api/me'),
+        ])
 
-        // Tenant
-        const { data: { user } } = await sb.auth.getUser()
-        if (user) {
-          const { data: u } = await (sb as any).from('usuarios').select('tenant_id').eq('auth_user_id', user.id).maybeSingle()
-          if (u?.tenant_id) setTenantId(u.tenant_id)
+        const negData = await resNegocios.json()
+        setNegocios(negData.negocios ?? [])
+
+        const edData = await resEditoras.json()
+        setEditoras(edData.editoras ?? [])
+
+        const tdData = await resTipos.json()
+        setTipoDireitos(tdData.tipos ?? [])
+
+        const meData = await resMe.json()
+        if (meData?.tenant_id) setTenantId(meData.tenant_id)
+        else {
+          // Fallback: tenant do primeiro negócio
+          const primeiro = (negData.negocios ?? [])[0]
+          if (primeiro?.tenant_id) setTenantId(primeiro.tenant_id)
         }
-
-        // Editoras
-        const { data: eds } = await (sb as any).from('editoras').select('id,nome_fantasia,razao_social,cnpj').eq('status','ativo')
-        setEditoras(eds ?? [])
-
-        // Tipos de Direito
-        const { data: tds } = await (sb as any).from('tipos_direito').select('id,nome,codigo').order('nome')
-        setTipoDireitos(tds ?? [])
-
-        // Negócios
-        const res = await fetch('/api/negocios-editoriais?limit=200')
-        const data = await res.json()
-        setNegocios(data.negocios ?? [])
       } catch (e) { console.error(e) }
       finally { setLoading(false) }
     }
