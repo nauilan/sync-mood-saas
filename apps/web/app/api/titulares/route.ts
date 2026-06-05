@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
   if (tipo !== 'todos') query = query.eq('tipo', tipo)
   if (status !== 'todos') query = query.eq('status', status)
   if (search) {
-    query = query.or(`nome.ilike.%${search}%,codigo_interno.ilike.%${search}%,ipi.ilike.%${search}%,cae.ilike.%${search}%`)
+    query = query.or(`nome_completo.ilike.%${search}%,codigo_titular.ilike.%${search}%,ipi.ilike.%${search}%`)
   }
 
   const { data, error, count } = await query

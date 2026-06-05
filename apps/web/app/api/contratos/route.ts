@@ -54,10 +54,10 @@ export async function GET(req: NextRequest) {
   const { data, error, count } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // KPIs
+  // KPIs — coluna correta é data_fim (conforme migration 005_contratos.sql)
   const { data: kpiData } = await sb
     .from('contratos')
-    .select('tipo, status, vigencia_fim')
+    .select('tipo, status, data_fim')
     .eq('tenant_id', tenant_id)
 
   const hoje = new Date()
@@ -67,13 +67,13 @@ export async function GET(req: NextRequest) {
     total: kpiData?.length ?? 0,
     em_vigor: kpiData?.filter((c: any) => ['ativo', 'vigente', 'em_vigor', 'assinado'].includes(c.status)).length ?? 0,
     vencendo: kpiData?.filter((c: any) => {
-      if (!c.vigencia_fim) return false
-      const fim = new Date(c.vigencia_fim)
+      if (!c.data_fim) return false
+      const fim = new Date(c.data_fim)
       return fim >= hoje && fim <= em30dias
     }).length ?? 0,
     vencidos: kpiData?.filter((c: any) => {
-      if (!c.vigencia_fim) return false
-      return new Date(c.vigencia_fim) < hoje && c.status !== 'rescindido'
+      if (!c.data_fim) return false
+      return new Date(c.data_fim) < hoje && c.status !== 'rescindido'
     }).length ?? 0,
     aguardando_assinatura: kpiData?.filter((c: any) => c.status === 'aguardando_assinatura').length ?? 0,
   }
