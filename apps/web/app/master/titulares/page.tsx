@@ -76,21 +76,8 @@ function ObrasContratosTab({ titular }: { titular: TitularComDados }) {
     [titular.id]
   )
 
-  // Collect all obra IDs where this titular appears as titularLink
-  const obrasVinculadas = useMemo(() => {
-    const result: { obra: (typeof MOCK_OBRAS)[0]; papel: string; percentual: number }[] = []
-    for (const obra of MOCK_OBRAS) {
-      const links = MOCK_OBRAS_LINKS[obra.id] ?? []
-      for (const link of links) {
-        for (const tit of link.titulares ?? []) {
-          if (tit.titular_id === titular.id) {
-            result.push({ obra, papel: tit.papel, percentual: tit.percentual })
-          }
-        }
-      }
-    }
-    return result
-  }, [titular.id])
+  // TODO: conectar ao banco real via API para buscar obras vinculadas
+  const obrasVinculadas: { obra: any; papel: string; percentual: number }[] = useMemo(() => [], [])
 
   const [subTab, setSubTab] = useState<'contratos' | 'obras'>('contratos')
 

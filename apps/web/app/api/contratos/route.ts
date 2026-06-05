@@ -14,7 +14,7 @@ function getAdminClient() {
   return createClient(url, key, { auth: { persistSession: false } })
 }
 
-async function autenticar(sb: ReturnType<typeof createClient>, req: NextRequest) {
+async function autenticar(sb: any, req: NextRequest) {
   const token = (req.headers.get('authorization') ?? '').replace('Bearer ', '')
   const { data: { user }, error } = await sb.auth.getUser(token)
   if (error || !user) return null

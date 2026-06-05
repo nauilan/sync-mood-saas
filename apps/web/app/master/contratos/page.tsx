@@ -376,11 +376,11 @@ export default function ContratosPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="text-sm font-semibold text-white/90">{c.numero}</span>
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${TIPO_CONTRATO_V2_COLORS[c.tipo]}`}>
-                        {TIPO_CONTRATO_V2_LABELS[c.tipo]}
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${TIPO_CONTRATO_V2_COLORS[c.tipo as TipoContratoV2] ?? 'bg-white/10 text-white/60'}`}>
+                        {TIPO_CONTRATO_V2_LABELS[c.tipo as TipoContratoV2] ?? c.tipo}
                       </span>
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_CONTRATO_V2_COLORS[c.status]}`}>
-                        {STATUS_CONTRATO_V2_LABELS[c.status]}
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_CONTRATO_V2_COLORS[c.status as StatusContratoV2] ?? 'bg-white/10 text-white/60'}`}>
+                        {STATUS_CONTRATO_V2_LABELS[c.status as StatusContratoV2] ?? c.status}
                       </span>
                       {c.exclusividade && (
                         <span className="text-xs px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 font-medium">
