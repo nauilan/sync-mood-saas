@@ -1,19 +1,17 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import {
   Building2, Save, Plus, Trash2, Users, Settings,
-  CreditCard, Check, X, Edit3,
+  CreditCard, Check, X,
   Mail, Globe,
   Shield,
   ToggleLeft, ToggleRight,
-  Music, FileText, ChevronDown, ChevronRight, Mic2, Calendar, Tag, ExternalLink,
+  FileText, ExternalLink, Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
-import { MOCK_OBRAS, MOCK_OBRAS_LINKS, MOCK_OBRAS_FONOGRAMAS } from '@/lib/mock-obras'
-import { MOCK_CONTRATOS_V2 } from '@/lib/mock-contratos-v2'
 import { maskCnpj, maskCpf } from '@/lib/masks'
 import { PhoneInput } from '@/components/ui/phone-input'
 
@@ -21,7 +19,6 @@ import { PhoneInput } from '@/components/ui/phone-input'
 const card = 'bg-white/[0.03] border border-white/[0.07] rounded-2xl'
 const inputCls = 'w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/40 transition-all'
 const labelCls = 'text-xs font-medium text-white/40 mb-1 block'
-const sectionTitle = 'text-sm font-semibold text-white/70 mb-4 flex items-center gap-2'
 
 const BANCOS_BR = [
   { codigo: '001', nome: 'Banco do Brasil' }, { codigo: '033', nome: 'Santander' },
@@ -36,23 +33,6 @@ const BANCOS_BR = [
 ]
 const ESTADOS_BR = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
 
-// ── Módulos do sistema por editora administrada ───────────────
-const MODULOS_SISTEMA = [
-  { id: 'titulares',      label: 'Titulares',            grupo: 'Cadastros',      desc: 'Cadastro e gestão de titulares do catálogo próprio' },
-  { id: 'obras',          label: 'Obras',                grupo: 'Cadastros',      desc: 'Visualização das obras do catálogo próprio' },
-  { id: 'nova_obra',      label: 'Cadastro de Obra',     grupo: 'Cadastros',      desc: 'Registrar novas obras (gera link AM automaticamente)' },
-  { id: 'contratos',      label: 'Contratos',            grupo: 'Contratos',      desc: 'Visualizar contratos vinculados ao seu catálogo' },
-  { id: 'novo_contrato',  label: 'Novo Contrato',        grupo: 'Contratos',      desc: 'Gerar contratos com titulares do seu catálogo' },
-  { id: 'autorizacoes',   label: 'Autorizações (leitura)',grupo: 'Autorizações',   desc: 'Ver autorizações emitidas — licenciamento sempre pela AM' },
-  { id: 'financeiro',     label: 'Financeiro',           grupo: 'Financeiro',     desc: 'Recebimentos, CC e demonstrativos do próprio catálogo' },
-  { id: 'prestacao',      label: 'Prestação de Contas',  grupo: 'Financeiro',     desc: 'Ver prestações referentes ao seu catálogo' },
-  { id: 'relatorios',     label: 'Relatórios',           grupo: 'Relatórios',     desc: 'Relatórios restritos ao catálogo próprio' },
-  { id: 'usuarios',       label: 'Usuários',             grupo: 'Admin',          desc: 'Gerenciar usuários internos da editora administrada' },
-] as const
-
-type ModuloId = typeof MODULOS_SISTEMA[number]['id']
-const DEFAULT_MODULOS: ModuloId[] = ['titulares', 'obras', 'nova_obra', 'contratos', 'novo_contrato', 'financeiro', 'prestacao']
-
 // ── tipos ─────────────────────────────────────────────────────
 interface TenantForm {
   razao_social: string; nome_fantasia: string; cnpj: string
@@ -65,29 +45,41 @@ interface TenantForm {
   tipo_conta: string; titular_conta: string; operacao: string
   pix_chave: string; pix_tipo: string
 }
-interface EditAdm { id: string; codigo: string; razao_social: string; nome_fantasia: string; cnpj: string; ativa: boolean; modulos?: ModuloId[] }
+// Editora simples para seletor de acesso de usuários
+interface EditoraOpcao { id: string; nome_fantasia: string; razao_social: string; cnpj?: string | null }
+// Negócio editorial para a aba Administradas (view derivada de negocios_editoriais)
+interface NegocioAdm {
+  id: string
+  nome: string
+  status: string
+  editora_administrada_id: string
+  editora_administrada?: { nome_fantasia: string } | null
+  editora_administradora?: { nome_fantasia: string } | null
+  percentual_administrada: number
+  percentual_administradora: number
+  territorios: string[]
+  data_inicio: string
+  data_fim?: string | null
+}
 interface Usuario {
   id: string
   nome: string
-  cpf: string          // Identificador principal — login via CPF
+  cpf: string
   email: string
   perfil: string
   ativo: boolean
-  editoras_acesso: string[]  // IDs das editoras administradas que o usuário pode operar
+  editoras_acesso: string[]
 }
 interface Config { notif_email: boolean; notif_vencimento: boolean; notif_royalties: boolean; modo_escuro: boolean; idioma: string; moeda: string; timezone: string }
 
 const EMPTY_TENANT: TenantForm = {
-  razao_social: 'TOP SHOW MUSIC EDICOES MUSICAIS LTDA',
-  nome_fantasia: 'TOP SHOW MUSIC',
-  cnpj: '11.111.111/0001-11', ie: '', im: '',
-  data_fundacao: '2020-01-15', registro_ecad: '', codigo_iswc: '',
+  razao_social: '', nome_fantasia: '', cnpj: '', ie: '', im: '',
+  data_fundacao: '', registro_ecad: '', codigo_iswc: '',
   cep: '', endereco: '', numero: '', compl: '', bairro: '',
-  cidade: 'SAO PAULO', estado: 'SP', pais: 'BRASIL',
+  cidade: '', estado: '', pais: 'BRASIL',
   telefone: '', email: '', site: '',
   banco: '', agencia: '', conta: '', tipo_conta: '', titular_conta: '', operacao: '', pix_chave: '', pix_tipo: '',
 }
-const EMPTY_ADM: EditAdm = { id: '', codigo: '', razao_social: '', nome_fantasia: '', cnpj: '', ativa: true, modulos: [...DEFAULT_MODULOS] }
 const EMPTY_USR: Usuario = { id: '', nome: '', cpf: '', email: '', perfil: 'operador', ativo: true, editoras_acesso: [] }
 const EMPTY_CFG: Config = {
   notif_email: true, notif_vencimento: true, notif_royalties: true,
@@ -135,280 +127,6 @@ const ABAS = [
 ] as const
 type AbaId = typeof ABAS[number]['id']
 
-// ── Drawer de detalhe da Editora Administrada ─────────────────
-const STATUS_CONTRATO: Record<string, { label: string; cls: string }> = {
-  em_vigor:              { label: 'Em Vigor',        cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
-  assinado:              { label: 'Assinado',         cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
-  aguardando_assinatura: { label: 'Ag. Assinatura',   cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
-  vencendo:              { label: 'Vencendo',          cls: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
-  vencido:               { label: 'Vencido',           cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
-  rescindido:            { label: 'Rescindido',        cls: 'bg-gray-500/15 text-gray-400 border-gray-500/30' },
-}
-const TIPO_CONTRATO: Record<string, string> = {
-  cessao_parcial: 'Cessão de Obras', licenciamento: 'Licenciamento',
-  administracao_editorial: 'Adm. Editorial', coeditorial: 'Coeditorial',
-  subedicao: 'Subedição', cessao_internacional: 'Cessão Internacional',
-  obra_nova: 'Obra Nova', versionamento: 'Versionamento',
-}
-
-function ObraRow({ obra }: { obra: (typeof MOCK_OBRAS)[0] }) {
-  const [open, setOpen] = useState(false)
-  const fonogramas = MOCK_OBRAS_FONOGRAMAS[obra.id] ?? []
-  const links = MOCK_OBRAS_LINKS[obra.id] ?? []
-  const totalTitulares = links.reduce((s, l) => s + (l.titulares?.length ?? 0), 0)
-
-  return (
-    <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl overflow-hidden">
-      <button onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-3 p-3 hover:bg-white/[0.02] transition-colors text-left">
-        <div className="w-7 h-7 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
-          <Music className="w-3.5 h-3.5 text-violet-400" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-bold text-white font-mono">{obra.codigo}</p>
-          <p className="text-[11px] text-white/50 truncate">{obra.titulo}</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {fonogramas.length > 0 && (
-            <span className="text-[10px] text-white/30 flex items-center gap-0.5">
-              <Mic2 className="w-3 h-3" />{fonogramas.length}
-            </span>
-          )}
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${
-            obra.status === 'ativa' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-white/5 text-white/30 border-white/10'
-          }`}>{obra.status}</span>
-          {open ? <ChevronDown className="w-3.5 h-3.5 text-white/30" /> : <ChevronRight className="w-3.5 h-3.5 text-white/30" />}
-        </div>
-      </button>
-
-      {open && (
-        <div className="border-t border-white/[0.05] p-3 space-y-3">
-          {/* Dados cadastrais */}
-          <div className="grid grid-cols-2 gap-2 text-[11px]">
-            <div><span className="text-white/30">ISWC: </span><span className="text-white/60 font-mono">{obra.iswc ?? '—'}</span></div>
-            <div><span className="text-white/30">Gênero: </span><span className="text-white/60">{obra.genero ?? '—'}</span></div>
-            <div><span className="text-white/30">Idioma: </span><span className="text-white/60">{obra.idioma ?? '—'}</span></div>
-            <div><span className="text-white/30">Ano: </span><span className="text-white/60">{obra.ano_criacao ?? '—'}</span></div>
-            {obra.duracao && <div><span className="text-white/30">Duração: </span><span className="text-white/60">{Math.floor(obra.duracao / 60)}:{String(obra.duracao % 60).padStart(2,'0')}</span></div>}
-            <div><span className="text-white/30">% Controlado: </span><span className="text-emerald-400">{obra._percentual_controlado ?? 0}%</span></div>
-          </div>
-
-          {/* Links / Participação */}
-          {links.length > 0 && (
-            <div>
-              <p className="text-[10px] text-white/25 uppercase tracking-wide mb-1.5">Participação ({totalTitulares} titular{totalTitulares !== 1 ? 'es' : ''})</p>
-              <div className="space-y-1">
-                {links.map((link, li) => (
-                  <div key={link.id} className="text-[11px]">
-                    <span className="text-white/20">Link {li + 1}: </span>
-                    {link.titulares?.map((t, ti) => (
-                      <span key={t.id}>
-                        <span className={t.controlado ? 'text-violet-400' : 'text-white/50'}>{t.nome}</span>
-                        <span className="text-white/25"> ({t.papel} {t.percentual}%)</span>
-                        {ti < (link.titulares!.length - 1) && <span className="text-white/20"> + </span>}
-                      </span>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Fonogramas atrelados */}
-          {fonogramas.length > 0 && (
-            <div>
-              <p className="text-[10px] text-white/25 uppercase tracking-wide mb-1.5">
-                <Mic2 className="inline w-3 h-3 mr-1" />Fonogramas ({fonogramas.length})
-              </p>
-              <div className="space-y-1">
-                {fonogramas.map(f => (
-                  <div key={f.id} className="flex items-center gap-2 bg-white/[0.02] rounded-lg px-2 py-1.5">
-                    <Mic2 className="w-3 h-3 text-white/20 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] text-white/70 truncate">{f.titulo_fonograma}</p>
-                      <p className="text-[10px] text-white/30">{f.interprete}{f.isrc ? ` · ${f.isrc}` : ''}</p>
-                    </div>
-                    {f.data_lancamento && (
-                      <span className="text-[10px] text-white/25 shrink-0">{new Date(f.data_lancamento).getFullYear()}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function EditoraDetalheDrawer({
-  editora, onClose, onSaveModulos,
-}: {
-  editora: EditAdm
-  onClose: () => void
-  onSaveModulos: (id: string, modulos: ModuloId[]) => void
-}) {
-  const [subTab, setSubTab] = useState<'obras' | 'contratos' | 'modulos'>('obras')
-  const [modulos, setModulos] = useState<ModuloId[]>(editora.modulos ?? [...DEFAULT_MODULOS])
-
-  const obras = useMemo(() => MOCK_OBRAS.filter(o => o.editora_id === editora.id), [editora.id])
-  const contratos = useMemo(() => MOCK_CONTRATOS_V2.filter(c =>
-    c._partes?.some(p => p.titular_id === editora.id) || c.editora_id === editora.id
-  ), [editora.id])
-
-  const grupos = [...new Set(MODULOS_SISTEMA.map(m => m.grupo))]
-
-  function toggleModulo(id: ModuloId) {
-    setModulos(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id])
-  }
-
-  function salvar() {
-    onSaveModulos(editora.id, modulos)
-  }
-
-  return (
-    <>
-      <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-[500px] bg-[#0d1526] border-l border-white/[0.07] flex flex-col shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.06] shrink-0">
-          <div className="w-9 h-9 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
-            <span className="text-xs font-bold text-violet-300">{editora.codigo || editora.razao_social.slice(0, 2)}</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-white truncate">{editora.nome_fantasia || editora.razao_social}</p>
-            <p className="text-[11px] text-white/30 truncate">{editora.razao_social}{editora.cnpj ? ` · ${editora.cnpj}` : ''}</p>
-          </div>
-          <Badge variant={editora.ativa ? 'emerald' : 'slate'}>{editora.ativa ? 'Ativa' : 'Inativa'}</Badge>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/5 text-white/30 hover:text-white transition-colors ml-1">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Sub-tabs */}
-        <div className="flex gap-1 px-4 pt-3 pb-2 shrink-0">
-          {([
-            { id: 'obras',     label: `Obras (${obras.length})` },
-            { id: 'contratos', label: `Contratos (${contratos.length})` },
-            { id: 'modulos',   label: 'Módulos / Acesso' },
-          ] as const).map(s => (
-            <button key={s.id} onClick={() => setSubTab(s.id)}
-              className={`flex-1 h-8 rounded-lg text-xs font-semibold transition-all ${
-                subTab === s.id ? 'bg-violet-600 text-white' : 'text-white/40 hover:text-white/70 hover:bg-white/5'
-              }`}>
-              {s.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
-          {/* ── Obras ── */}
-          {subTab === 'obras' && (
-            obras.length === 0
-              ? <div className="flex flex-col items-center gap-2 py-10 text-white/25"><Music className="w-8 h-8" /><p className="text-sm">Nenhuma obra vinculada</p></div>
-              : obras.map(o => <ObraRow key={o.id} obra={o} />)
-          )}
-
-          {/* ── Contratos ── */}
-          {subTab === 'contratos' && (
-            contratos.length === 0
-              ? <div className="flex flex-col items-center gap-2 py-10 text-white/25"><FileText className="w-8 h-8" /><p className="text-sm">Nenhum contrato vinculado</p></div>
-              : contratos.map(c => {
-                  const st = STATUS_CONTRATO[c.status] ?? { label: c.status, cls: 'bg-white/10 text-white/50 border-white/10' }
-                  return (
-                    <div key={c.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-bold text-white font-mono">{c.numero}</p>
-                          <p className="text-xs text-white/40">{TIPO_CONTRATO[c.tipo] ?? c.tipo}</p>
-                        </div>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${st.cls}`}>{st.label}</span>
-                      </div>
-                      <div className="flex items-center gap-4 text-[11px] text-white/40">
-                        {c.vigencia_inicio && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{new Date(c.vigencia_inicio).toLocaleDateString('pt-BR')}</span>}
-                        {c.vigencia_fim && <span className="flex items-center gap-1"><Tag className="w-3 h-3" />Até {new Date(c.vigencia_fim).toLocaleDateString('pt-BR')}</span>}
-                      </div>
-                      {c._obras && c._obras.length > 0 && (
-                        <div className="flex flex-wrap gap-1 pt-1 border-t border-white/[0.05]">
-                          {c._obras.slice(0, 5).map(o => (
-                            <span key={o.id} className="text-[10px] bg-violet-500/10 text-violet-400 border border-violet-500/20 rounded-md px-2 py-0.5 font-mono">{o.codigo_obra}</span>
-                          ))}
-                          {c._obras.length > 5 && <span className="text-[10px] text-white/30">+{c._obras.length - 5}</span>}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })
-          )}
-
-          {/* ── Módulos / Acesso ── */}
-          {subTab === 'modulos' && (
-            <div className="space-y-4 pt-1">
-              {/* Aviso imutável */}
-              <div className="bg-amber-500/8 border border-amber-500/20 rounded-xl px-4 py-3 space-y-1">
-                <p className="text-xs font-semibold text-amber-400">Regras fixas da AM (não configuráveis)</p>
-                <ul className="text-[11px] text-amber-300/70 space-y-0.5 list-disc list-inside">
-                  <li>Toda autorização/licenciamento é emitido <strong>pela AM</strong></li>
-                  <li>Catálogo da E compõe automaticamente o catálogo da AM</li>
-                  <li>Financeiro restrito às obras/autores do próprio catálogo</li>
-                </ul>
-              </div>
-
-              {/* Módulos por grupo */}
-              {grupos.map(grupo => (
-                <div key={grupo}>
-                  <p className="text-[10px] text-white/25 uppercase tracking-widest mb-2">{grupo}</p>
-                  <div className="space-y-1.5">
-                    {MODULOS_SISTEMA.filter(m => m.grupo === grupo).map(m => {
-                      const ativo = modulos.includes(m.id)
-                      return (
-                        <div key={m.id} onClick={() => toggleModulo(m.id)}
-                          className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                            ativo
-                              ? 'bg-violet-500/8 border-violet-500/20 hover:border-violet-500/35'
-                              : 'bg-white/[0.02] border-white/[0.05] hover:border-white/10'
-                          }`}>
-                          <div className={`w-9 h-5 rounded-full relative transition-all shrink-0 ${ativo ? 'bg-violet-500' : 'bg-white/10'}`}>
-                            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${ativo ? 'left-[18px]' : 'left-0.5'}`} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-xs font-semibold ${ativo ? 'text-white' : 'text-white/40'}`}>{m.label}</p>
-                            <p className="text-[10px] text-white/25 truncate">{m.desc}</p>
-                          </div>
-                          {ativo
-                            ? <Check className="w-3.5 h-3.5 text-violet-400 shrink-0" />
-                            : <X className="w-3.5 h-3.5 text-white/20 shrink-0" />
-                          }
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-5 py-4 border-t border-white/[0.06] shrink-0 flex gap-2">
-          <button onClick={onClose}
-            className="flex-1 h-9 rounded-xl bg-white/5 border border-white/[0.06] text-sm text-white/50 hover:text-white/70 transition-colors">
-            Fechar
-          </button>
-          {subTab === 'modulos' && (
-            <button onClick={salvar}
-              className="flex-1 h-9 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-semibold text-white transition-colors flex items-center justify-center gap-1.5">
-              <Save className="w-3.5 h-3.5" /> Salvar Módulos
-            </button>
-          )}
-        </div>
-      </div>
-    </>
-  )
-}
-
 // ──────────────────────────────────────────────────────────────
 export default function EditoraPage() {
   const [aba, setAba] = useState<AbaId>('empresa')
@@ -416,12 +134,14 @@ export default function EditoraPage() {
   const [salvando, setSalvando] = useState(false)
   const [toast, setToast] = useState('')
   const [buscandoCep, setBuscandoCep] = useState(false)
+  const [masterEditoraId, setMasterEditoraId] = useState<string | null>(null)
 
-  // Editoras administradas
-  const [editoras, setEditoras] = useState<EditAdm[]>([])
-  const [novaEditora, setNovaEditora] = useState<EditAdm>(EMPTY_ADM)
-  const [adicionandoEditora, setAdicionandoEditora] = useState(false)
-  const [editEditoraIdx, setEditEditoraIdx] = useState<number | null>(null)
+  // Editoras para seletor de acesso de usuários
+  const [editoras, setEditoras] = useState<EditoraOpcao[]>([])
+
+  // Negócios editoriais para aba Administradas (view derivada)
+  const [negocios, setNegocios] = useState<NegocioAdm[]>([])
+  const [loadingNegocios, setLoadingNegocios] = useState(false)
 
   // Usuarios
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
@@ -431,22 +151,80 @@ export default function EditoraPage() {
   // Config
   const [config, setConfig] = useState<Config>(EMPTY_CFG)
 
-  // Drawer detalhe editora
-  const [detalheEditora, setDetalheEditora] = useState<EditAdm | null>(null)
-
-  // Carregar do localStorage
+  // Carregar dados reais na inicialização
   useEffect(() => {
+    // Restaurar usuarios e config do localStorage
     try {
-      const t = localStorage.getItem('sync_tenant'); if (t) setForm(JSON.parse(t))
-      const adms = localStorage.getItem('sync_editoras_adm')
-      const mockAdms: EditAdm[] = MOCK_EDITORAS.filter(e => e.administradora_id !== null).map(e => ({
-        id: e.id, codigo: e.codigo, razao_social: e.razao_social,
-        nome_fantasia: e.nome_fantasia, cnpj: e.cnpj ?? '', ativa: e.ativa,
-      }))
-      setEditoras(adms ? JSON.parse(adms) : mockAdms)
       const u = localStorage.getItem('sync_usuarios'); if (u) setUsuarios(JSON.parse(u))
       const c = localStorage.getItem('sync_config'); if (c) setConfig(JSON.parse(c))
     } catch { /* silencioso */ }
+
+    // Carregar editoras do banco
+    async function loadEditoras() {
+      try {
+        const res = await fetch('/api/editoras?status=todos')
+        const data = await res.json()
+        const all: any[] = data.editoras ?? []
+        setEditoras(all.map(e => ({ id: e.id, nome_fantasia: e.nome_fantasia, razao_social: e.razao_social, cnpj: e.cnpj })))
+
+        const master = all.find(e => e.tipo_editora === 'master')
+        if (master) {
+          setMasterEditoraId(master.id)
+          // Carregar dados completos da editora master
+          const res2 = await fetch(`/api/editoras/${master.id}`)
+          const data2 = await res2.json()
+          const e = data2.editora
+          if (e) {
+            const extra = (e.dados_bancarios as any)?._extra ?? {}
+            const banco = (e.dados_bancarios as any) ?? {}
+            setForm({
+              razao_social: e.razao_social ?? '',
+              nome_fantasia: e.nome_fantasia ?? '',
+              cnpj: e.cnpj ?? '',
+              ie: extra.ie ?? '',
+              im: extra.im ?? '',
+              data_fundacao: extra.data_fundacao ?? '',
+              registro_ecad: e.codigo_ecad ?? '',
+              codigo_iswc: extra.codigo_iswc ?? '',
+              cep: e.cep ?? '',
+              endereco: e.endereco ?? '',
+              numero: extra.numero ?? '',
+              compl: extra.compl ?? '',
+              bairro: e.bairro ?? '',
+              cidade: e.cidade ?? '',
+              estado: e.estado ?? '',
+              pais: e.pais ?? 'BRASIL',
+              telefone: e.telefone ?? '',
+              email: e.email ?? '',
+              site: e.site ?? '',
+              banco: banco.banco ?? '',
+              agencia: banco.agencia ?? '',
+              conta: banco.conta ?? '',
+              tipo_conta: banco.tipo_conta ?? '',
+              titular_conta: banco.titular_conta ?? '',
+              operacao: banco.operacao ?? '',
+              pix_chave: banco.pix_chave ?? '',
+              pix_tipo: banco.pix_tipo ?? '',
+            })
+          }
+        }
+      } catch { /* silencioso */ }
+    }
+
+    // Carregar negócios editoriais para aba Administradas
+    async function loadNegocios() {
+      setLoadingNegocios(true)
+      try {
+        const res = await fetch('/api/negocios-editoriais')
+        const data = await res.json()
+        setNegocios(data.negocios ?? [])
+      } catch { /* silencioso */ } finally {
+        setLoadingNegocios(false)
+      }
+    }
+
+    loadEditoras()
+    loadNegocios()
   }, [])
 
   const set = useCallback((k: keyof TenantForm) =>
@@ -474,49 +252,67 @@ export default function EditoraPage() {
     } catch { /* silencioso */ } finally { setBuscandoCep(false) }
   }
 
-  // Salva tudo de uma vez
-  async function salvarTudo() {
+  // Salvar dados da Editora Master via API PUT
+  async function salvarEmpresa() {
+    if (!masterEditoraId) {
+      setToast('Editora master não identificada. Verifique o cadastro.')
+      return
+    }
     setSalvando(true)
-    await new Promise(r => setTimeout(r, 300))
-    localStorage.setItem('sync_tenant', JSON.stringify(form))
-    localStorage.setItem('sync_editoras_adm', JSON.stringify(editoras))
-    localStorage.setItem('sync_usuarios', JSON.stringify(usuarios))
-    localStorage.setItem('sync_config', JSON.stringify(config))
-    setSalvando(false)
-    setToast('Todas as configuracoes foram salvas com sucesso.')
+    try {
+      const payload = {
+        razao_social: form.razao_social,
+        nome_fantasia: form.nome_fantasia,
+        cnpj: form.cnpj,
+        cep: form.cep,
+        endereco: form.endereco,
+        bairro: form.bairro,
+        cidade: form.cidade,
+        estado: form.estado,
+        pais: form.pais,
+        telefone: form.telefone,
+        email: form.email,
+        site: form.site,
+        codigo_ecad: form.registro_ecad,
+        dados_bancarios: {
+          banco: form.banco,
+          agencia: form.agencia,
+          conta: form.conta,
+          tipo_conta: form.tipo_conta,
+          titular_conta: form.titular_conta,
+          operacao: form.operacao,
+          pix_chave: form.pix_chave,
+          pix_tipo: form.pix_tipo,
+          _extra: {
+            ie: form.ie,
+            im: form.im,
+            data_fundacao: form.data_fundacao,
+            numero: form.numero,
+            compl: form.compl,
+            codigo_iswc: form.codigo_iswc,
+          },
+        },
+      }
+      const res = await fetch(`/api/editoras/${masterEditoraId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error('Erro ao salvar')
+      setToast('Dados da editora master salvos com sucesso.')
+    } catch (e: any) {
+      setToast('Erro: ' + (e as Error).message)
+    } finally {
+      setSalvando(false)
+    }
   }
-
-  async function salvarEmpresa() { return salvarTudo() }
 
   function salvarConfig() {
     localStorage.setItem('sync_config', JSON.stringify(config))
     setToast('Configuracoes salvas.')
   }
 
-  // Editoras administradas CRUD
-  function salvarEditora() {
-    if (!novaEditora.razao_social.trim()) return
-    const updated = editEditoraIdx !== null
-      ? editoras.map((e, i) => i === editEditoraIdx ? { ...novaEditora, id: e.id } : e)
-      : [...editoras, { ...novaEditora, id: 'LOCAL-' + Date.now() }]
-    setEditoras(updated)
-    localStorage.setItem('sync_editoras_adm', JSON.stringify(updated))
-    setNovaEditora(EMPTY_ADM); setAdicionandoEditora(false); setEditEditoraIdx(null)
-    setToast('Editora salva.')
-  }
-  function removerEditora(idx: number) {
-    const updated = editoras.filter((_, i) => i !== idx)
-    setEditoras(updated)
-    localStorage.setItem('sync_editoras_adm', JSON.stringify(updated))
-    setToast('Editora removida.')
-  }
-  function toggleAtivaEditora(idx: number) {
-    const updated = editoras.map((e, i) => i === idx ? { ...e, ativa: !e.ativa } : e)
-    setEditoras(updated)
-    localStorage.setItem('sync_editoras_adm', JSON.stringify(updated))
-  }
-
-  // Usuarios CRUD
+  // Usuarios CRUD (localStorage)
   function salvarUsuario() {
     if (!novoUsuario.nome.trim() || !novoUsuario.email.trim()) return
     const updated = [...usuarios, { ...novoUsuario, id: 'U-' + Date.now() }]
@@ -539,25 +335,16 @@ export default function EditoraPage() {
   return (
     <div className="space-y-6">
       {toast && <Toast msg={toast} onClose={() => setToast('')} />}
-      {detalheEditora && (
-        <EditoraDetalheDrawer
-          editora={detalheEditora}
-          onClose={() => setDetalheEditora(null)}
-          onSaveModulos={(id, mods) => {
-            setEditoras((prev: EditAdm[]) => prev.map((e: EditAdm) => e.id === id ? { ...e, modulos: mods } : e))
-            setDetalheEditora(prev => prev ? { ...prev, modulos: mods } : null)
-          }}
-        />
-      )}
 
-      {/* Header com botao Salvar global */}
+      {/* Header com botao Salvar */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-white">Editoras / Master</h1>
           <p className="text-sm text-white/40 mt-0.5">Editora administradora do sistema e editoras administradas</p>
         </div>
-        <Button size="sm" onClick={salvarTudo} disabled={salvando} className="flex-shrink-0">
-          <Save className="w-4 h-4" />{salvando ? 'Salvando...' : 'Salvar'}
+        <Button size="sm" onClick={salvarEmpresa} disabled={salvando} className="flex-shrink-0">
+          {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {salvando ? 'Salvando...' : 'Salvar'}
         </Button>
       </div>
 
@@ -648,7 +435,6 @@ export default function EditoraPage() {
               <PhoneInput
                 value={form.telefone}
                 onChange={v => setForm(prev => ({ ...prev, telefone: v }))}
-               
               />
             </Field>
             <Field label="E-mail">
@@ -721,87 +507,66 @@ export default function EditoraPage() {
         </div>
       )}
 
-      {/* ─── ABA ADMINISTRADAS ───────────────────────── */}
+      {/* ─── ABA ADMINISTRADAS — view derivada de negocios_editoriais ── */}
       {aba === 'administradas' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-white/40">{editoras.length} editora{editoras.length !== 1 ? 's' : ''} administrada{editoras.length !== 1 ? 's' : ''}</p>
-            <Button size="sm" onClick={() => { setNovaEditora(EMPTY_ADM); setEditEditoraIdx(null); setAdicionandoEditora(true) }}>
-              <Plus className="w-3.5 h-3.5" /> Nova Editora Administrada
-            </Button>
+            <p className="text-sm text-white/40">
+              {negocios.length} negócio{negocios.length !== 1 ? 's' : ''} editorial{negocios.length !== 1 ? 'is' : ''} ativo{negocios.length !== 1 ? 's' : ''}
+            </p>
+            <Link href="/master/negocios-editoriais"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors">
+              <ExternalLink className="w-3.5 h-3.5" /> Gerenciar Negócios
+            </Link>
           </div>
 
-          {/* Form inline nova/editar */}
-          {adicionandoEditora && (
-            <div className={`${card} p-5 space-y-4 border-violet-500/20`}>
-              <h3 className="text-sm font-semibold text-violet-300">{editEditoraIdx !== null ? 'Editar Editora' : 'Nova Editora Administrada'}</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label="Codigo">
-                  <input className={inputCls} placeholder="EX: EDI" value={novaEditora.codigo}
-                    onChange={e => setNovaEditora(prev => ({ ...prev, codigo: e.target.value.toUpperCase() }))} />
-                </Field>
-                <Field label="CNPJ">
-                  <input className={inputCls} placeholder="00.000.000/0001-00" value={novaEditora.cnpj}
-                    onChange={e => setNovaEditora(prev => ({ ...prev, cnpj: maskCnpj(e.target.value) }))} />
-                </Field>
-                <div className="md:col-span-2">
-                  <Field label="Razao Social *">
-                    <input className={inputCls} placeholder="RAZAO SOCIAL" value={novaEditora.razao_social}
-                      onChange={e => setNovaEditora(prev => ({ ...prev, razao_social: e.target.value.toUpperCase() }))} />
-                  </Field>
-                </div>
-                <Field label="Nome Fantasia">
-                  <input className={inputCls} placeholder="NOME FANTASIA" value={novaEditora.nome_fantasia}
-                    onChange={e => setNovaEditora(prev => ({ ...prev, nome_fantasia: e.target.value.toUpperCase() }))} />
-                </Field>
-                <Field label="Status">
-                  <select className={inputCls} value={novaEditora.ativa ? 'ativa' : 'inativa'}
-                    onChange={e => setNovaEditora(prev => ({ ...prev, ativa: e.target.value === 'ativa' }))}>
-                    <option value="ativa">Ativa</option>
-                    <option value="inativa">Inativa</option>
-                  </select>
-                </Field>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="ghost" size="sm" onClick={() => { setAdicionandoEditora(false); setEditEditoraIdx(null) }}>Cancelar</Button>
-                <Button size="sm" onClick={salvarEditora}><Save className="w-3.5 h-3.5" /> Salvar</Button>
-              </div>
+          <div className="bg-sky-500/5 border border-sky-500/15 rounded-xl px-4 py-3">
+            <p className="text-[11px] text-sky-300/70">
+              As editoras administradas são derivadas automaticamente dos Negócios Editoriais ativos.
+              Para cadastrar ou editar a relação entre editoras, acesse <Link href="/master/negocios-editoriais" className="underline hover:text-sky-200">Negócios entre Editoras</Link>.
+            </p>
+          </div>
+
+          {loadingNegocios && (
+            <div className="flex items-center justify-center py-8 text-white/25">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" /> Carregando negócios editoriais...
             </div>
           )}
 
-          {editoras.length === 0 && !adicionandoEditora && (
+          {!loadingNegocios && negocios.length === 0 && (
             <div className={`${card} p-8 flex flex-col items-center gap-3 text-center`}>
               <Building2 className="w-10 h-10 text-white/10" />
-              <p className="text-sm text-white/30">Nenhuma editora administrada cadastrada.</p>
-              <Button size="sm" variant="secondary" onClick={() => setAdicionandoEditora(true)}>
-                <Plus className="w-3.5 h-3.5" /> Adicionar
-              </Button>
+              <p className="text-sm text-white/30">Nenhum negócio editorial cadastrado.</p>
+              <Link href="/master/negocios-editoriais"
+                className="text-xs text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1">
+                <Plus className="w-3.5 h-3.5" /> Cadastrar negócio editorial
+              </Link>
             </div>
           )}
 
-          {editoras.map((e, idx) => (
-            <div key={e.id} className={`${card} p-4 flex items-center gap-4`}>
-              <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/15 flex items-center justify-center flex-shrink-0">
-                <span className="text-xs font-bold text-violet-300">{e.codigo || e.razao_social.slice(0, 2)}</span>
+          {negocios.map(n => (
+            <div key={n.id} className={`${card} p-4 flex items-center gap-4`}>
+              <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/15 flex items-center justify-center flex-shrink-0">
+                <Building2 className="w-5 h-5 text-sky-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white truncate">{e.nome_fantasia || e.razao_social}</p>
-                <p className="text-xs text-white/30 truncate">{e.razao_social} {e.cnpj ? `· ${e.cnpj}` : ''}</p>
+                <p className="text-sm font-semibold text-white truncate">
+                  {n.editora_administrada?.nome_fantasia ?? n.nome}
+                </p>
+                <p className="text-xs text-white/30 truncate">
+                  {n.editora_administrada?.nome_fantasia ?? '—'} → {n.editora_administradora?.nome_fantasia ?? '—'}
+                  &nbsp;·&nbsp;{n.percentual_administrada}% / {n.percentual_administradora}%
+                </p>
+                {(n.territorios ?? []).length > 0 && (
+                  <p className="text-[10px] text-white/20 mt-0.5">{(n.territorios ?? []).join(', ')}</p>
+                )}
               </div>
-              <Badge variant={e.ativa ? 'emerald' : 'slate'}>{e.ativa ? 'Ativa' : 'Inativa'}</Badge>
-              <div className="flex gap-1">
-                <button onClick={() => setDetalheEditora(e)}
-                  className="p-1.5 rounded-lg hover:bg-violet-500/10 text-white/30 hover:text-violet-400 transition-colors" title="Ver obras e contratos">
-                  <ExternalLink className="w-4 h-4" />
-                </button>
-                <button onClick={() => toggleAtivaEditora(idx)} className="p-1.5 rounded-lg hover:bg-white/5 text-white/30 hover:text-amber-400 transition-colors" title={e.ativa ? 'Desativar' : 'Ativar'}>
-                  {e.ativa ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
-                </button>
-                <button onClick={() => { setNovaEditora(e); setEditEditoraIdx(idx); setAdicionandoEditora(true) }}
-                  className="p-1.5 rounded-lg hover:bg-white/5 text-white/30 hover:text-white transition-colors"><Edit3 className="w-4 h-4" /></button>
-                <button onClick={() => removerEditora(idx)}
-                  className="p-1.5 rounded-lg hover:bg-rose-500/10 text-white/30 hover:text-rose-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
-              </div>
+              <Badge variant={n.status === 'ativo' ? 'emerald' : 'slate'}>{n.status}</Badge>
+              <Link href="/master/negocios-editoriais"
+                className="p-1.5 rounded-lg hover:bg-violet-500/10 text-white/30 hover:text-violet-400 transition-colors"
+                title="Ver negócios editoriais">
+                <ExternalLink className="w-4 h-4" />
+              </Link>
             </div>
           ))}
         </div>
@@ -849,7 +614,7 @@ export default function EditoraPage() {
                 </Field>
               </div>
 
-              {/* Acesso a Editoras Administradas */}
+              {/* Acesso a Editoras */}
               {editoras.length > 0 && (
                 <div>
                   <p className="text-xs text-white/40 mb-2 flex items-center gap-1.5">
@@ -858,7 +623,7 @@ export default function EditoraPage() {
                     <span className="text-white/20 ml-1">— além da Editora Master (acesso automático pelo perfil)</span>
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {editoras.filter(e => e.ativa).map(e => {
+                    {editoras.filter(e => e.nome_fantasia).map(e => {
                       const selecionada = novoUsuario.editoras_acesso.includes(e.id)
                       return (
                         <div key={e.id}
@@ -884,9 +649,6 @@ export default function EditoraPage() {
                             </p>
                             {e.cnpj && <p className="text-[10px] text-white/20 font-mono">{e.cnpj}</p>}
                           </div>
-                          {e.modulos && (
-                            <span className="text-[10px] text-white/20 shrink-0">{e.modulos.length} módulos</span>
-                          )}
                         </div>
                       )
                     })}
@@ -958,7 +720,6 @@ export default function EditoraPage() {
                     </button>
                   </div>
                 </div>
-                {/* Editoras com acesso */}
                 <div className="flex items-center gap-2 pl-12 flex-wrap">
                   <span className="text-[10px] text-white/20 uppercase tracking-wide">Acesso:</span>
                   <span className="text-[10px] bg-violet-500/10 text-violet-400 border border-violet-500/20 rounded-full px-2 py-0.5">
@@ -982,13 +743,11 @@ export default function EditoraPage() {
       {/* ─── ABA REGRAS / ARQUITETURA ─────────────────── */}
       {aba === 'regras' && (
         <div className="space-y-4">
-          {/* Diagrama visual AM ← E */}
           <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-6">
             <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
               <Shield className="w-4 h-4 text-violet-400" />
               Arquitetura de Administração
             </h3>
-            {/* Diagrama */}
             <div className="flex flex-col items-center gap-2 py-2">
               <div className="bg-violet-600/20 border-2 border-violet-500/40 rounded-2xl px-6 py-3 text-center">
                 <p className="text-[10px] text-violet-300/60 uppercase tracking-widest mb-0.5">Editora Administradora (AM)</p>
@@ -1014,12 +773,11 @@ export default function EditoraPage() {
             </div>
           </div>
 
-          {/* Regras */}
           <div className="grid grid-cols-1 gap-3">
             {[
               {
                 titulo: 'Catálogo Unificado',
-                icon: Music,
+                icon: Building2,
                 cor: 'violet',
                 descricao: 'Toda obra cadastrada por uma Editora Administrada (E) compõe automaticamente o catálogo da Editora Administradora (AM) por força do contrato de administração.',
                 linkLogica: 'Link: Autor + Editora Original (E) + Editora Administradora (AM)',
@@ -1032,11 +790,11 @@ export default function EditoraPage() {
                 linkLogica: 'REGRA INVIOLÁVEL — AM autoriza, AM licencia',
               },
               {
-                titulo: 'Módulos por Editora Administrada',
-                icon: Settings,
+                titulo: 'Negócios Editoriais por Tipo de Direito e Território',
+                icon: CreditCard,
                 cor: 'blue',
-                descricao: 'O usuário Master da AM habilita individualmente quais módulos cada Editora Administrada pode acessar. A AM sempre tem acesso total.',
-                linkLogica: 'Configure em: Editoras Administradas → clique na editora → aba Módulos / Acesso',
+                descricao: 'Cada negócio editorial define percentuais por tipo de direito e território. O percentual da administradora incide apenas sobre a parcela editorial da editora administrada, nunca sobre a obra inteira.',
+                linkLogica: 'Configure em: Negócios entre Editoras → cada negócio por tipo de direito e território',
               },
               {
                 titulo: 'Financeiro Restrito',

@@ -1,0 +1,134 @@
+============================================================
+RELATÓRIO DE VALIDAÇÃO — MÓDULO DE CONTRATOS
+Data: 05/06/2026 16:53 (horário de Brasília)
+URL: https://sync-mood-saas.vercel.app
+Usuário: CPF 04730581970 / role: master
+============================================================
+
+1. STATUS DO DEPLOY
+-------------------
+NOVO CÓDIGO ATIVO (deploy recente confirmado).
+- API /api/editoras retorna editoras reais sem CNPJs sequenciais falsos.
+- Commit mais recente: bc4f122 (fix: titulares API — order by nome_completo)
+  aplicado durante esta validação e enviado ao repositório.
+
+2. EDITORAS EXIBIDAS NO WIZARD (Step 1 — /master/contratos/novo)
+-----------------------------------------------------------------
+Total: 6 editoras reais carregadas da API /api/editoras
+
+  ID                                    | Nome Fantasia       | Tipo        | CNPJ
+  --------------------------------------|---------------------|-------------|--------------------
+  bbbbbbbb-0000-0000-0000-000000000001  | Top Show Music      | master      | 00.000.000/0001-00
+  3b86b73e-bbf7-46f6-95a5-2f58d75c8b4a  | Top Show Music      | master      | (null)
+  0774bcbc-5d60-44a6-a294-b359aaf8cfcb  | P3 Editora          | administrada| (null)
+  417b2b2b-98df-4be6-8045-4fb1fef7ee0a  | LR Edições          | administrada| (null)
+  f46fc670-c843-4aa7-922e-f034c0424439  | EDI Music           | administrada| (null)
+  6408f1a3-514e-41d7-b6cf-b9cbac25c1c3  | Lamu                | administrada| (null)
+
+CONFIRMADO: NÃO aparecem CNPJs sequenciais falsos (12.345.678/0001-90 etc.).
+OBSERVAÇÃO: "Top Show Music" aparece duplicada (2 registros no banco).
+OBSERVAÇÃO: A maioria das editoras tem CNPJ null — campos operacionais ainda não preenchidos.
+
+3. STATUS DO BANCO DE TITULARES
+--------------------------------
+BANCO ESTAVA VAZIO antes desta validação.
+- GET /api/titulares retornava erro 500: "column titulares.nome does not exist"
+  BUG ENCONTRADO E CORRIGIDO: a API usava .order('nome') mas a coluna é 'nome_completo'.
+  Fix aplicado em: apps/web/app/api/titulares/route.ts (linha 45)
+  Commit: bc4f122 — enviado ao repositório e deploy iniciado.
+
+- Após correção, foi criado 1 titular de teste via POST /api/titulares:
+  ID: bcd32496-4fff-46fb-acb7-f28f96952c51
+  Nome: "Autor Teste Validacao" | Tipo: autor | Pessoa: PF | Código: T0001
+
+4. POST DE CONTRATO EXECUTADO?
+-------------------------------
+SIM — POST /api/contratos executado com sucesso (HTTP 201).
+
+Payload enviado:
+  tipo: cessao
+  editora_id: bbbbbbbb-0000-0000-0000-000000000001 (Top Show Music)
+  titular_id: bcd32496-4fff-46fb-acb7-f28f96952c51 (Autor Teste Validacao)
+  percentual_autor: 75 | percentual_editora: 25
+  status: ativo (ver nota abaixo)
+  numero: CTR-TESTE-001
+  data_inicio: 2026-06-05
+  territorio: BR
+
+NOTA IMPORTANTE: O wizard envia status="assinado" mas o banco retornou erro:
+  "invalid input value for enum status_contrato: 'assinado'"
+  A migration 022_status_contrato_novos_valores.sql (que adiciona 'assinado', 'vigente', 'rascunho'
+  ao enum) NÃO FOI APLICADA no banco de produção.
+  O contrato de teste foi criado com status="ativo" como workaround.
+
+5. CONTRATO PERSISTIDO NO BANCO?
+----------------------------------
+SIM — Contrato confirmado na listagem GET /api/contratos:
+  ID: 7cf415cf-0533-41bb-9a34-51e086b379f0
+  Número: CTR-TESTE-001
+  Status: ativo
+  Total de contratos no banco: 1
+
+KPIs retornados:
+  total: 0 (BUG: kpis.total=0 mas data[] tem 1 item — o KPI usa status='em_vigor' que não existe)
+  em_vigor: 0 | vencendo: 0 | vencidos: 0 | aguardando_assinatura: 0
+
+6. ERROS ENCONTRADOS
+---------------------
+
+ERRO #1 — CRÍTICO (CORRIGIDO NESTA SESSÃO)
+  URL: GET /api/titulares
+  Mensagem: "column titulares.nome does not exist"
+  Causa: route.ts linha 45 usava .order('nome') — coluna correta é 'nome_completo'
+  Status: CORRIGIDO — commit bc4f122 enviado, deploy em andamento
+
+ERRO #2 — CRÍTICO (PENDENTE)
+  URL: POST /api/contratos com status="assinado"
+  Mensagem: "invalid input value for enum status_contrato: 'assinado'"
+  Causa: Migration 022_status_contrato_novos_valores.sql não foi aplicada no banco de produção.
+         O enum status_contrato aceita apenas: ativo | encerrado | suspenso | em_analise
+         O wizard envia 'assinado' (hardcoded na linha 1273 do wizard page.tsx).
+  Impacto: O wizard de contratos FALHARÁ ao tentar criar qualquer contrato via UI.
+  Solução: Aplicar a migration 022 no Supabase de produção via Dashboard SQL Editor.
+
+ERRO #3 — MENOR
+  URL: GET /api/contratos (KPIs)
+  Mensagem: kpis.total retorna 0 mesmo com contratos existentes
+  Causa: O KPI usa status='em_vigor' mas o enum não tem esse valor (é 'ativo').
+         A query de KPI filtra por status='em_vigor' que nunca existe.
+  Impacto: Painel de KPIs sempre mostrará zeros.
+  Solução: Corrigir o filtro em /api/contratos/route.ts linha 68: 'em_vigor' → 'ativo'
+
+ERRO #4 — MENOR
+  Editora "Top Show Music" duplicada no banco (2 registros com IDs diferentes).
+  Impacto: Aparece duas vezes no seletor do wizard.
+
+7. SCREENSHOTS DISPONÍVEIS
+----------------------------
+C:\Users\Usuário\Desktop\sync-mood-saas\screenshots\etapa1_login_dashboard.png
+C:\Users\Usuário\Desktop\sync-mood-saas\screenshots\etapa2_wizard_step1.png
+C:\Users\Usuário\Desktop\sync-mood-saas\screenshots\etapa3_step3_busca_titular.png
+C:\Users\Usuário\Desktop\sync-mood-saas\screenshots\etapa3_step3_sem_titular.png
+C:\Users\Usuário\Desktop\sync-mood-saas\screenshots\etapa4_listagem_contratos.png
+(Screenshots de sessão anterior — validação atual feita via API direta)
+
+8. CONCLUSÃO
+-------------
+O módulo de contratos NÃO está pronto para uso real em produção.
+
+Bloqueadores críticos:
+  [BLOQUEADOR] Migration 022 não aplicada → wizard falha ao criar contrato (status='assinado' inválido)
+  [CORRIGIDO]  API /api/titulares com bug de coluna → titulares não carregavam no wizard
+
+Ações necessárias antes de liberar para uso:
+  1. Aplicar migration 022 no Supabase produção:
+     ALTER TYPE status_contrato ADD VALUE IF NOT EXISTS 'vigente';
+     ALTER TYPE status_contrato ADD VALUE IF NOT EXISTS 'assinado';
+     ALTER TYPE status_contrato ADD VALUE IF NOT EXISTS 'rascunho';
+  2. Corrigir KPI em /api/contratos/route.ts: filtro 'em_vigor' → 'ativo'
+  3. Remover duplicata de "Top Show Music" no banco
+  4. Aguardar deploy do fix bc4f122 (titulares API) — ~2 min
+
+============================================================
+FIM DO RELATÓRIO
+============================================================

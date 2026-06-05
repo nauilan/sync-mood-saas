@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
   const headers = { apikey: ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
   // Tenta query completa (com colunas adicionadas em migrations 012/014)
-  let qs = `select=id,nome_fantasia,razao_social,cnpj,tipo_editora,controlada,status,codigo_publisher_cwr,created_at&order=nome_fantasia.asc`
+  let qs = `select=id,nome_fantasia,razao_social,cnpj,tipo_editora,controlada,status,codigo_publisher_cwr,codigo_cae,codigo_ipi,created_at&order=nome_fantasia.asc`
   if (status && status !== 'todos') qs += `&status=eq.${status}`
   let res = await fetch(`${SUPABASE_URL}/rest/v1/editoras?${qs}`, { headers })
   let data = await res.json()
@@ -67,6 +67,8 @@ export async function GET(req: NextRequest) {
       tipo_editora: null,
       controlada: false,
       codigo_publisher_cwr: null,
+      codigo_cae: null,
+      codigo_ipi: null,
     }))
     return NextResponse.json({ editoras: normalized, _schema_v1: true })
   }
@@ -85,7 +87,7 @@ export async function POST(req: NextRequest) {
   if (!tenant_id) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
 
   const body = await req.json()
-  const { nome_fantasia, razao_social, cnpj, tipo_editora, controlada, codigo_publisher_cwr } = body
+  const { nome_fantasia, razao_social, cnpj, tipo_editora, controlada, codigo_publisher_cwr, codigo_cae, codigo_ipi } = body
 
   if (!nome_fantasia?.trim() || !razao_social?.trim()) {
     return NextResponse.json({ error: 'nome_fantasia e razao_social são obrigatórios' }, { status: 400 })
@@ -103,6 +105,8 @@ export async function POST(req: NextRequest) {
     tipo_editora: tipo_editora ?? 'administrada',
     controlada: controlada ?? false,
     codigo_publisher_cwr: codigo_publisher_cwr?.trim() || null,
+    codigo_cae: codigo_cae?.trim() || null,
+    codigo_ipi: codigo_ipi?.trim() || null,
     status: 'ativo',
   }
   let res = await fetch(`${SUPABASE_URL}/rest/v1/editoras`, { method: 'POST', headers: postHeaders, body: JSON.stringify(payloadFull) })

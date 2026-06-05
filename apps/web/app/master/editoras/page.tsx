@@ -28,6 +28,8 @@ interface Editora {
   controlada: boolean
   status: string
   codigo_publisher_cwr: string | null
+  codigo_cae: string | null
+  codigo_ipi: string | null
   created_at: string
 }
 
@@ -38,6 +40,8 @@ const FORM_INITIAL = {
   tipo_editora: 'administrada' as TipoEditora,
   controlada: false,
   codigo_publisher_cwr: '',
+  codigo_cae: '',
+  codigo_ipi: '',
 }
 
 function getInitials(name: string): string {
@@ -228,6 +232,23 @@ export default function EditorasPage() {
                   className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 font-mono focus:outline-none focus:border-violet-500/50"
                   placeholder="Ex: ED01"
                 />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-white/50 mb-1.5">Código CAE / IPI</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    value={form.codigo_cae}
+                    onChange={e => setForm(f => ({ ...f, codigo_cae: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 font-mono focus:outline-none focus:border-violet-500/50"
+                    placeholder="CAE"
+                  />
+                  <input
+                    value={form.codigo_ipi}
+                    onChange={e => setForm(f => ({ ...f, codigo_ipi: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 font-mono focus:outline-none focus:border-violet-500/50"
+                    placeholder="IPI"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-[11px] font-medium text-white/50 mb-1.5">Tipo</label>

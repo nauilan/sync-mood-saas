@@ -47,16 +47,39 @@ const RECEITAS_OPCOES = [
   { value: 'internacional',    label: 'Internacional' },
   { value: 'licenciamento',    label: 'Licenciamento' },
   { value: 'outras',           label: 'Outras' },
+  { value: 'direitos_futuros', label: 'Direitos Futuros / Novas Receitas' },
 ]
-const TERRITORIOS_OPCOES = [
-  { value: 'mundial',         label: 'Mundial' },
-  { value: 'brasil',          label: 'Brasil' },
-  { value: 'america_latina',  label: 'América Latina' },
-  { value: 'europa',          label: 'Europa' },
-  { value: 'america_norte',   label: 'América do Norte' },
-  { value: 'asia',            label: 'Ásia' },
-  { value: 'outros',          label: 'Outros' },
+const TERRITORIOS_RAPIDOS = [
+  { value: 'mundial', label: 'Mundo' },
+  { value: 'brasil',  label: 'Brasil' },
 ]
+const PAISES_ESPECIFICOS = [
+  { value: 'PT', label: 'Portugal' },
+  { value: 'US', label: 'Estados Unidos' },
+  { value: 'AR', label: 'Argentina' },
+  { value: 'PY', label: 'Paraguai' },
+  { value: 'UY', label: 'Uruguai' },
+  { value: 'MX', label: 'México' },
+  { value: 'ES', label: 'Espanha' },
+  { value: 'CO', label: 'Colômbia' },
+  { value: 'CL', label: 'Chile' },
+  { value: 'FR', label: 'França' },
+  { value: 'IT', label: 'Itália' },
+  { value: 'DE', label: 'Alemanha' },
+  { value: 'UK', label: 'Reino Unido' },
+  { value: 'JP', label: 'Japão' },
+]
+const TERRITORIOS_TODOS = [...TERRITORIOS_RAPIDOS, ...PAISES_ESPECIFICOS]
+// Mapeamento de compatibilidade para valores antigos já armazenados no banco
+const LEGACY_TERRITORIO_LABELS: Record<string, string> = {
+  america_latina: 'América Latina',
+  europa: 'Europa',
+  america_norte: 'América do Norte',
+  asia: 'Ásia',
+  outros: 'Outros',
+}
+// Mantido para compatibilidade com NegocioCard e outros pontos que usavam TERRITORIOS_OPCOES
+const TERRITORIOS_OPCOES = TERRITORIOS_TODOS
 const ABRANGENCIA_OPCOES = [
   { value: 'catalogo_inteiro', label: 'Catálogo inteiro' },
   { value: 'obras_especificas', label: 'Obras específicas' },
@@ -97,6 +120,11 @@ function fmtDate(d?: string | null) {
   return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR')
 }
 function fmtPct(n: number) { return n.toFixed(4).replace(/\.?0+$/, '') + '%' }
+function getTerritoryLabel(v: string): string {
+  return TERRITORIOS_TODOS.find(t => t.value === v)?.label
+    ?? LEGACY_TERRITORIO_LABELS[v]
+    ?? v
+}
 
 // ─── Componente de formulário inline ─────────────────────────────────────────
 function NegocioForm({
@@ -226,7 +254,7 @@ function NegocioForm({
       {/* Partes */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className={labelCls}>Editora Administrada (Editora Original) *</label>
+          <label className={labelCls}>Editora Titular / Administrada *</label>
           <select value={form.editora_administrada_id} onChange={e => pickAdministrada(e.target.value)} className={inputCls}>
             <option value="">— selecionar —</option>
             {editoras.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia}</option>)}
@@ -234,7 +262,7 @@ function NegocioForm({
           <p className="text-[10px] text-white/25 mt-0.5">Editora que possui os direitos editoriais</p>
         </div>
         <div>
-          <label className={labelCls}>Editora Administradora *</label>
+          <label className={labelCls}>Editora Gestora / Administradora *</label>
           <select value={form.editora_administradora_id} onChange={e => pickAdministradora(e.target.value)} className={inputCls}>
             <option value="">— selecionar —</option>
             {editoras.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia}</option>)}
@@ -278,8 +306,8 @@ function NegocioForm({
         </div>
         <p className="text-[10px] text-amber-400/60 flex items-center gap-1.5">
           <Info className="w-3 h-3 shrink-0" />
-          Esses percentuais são o que o Analítico usará para distribuir a parte editorial.
-          NÃO inferir do CWR.
+          Estes percentuais incidem <strong>somente sobre a parcela editorial da Editora Titular</strong>, nunca sobre a obra inteira.
+          Ex.: autor 50% da obra, editora 25% → parte editorial = 12,5%. Se regra for 60/40, Titular fica 7,5% e Gestora 5%.
         </p>
       </div>
 
@@ -304,11 +332,25 @@ function NegocioForm({
       {/* Territórios */}
       <div>
         <label className={labelCls}>Territórios</label>
-        <div className="flex flex-wrap gap-2">
-          {TERRITORIOS_OPCOES.map(t => (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {TERRITORIOS_RAPIDOS.map(t => (
             <button key={t.value} type="button"
               onClick={() => toggleTerritorio(t.value)}
               className={`h-7 px-3 rounded-lg text-xs font-semibold transition-colors border ${
+                (form.territorios as string[]).includes(t.value)
+                  ? 'bg-sky-600/25 border-sky-500/40 text-sky-300'
+                  : 'bg-white/[0.03] border-white/[0.06] text-white/35 hover:text-white/60'
+              }`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-[10px] text-white/25 mb-1.5">Países específicos</p>
+        <div className="flex flex-wrap gap-1.5">
+          {PAISES_ESPECIFICOS.map(t => (
+            <button key={t.value} type="button"
+              onClick={() => toggleTerritorio(t.value)}
+              className={`h-6 px-2 rounded text-[11px] font-medium transition-colors border ${
                 (form.territorios as string[]).includes(t.value)
                   ? 'bg-sky-600/25 border-sky-500/40 text-sky-300'
                   : 'bg-white/[0.03] border-white/[0.06] text-white/35 hover:text-white/60'
@@ -366,9 +408,9 @@ function NegocioForm({
         </div>
       </div>
       <div>
-        <label className={labelCls}>URL do Documento do Contrato</label>
+        <label className={labelCls}>Link externo do Contrato (opcional)</label>
         <input value={(form as any).contrato_url ?? ''} onChange={e => set('contrato_url', e.target.value)}
-          placeholder="https://... ou caminho no storage" className={inputCls} />
+          placeholder="https://drive.google.com/... ou DocuSign/Clicksign" className={inputCls} />
       </div>
 
       {/* Observações */}
@@ -404,9 +446,7 @@ function NegocioCard({
   const receitas = (negocio.receitas_aplicaveis ?? []).map(r =>
     RECEITAS_OPCOES.find(x => x.value === r)?.label ?? r
   )
-  const territorios = (negocio.territorios ?? []).map(t =>
-    TERRITORIOS_OPCOES.find(x => x.value === t)?.label ?? t
-  )
+  const territorios = (negocio.territorios ?? []).map(t => getTerritoryLabel(t))
 
   return (
     <div className={`bg-[#0d1526] border rounded-2xl overflow-hidden transition-all ${

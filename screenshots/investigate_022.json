@@ -1,0 +1,96 @@
+{
+  "test1_data_inicio_ativo": {
+    "status": 500,
+    "body": {
+      "error": "null value in column \"titular_id\" of relation \"contratos\" violates not-null constraint"
+    }
+  },
+  "test2_data_inicio_assinado": {
+    "status": 500,
+    "body": {
+      "error": "null value in column \"titular_id\" of relation \"contratos\" violates not-null constraint"
+    }
+  },
+  "test3_vigencia_inicio_assinado": {
+    "status": 500,
+    "body": {
+      "error": "Could not find the 'vigencia_inicio' column of 'contratos' in the schema cache"
+    }
+  },
+  "test4_get_contratos": {
+    "kpis": {
+      "total": 0,
+      "em_vigor": 0,
+      "vencendo": 0,
+      "vencidos": 0,
+      "aguardando_assinatura": 0
+    },
+    "contratos": [
+      {
+        "id": "3b2519bf-d066-4921-a264-35074a1ec7fc",
+        "tenant_id": "aaaaaaaa-0000-0000-0000-000000000001",
+        "editora_id": "bbbbbbbb-0000-0000-0000-000000000001",
+        "numero": "CTR-WIZARD-022",
+        "tipo": "cessao",
+        "titular_id": "bcd32496-4fff-46fb-acb7-f28f96952c51",
+        "modelo_juridico_id": null,
+        "data_inicio": "2026-06-05",
+        "data_fim": null,
+        "prazo_indeterminado": true,
+        "percentual_editora": 25,
+        "percentual_autor": 75,
+        "splits_direitos": {},
+        "territorio": "BR",
+        "direitos": [
+          "execucao_publica",
+          "reproducao"
+        ],
+        "exclusividade": false,
+        "arquivo_pdf_url": null,
+        "arquivo_assinado_url": null,
+        "status": "ativo",
+        "observacoes": "Contrato criado via wizard - validacao migration 022",
+        "deleted_at": null,
+        "created_at": "2026-06-05T20:03:44.984862+00:00",
+        "updated_at": "2026-06-05T20:03:44.984862+00:00"
+      },
+      {
+        "id": "7cf415cf-0533-41bb-9a34-51e086b379f0",
+        "tenant_id": "aaaaaaaa-0000-0000-0000-000000000001",
+        "editora_id": "bbbbbbbb-0000-0000-0000-000000000001",
+        "numero": "CTR-TESTE-001",
+        "tipo": "cessao",
+        "titular_id": "bcd32496-4fff-46fb-acb7-f28f96952c51",
+        "modelo_juridico_id": null,
+        "data_inicio": "2026-06-05",
+        "data_fim": null,
+        "prazo_indeterminado": false,
+        "percentual_editora": 25,
+        "percentual_autor": 75,
+        "splits_direitos": {},
+        "territorio": "BR",
+        "direitos": [
+          "execucao_publica",
+          "reproducao",
+          "sincronizacao",
+          "digital"
+        ],
+        "exclusividade": false,
+        "arquivo_pdf_url": null,
+        "arquivo_assinado_url": null,
+        "status": "ativo",
+        "observacoes": "cessao_parcial - Contrato de validacao deploy",
+        "deleted_at": null,
+        "created_at": "2026-06-05T19:53:38.703466+00:00",
+        "updated_at": "2026-06-05T19:53:38.703466+00:00"
+      }
+    ]
+  },
+  "test5_wizard": {
+    "network_calls": [],
+    "save_error": "Selecione um titular válido cadastrado no banco."
+  },
+  "test6_bridge": {
+    "status": "nao_encontrado"
+  }
+}

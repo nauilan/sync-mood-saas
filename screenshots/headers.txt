@@ -1,0 +1,14 @@
+HTTP/1.1 200 OK
+Cache-Control: no-store, no-cache, private
+Content-Type: application/json
+Date: Fri, 05 Jun 2026 19:59:04 GMT
+Expires: 0
+Pragma: no-cache
+Server: Vercel
+Set-Cookie: sb-tigubwxotanaznqqxogf-auth-token=%7B%22access_token%22%3A%22eyJhbGciOiJFUzI1NiIsImtpZCI6IjA3ZDliMGQzLTU5OGItNDkyNS05NTFkLWJiYzJmZjIxYjNmZSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3RpZ3Vid3hvdGFuYXpucXF4b2dmLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiIyN2YzOGVjNC1iZDk3LTQzYTctYmVlZC05NDZlZGM1YjE5NWUiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzgwNjkzMTQzLCJpYXQiOjE3ODA2ODk1NDMsImVtYWlsIjoiMDQ3MzA1ODE5NzBAc3luY21vb2QuYXBwIiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6eyJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwidXNlcl9yb2xlIjoibWFzdGVyIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3ODA2ODk1NDN9XSwic2Vzc2lvbl9pZCI6IjU5NDkzZWI0LTRhMTMtNGZkMS1iMjI3LTMzMWQ4NTM3NmQ1YiIsImlzX2Fub255bW91cyI6ZmFsc2V9.bWm-2hUueVo8IYjDo7YKnviCncWPEz-dIGhtj3Bfct3A7O-l25Le2CDEKK4HU9RSv6BEiPUxTBSmEzJVCzyRCA%22%2C%22refresh_token%22%3A%225qeqjfb4lfs2%22%2C%22expires_in%22%3A3600%2C%22expires_at%22%3A1780693143%2C%22token_type%22%3A%22bearer%22%2C%22user%22%3A%7B%22id%22%3A%2227f38ec4-bd97-43a7-beed-946edc5b195e%22%2C%22aud%22%3A%22authenticated%22%2C%22role%22%3A%22authenticated%22%2C%22email%22%3A%2204730581970%40syncmood.app%22%2C%22email_confirmed_at%22%3A%222026-05-31T02%3A04%3A09.055989Z%22%2C%22phone%22%3A%22%22%2C%22confirmed_at%22%3A%222026-05-31T02%3A04%3A09.055989Z%22%2C%22last_sign_in_at%22%3A%222026-06-05T19%3A59%3A03.802912433Z%22%2C%22app_metadata%22%3A%7B%22provider%22%3A%22email%22%2C%22providers%22%3A%5B%22email%22%5D%7D%2C%22user_metadata%22%3A%7B%22email_verified%22%3Atrue%2C%22user_role%22%3A%22master%22%7D%2C%22identities%22%3A%5B%7B%22identity_id%22%3A%220c0d344e-0bb6-4fe9-a8f2-1229a01dd04a%22%2C%22id%22%3A%2227f38ec4-bd97-43a7-beed-946edc5b195e%22%2C%22user_id%22%3A%2227f38ec4-bd97-43a7-beed-946edc5b195e%22%2C%22identity_data%22%3A%7B%22email%22%3A%2204730581970%40syncmood.app%22%2C%22email_verified%22%3Afalse%2C%22phone_verified%22%3Afalse%2C%22sub%22%3A%2227f38ec4-bd97-43a7-beed-946edc5b195e%22%7D%2C%22provider%22%3A%22email%22%2C%22last_sign_in_at%22%3A%222026-05-31T02%3A04%3A09.050482Z%22%2C%22created_at%22%3A%222026-05-31T02%3A04%3A09.05054Z%22%2C%22updated_at%22%3A%222026-05-31T02%3A04%3A09.05054Z%22%2C%22email%22%3A%2204730581970%40syncmood.app%22%7D%5D%2C%22created_at%22%3A%222026-05-31T02%3A04%3A09.036087Z%22%2C%22updated_at%22%3A%222026-06-05T19%3A59%3A03.824224Z%22%2C%22is_anonymous%22%3Afalse%7D%7D; Path=/; Expires=Fri, 05 Jun 2026 20:59:04 GMT; Max-Age=3600; Secure; SameSite=lax
+Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+X-Matched-Path: /api/auth/login
+X-Vercel-Cache: MISS
+X-Vercel-Id: gru1::iad1::cghc9-1780689542792-1fbdc79c2fe3
+Transfer-Encoding: chunked
+

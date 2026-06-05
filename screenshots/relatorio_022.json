@@ -1,0 +1,135 @@
+{
+  "migration_022": "NÃO APLICADA",
+  "post_status": 500,
+  "post_response": {
+    "error": "Could not find the 'vigencia_inicio' column of 'contratos' in the schema cache"
+  },
+  "contrato_status": null,
+  "top_show_count": 1,
+  "kpi_em_vigor": 0,
+  "kpi_total": 0,
+  "kpis_raw": {
+    "total": 0,
+    "em_vigor": 0,
+    "vencendo": 0,
+    "vencidos": 0,
+    "aguardando_assinatura": 0
+  },
+  "contratos_listagem": [
+    "Modelos Juridicos",
+    "Alertas Exclusividade",
+    " Contrato de Obras",
+    " Outros Contratos",
+    "CTR-WIZARD-022cessaoativo—··— – Indeterminado0obras",
+    "CTR-TESTE-001cessaoativo—··— – —0obras",
+    "Biblioteca de Modelos Juridicos",
+    "Alertas de Exclusividade"
+  ],
+  "bridge_obras": "3 obras",
+  "bridge_result": "Botão Analítico não encontrado",
+  "erros": [
+    "Migration 022 não aplicada: POST retornou 500 — Could not find the 'vigencia_inicio' column of 'contratos' in the schema cache",
+    "Banco de titulares: nenhum resultado para 'Autor'",
+    "Nenhuma chamada POST /api/contratos detectada no wizard"
+  ],
+  "screenshots": [
+    "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\00_login_page.png",
+    "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\01_login_filled.png",
+    "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\02_after_login.png",
+    "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\03_contratos_listagem_inicial.png",
+    "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\04_wizard_step1.png",
+    "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\05_wizard_step1_filled.png",
+    "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\06_wizard_step2.png",
+    "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\07_wizard_step3_partes.png",
+    "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\08_wizard_step3_busca_titular.png",
+    "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\09_wizard_step6_periodo.png",
+    "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\10_wizard_step9_revisao.png",
+    "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\11_wizard_after_submit.png",
+    "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\12_contratos_listagem_pos_criacao.png",
+    "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\13_obras_listagem.png",
+    "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\14_obra_detalhe.png"
+  ],
+  "api_contratos_raw": {
+    "total": 2,
+    "kpis": {
+      "total": 0,
+      "em_vigor": 0,
+      "vencendo": 0,
+      "vencidos": 0,
+      "aguardando_assinatura": 0
+    },
+    "contratos": [
+      {
+        "id": "3b2519bf-d066-4921-a264-35074a1ec7fc",
+        "numero": "CTR-WIZARD-022",
+        "status": "ativo",
+        "tipo": "cessao"
+      },
+      {
+        "id": "7cf415cf-0533-41bb-9a34-51e086b379f0",
+        "numero": "CTR-TESTE-001",
+        "status": "ativo",
+        "tipo": "cessao"
+      }
+    ]
+  },
+  "titulares_count": 1,
+  "editoras_raw": [
+    {
+      "id": "f46fc670-c843-4aa7-922e-f034c0424439",
+      "nome_fantasia": "EDI Music",
+      "razao_social": "EDI Music Edições Ltda",
+      "cnpj": null,
+      "tipo_editora": "administrada",
+      "controlada": true,
+      "status": "ativo",
+      "codigo_publisher_cwr": null,
+      "created_at": "2026-06-05T18:48:26.805423+00:00"
+    },
+    {
+      "id": "6408f1a3-514e-41d7-b6cf-b9cbac25c1c3",
+      "nome_fantasia": "Lamu",
+      "razao_social": "Lamu Editora Musical Ltda",
+      "cnpj": null,
+      "tipo_editora": "administrada",
+      "controlada": true,
+      "status": "ativo",
+      "codigo_publisher_cwr": null,
+      "created_at": "2026-06-05T18:48:27.426555+00:00"
+    },
+    {
+      "id": "417b2b2b-98df-4be6-8045-4fb1fef7ee0a",
+      "nome_fantasia": "LR Edições",
+      "razao_social": "LR Edições Musicais Ltda",
+      "cnpj": null,
+      "tipo_editora": "administrada",
+      "controlada": true,
+      "status": "ativo",
+      "codigo_publisher_cwr": null,
+      "created_at": "2026-06-05T18:48:26.107815+00:00"
+    },
+    {
+      "id": "0774bcbc-5d60-44a6-a294-b359aaf8cfcb",
+      "nome_fantasia": "P3 Editora",
+      "razao_social": "P3 Editora Musical LTDA",
+      "cnpj": null,
+      "tipo_editora": "administrada",
+      "controlada": true,
+      "status": "ativo",
+      "codigo_publisher_cwr": null,
+      "created_at": "2026-06-04T21:33:06.83301+00:00"
+    },
+    {
+      "id": "bbbbbbbb-0000-0000-0000-000000000001",
+      "nome_fantasia": "Top Show Music",
+      "razao_social": "TOP SHOW MUSIC LIMIT",
+      "cnpj": "00.000.000/0001-00",
+      "tipo_editora": "master",
+      "controlada": true,
+      "status": "ativo",
+      "codigo_publisher_cwr": null,
+      "created_at": "2026-05-31T12:38:38.552274+00:00"
+    }
+  ],
+  "ctr_wizard_022_existe": true
+}

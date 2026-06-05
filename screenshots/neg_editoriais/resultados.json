@@ -1,0 +1,115 @@
+{
+  "etapa1_login_status": 200,
+  "etapa1_token_ok": true,
+  "etapa1_role": "master",
+  "etapa2_http_status": 200,
+  "etapa2_tipo_direito_id_presente": true,
+  "etapa2_total_negocios": 0,
+  "etapa3_id_p3": "0774bcbc-5d60-44a6-a294-b359aaf8cfcb",
+  "etapa3_id_top_show": "bbbbbbbb-0000-0000-0000-000000000001",
+  "etapa3_id_lr": "417b2b2b-98df-4be6-8045-4fb1fef7ee0a",
+  "etapa3_editoras_total": 5,
+  "etapa3_editoras_lista": [
+    {
+      "id": "f46fc670-c843-4aa7-922e-f034c0424439",
+      "nome": "EDI Music"
+    },
+    {
+      "id": "6408f1a3-514e-41d7-b6cf-b9cbac25c1c3",
+      "nome": "Lamu"
+    },
+    {
+      "id": "417b2b2b-98df-4be6-8045-4fb1fef7ee0a",
+      "nome": "LR Edições"
+    },
+    {
+      "id": "0774bcbc-5d60-44a6-a294-b359aaf8cfcb",
+      "nome": "P3 Editora"
+    },
+    {
+      "id": "bbbbbbbb-0000-0000-0000-000000000001",
+      "nome": "Top Show Music"
+    }
+  ],
+  "etapa3_tipos_direito_status": 200,
+  "etapa3_tipos_direito_total": 10,
+  "etapa3_tipos_direito": [
+    {
+      "id": "00000000-0000-0000-0000-000000000005",
+      "nome": "Audiovisual",
+      "codigo": "audiovisual"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000009",
+      "nome": "Base de Dados",
+      "codigo": "base_dados"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000001",
+      "nome": "Execução Pública",
+      "codigo": "exec_publica"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000002",
+      "nome": "Fono Digital (DSP)",
+      "codigo": "digital"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000007",
+      "nome": "Internacional",
+      "codigo": "internacional"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000008",
+      "nome": "Licenciamento",
+      "codigo": "licenciamento"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000004",
+      "nome": "Mecânico",
+      "codigo": "mecanico"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000010",
+      "nome": "Outros",
+      "codigo": "outros"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000006",
+      "nome": "Publicidade",
+      "codigo": "publicidade"
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000003",
+      "nome": "Sincronização",
+      "codigo": "sincronizacao"
+    }
+  ],
+  "etapa4_http_status": 201,
+  "etapa4_id_criado": "089b44f2-1e6a-412e-92f7-9569c9c3771b",
+  "etapa4_tipo_direito_id": null,
+  "etapa4_campos": {
+    "nome": "TESTE-023 P3 -> Top Show Digital BR",
+    "percentual_administrada": 60,
+    "percentual_administradora": 40,
+    "tipo_direito_id": null,
+    "status": "ativo"
+  },
+  "etapa5_http_status": 200,
+  "etapa5_percentual_administrada": 65,
+  "etapa5_percentual_administradora": 35,
+  "etapa6_negocio_na_lista": true,
+  "etapa6_percentual_administrada": 65,
+  "etapa6_percentual_administradora": 35,
+  "etapa6_tipo_direito_id_presente": true,
+  "etapa6_tipo_direito_id_valor": null,
+  "etapa8_url": "https://sync-mood-saas.vercel.app/master/negocios-editoriais",
+  "etapa8_screenshot1": "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\neg_editoriais\\01_lista_negocios.png",
+  "etapa8_page_title": "Sync Mood | Gestao Inteligente de Direitos Musicais",
+  "etapa8_carregou_sem_erro": true,
+  "etapa8_form_edicao_abriu": false,
+  "etapa8_screenshot2": "C:\\Users\\Usuário\\Desktop\\sync-mood-saas\\screenshots\\neg_editoriais\\02_form_edicao.png",
+  "etapa9_http_status": 200,
+  "etapa9_ok": true,
+  "etapa9_negocio_removido": true
+}

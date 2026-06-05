@@ -16,7 +16,7 @@ export const MASTER_NAV: NavSection[] = [
   ]},
   { title: 'M1 Cadastros', items: [
     { label: 'Titulares', href: '/master/titulares', iconName: 'Users' },
-    { label: 'Editoras Administradas', href: '/master/editoras', iconName: 'Building2' },
+    { label: 'Editoras', href: '/master/editoras', iconName: 'Building2' },
     { label: 'Editoras / Master', href: '/master/editora', iconName: 'Settings' },
   ]},
   { title: 'M2 Contratos', items: [
