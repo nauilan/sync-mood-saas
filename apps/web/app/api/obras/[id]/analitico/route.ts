@@ -23,10 +23,9 @@ import {
 } from '@/lib/bridge-analitico'
 
 function supabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()
+  return createClient(url, key, { auth: { persistSession: false } })
 }
 
 export async function POST(
