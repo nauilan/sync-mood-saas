@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { MOCK_OBRAS, MOCK_OBRAS_LINKS, MOCK_OBRAS_FONOGRAMAS } from '@/lib/mock-obras'
 import { STORE_KEYS } from '@/lib/store'
-import { createClient as createBrowserClient, getAccessToken } from '@/lib/supabase/client'
+import { getAccessToken } from '@/lib/supabase/client'
 import { createClient } from '@supabase/supabase-js'
 import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
 import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, normalizarLinksObra } from '@/lib/types-obras'
@@ -129,29 +129,17 @@ function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => 
     setRealLinks(null)
     const token = getAccessToken()
     if (!token) { setLoadingLinks(false); return }
-    const sb = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    )
-    sb.from('obras_links')
-      .select(`
-        id, obra_id, numero_link, percentual_link, tipo_link, controlado,
-        obras_links_titulares (
-          id, obra_link_id, nome, papel, funcao_no_link,
-          percentual_exec_publica, percentual_fonomecanico, percentual_sincronizacao,
-          controlado, cpf_cnpj, tipo_pessoa, pseudonimo_fantasia,
-          codigo_interno_legado_titular, contrato_file, titular_id, editora_id
-        )
-      `)
-      .eq('obra_id', obraInicial.id)
-      .eq('status', 'ativo')
-      .then(({ data, error }) => {
-        if (!error && data && data.length > 0) {
-          setRealLinks(data.map((l: any) => ({ ...l, titulares: l.obras_links_titulares ?? [] })))
+    fetch(`/api/obras/${obraInicial.id}/links`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(json => {
+        if (json.data) {
+          setRealLinks(json.data)
         }
-        setLoadingLinks(false)
       })
+      .catch(() => { /* silencioso: cai no fallback mock */ })
+      .finally(() => setLoadingLinks(false))
   }, [obraInicial.id])
 
   // ── Calcular Analítico ───────────────────────────────────────────────────
