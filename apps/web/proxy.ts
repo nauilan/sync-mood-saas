@@ -3,8 +3,9 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 type UserRole = 'master' | 'editora' | 'titular'
 
-// Rotas de API públicas (não exigem sessão)
-const API_PUBLIC = ['/api/auth/login']
+// Todas as rotas /api/* fazem sua própria autenticação via Bearer token no handler.
+// O middleware não bloqueia API routes — cada handler é responsável por validar o token.
+const API_PUBLIC = ['/api/']
 
 // Rotas de auth — redireciona para dashboard se já logado
 const AUTH_ROUTES = ['/auth/login', '/auth/signup']
