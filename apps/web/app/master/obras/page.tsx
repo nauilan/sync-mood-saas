@@ -9,11 +9,12 @@ import {
   AlignLeft, Link2, Hash, Globe, Calendar, Clock,
   ExternalLink, Edit3, Copy, ChevronDown, ChevronUp,
   Send, Database, Tag, ShieldCheck, ShieldAlert, Loader2,
-  Save, FileSpreadsheet, FileText, Check,
+  Save, FileSpreadsheet, FileText, Check, Calculator, RefreshCw,
 } from 'lucide-react'
 import { MOCK_OBRAS, MOCK_OBRAS_LINKS, MOCK_OBRAS_FONOGRAMAS } from '@/lib/mock-obras'
 import { STORE_KEYS } from '@/lib/store'
 import { useSupabaseQuery } from '@/lib/hooks/use-supabase-query'
+import { createClient as createBrowserClient } from '@/lib/supabase/client'
 import { createClient } from '@supabase/supabase-js'
 import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
 import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, normalizarLinksObra } from '@/lib/types-obras'
@@ -119,7 +120,67 @@ function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => 
   const [editData, setEditData] = useState<any>({})
   const [modoView, setModoView] = useState<'sintetico' | 'analitico'>('sintetico')
 
-  const links = normalizarLinksObra(obra._links ?? MOCK_OBRAS_LINKS[obra.id] ?? [])
+  // ── Carregamento real de links do banco ──────────────────────────────────
+  const [realLinks, setRealLinks] = useState<any[] | null>(null)
+  const [loadingLinks, setLoadingLinks] = useState(true)
+
+  useEffect(() => {
+    if (!obraInicial.id) { setLoadingLinks(false); return }
+    setLoadingLinks(true)
+    setRealLinks(null)
+    const sb = createBrowserClient()
+    sb.from('obras_links')
+      .select(`
+        id, numero_link, percentual_link, tipo_link, controlado,
+        obras_links_titulares (
+          id, nome, papel, funcao_no_link,
+          percentual_exec_publica, percentual_fonomecanico, percentual_sincronizacao,
+          controlado, cpf_cnpj, tipo_pessoa, pseudonimo_fantasia,
+          codigo_interno_legado_titular, contrato_file, titular_id, editora_id
+        )
+      `)
+      .eq('obra_id', obraInicial.id)
+      .eq('status', 'ativo')
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0) {
+          setRealLinks(data.map((l: any) => ({ ...l, titulares: l.obras_links_titulares ?? [] })))
+        }
+        setLoadingLinks(false)
+      })
+  }, [obraInicial.id])
+
+  // ── Calcular Analítico ───────────────────────────────────────────────────
+  const [calculando, setCalculando] = useState(false)
+  const [analiticoResult, setAnaliticoResult] = useState<any>(null)
+  const [analiticoError, setAnaliticoError] = useState<string | null>(null)
+
+  const calcularAnalitico = async () => {
+    setCalculando(true)
+    setAnaliticoError(null)
+    setAnaliticoResult(null)
+    try {
+      const sb = createBrowserClient()
+      const { data: { session } } = await sb.auth.getSession()
+      const token = session?.access_token ?? ''
+      const res = await fetch(`/api/obras/${obra.id}/analitico`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ territorios: ['BR'] }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Erro ao calcular analítico')
+      setAnaliticoResult(json)
+    } catch (e: any) {
+      setAnaliticoError(e.message)
+    } finally {
+      setCalculando(false)
+    }
+  }
+
+  const links = normalizarLinksObra(realLinks ?? obra._links ?? MOCK_OBRAS_LINKS[obra.id] ?? [])
 
   // Detecta link OWR: tem autores MAS nenhuma editora/administradora no link.
   // Regra: se existe E/AM/SE no link, é cadeia editorial controlada (não OWR).
@@ -780,6 +841,19 @@ tfoot td{background:#f7f7f7;font-weight:bold}
             </>
           ) : (
             <>
+              {/* Painel de resultado / erro do analítico */}
+              {(analiticoResult || analiticoError) && (
+                <div className={`w-full mb-1 rounded-xl px-3 py-2 text-xs ${analiticoError ? 'bg-red-500/10 border border-red-500/20 text-red-300' : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'}`}>
+                  {analiticoError ? (
+                    <span className="flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />{analiticoError}</span>
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                      Analítico calculado — {analiticoResult?.total_linhas ?? '?'} participantes · {analiticoResult?.soma_percentuais?.toFixed(2) ?? '?'}%
+                    </span>
+                  )}
+                </div>
+              )}
               <button onClick={onClose}
                 className="flex-1 h-9 rounded-xl bg-white/5 border border-white/[0.06] text-sm text-white/50 hover:text-white/70 transition-colors">
                 Fechar
@@ -791,6 +865,12 @@ tfoot td{background:#f7f7f7;font-weight:bold}
               <button onClick={exportPdf} title="Exportar PDF"
                 className="flex items-center justify-center gap-1.5 px-3 h-9 rounded-xl bg-rose-600/20 border border-rose-500/20 text-sm font-semibold text-rose-400 hover:bg-rose-600/30 transition-colors">
                 <FileText className="w-3.5 h-3.5" /> PDF
+              </button>
+              <button onClick={calcularAnalitico} disabled={calculando}
+                title="Calcular Analítico — gera distribuição por participante"
+                className="flex items-center justify-center gap-1.5 px-3 h-9 rounded-xl bg-blue-600/20 border border-blue-500/20 text-sm font-semibold text-blue-300 hover:bg-blue-600/30 transition-colors disabled:opacity-60">
+                {calculando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Calculator className="w-3.5 h-3.5" />}
+                {calculando ? 'Calculando...' : 'Analítico'}
               </button>
               <button onClick={startEdit}
                 className="flex items-center justify-center gap-1.5 flex-1 h-9 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-semibold text-white transition-colors">
