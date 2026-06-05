@@ -245,15 +245,6 @@ export async function POST(
   const { _tempKey: _k, _tempOrigemKey: _ko, ...fieldsToKeep } = resultado.linhas[0] ?? {}
   void _k; void _ko; void fieldsToKeep
 
-  // Resolve tipos_participante_id a partir do código
-  const { data: tiposPartDb } = await sb
-    .from('tipos_participante')
-    .select('id, codigo')
-
-  const tiposPartMap = new Map<string, string>(
-    (tiposPartDb ?? []).map((t: { id: string; codigo: string }) => [t.codigo, t.id])
-  )
-
   // Insere em lotes de 50, guardando mapa tempKey → id inserido
   const tempKeyToId = new Map<string, string>()
 
@@ -273,7 +264,7 @@ export async function POST(
       titular_id:             l.titular_id,
       editora_id:             l.editora_id,
       nome_participante:      l.nome_participante,
-      tipo_participante_id:   tiposPartMap.get(l.tipo_participante_codigo) ?? null,
+      tipo_participante_codigo: l.tipo_participante_codigo,
       percentual_sobre_obra:  l.percentual_sobre_obra,
       percentual_sobre_origem: l.percentual_sobre_origem,
       origem_participante_id: l._tempOrigemKey ? (tempKeyToId.get(l._tempOrigemKey) ?? null) : null,
@@ -333,12 +324,11 @@ export async function GET(
   const { data, error } = await sb
     .from('obras_analitico')
     .select(`
-      id, nome_participante, tipo_participante_id,
+      id, nome_participante, tipo_participante_codigo,
       percentual_sobre_obra, percentual_sobre_origem,
       nivel_distribuicao, territorio, status_calculo, pendencia,
       versao_calculo, calculado_em,
       tipo_direito_id, tipos_direito ( codigo, nome ),
-      tipos_participante ( codigo, nome ),
       obra_link_id, obra_link_origem_id, origem_participante_id,
       contrato_id, negocio_editorial_id,
       competencia_inicio, competencia_fim
