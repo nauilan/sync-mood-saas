@@ -8,7 +8,8 @@ function getAdminClient() {
   return createClient(url, key, { auth: { persistSession: false } })
 }
 
-async function autenticar(req: NextRequest, sb: ReturnType<typeof createClient>): Promise<{ tenant_id: string; role: string } | null> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function autenticar(req: NextRequest, sb: any): Promise<{ tenant_id: string; role: string } | null> {
   const token = (req.headers.get('authorization') ?? '').replace('Bearer ', '').trim()
   if (!token) return null
   const { data: { user }, error } = await sb.auth.getUser(token)
