@@ -147,7 +147,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     data: result,
     total: search ? result.length : (count ?? 0),
-    _debug: { ccObrasRaw: ccObras?.length ?? 0, tenant_id },
     kpis: {
       saldo_total_obras: saldo_total,
       total_distribuido: distribuido_total,
