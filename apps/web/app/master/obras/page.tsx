@@ -13,7 +13,6 @@ import {
 } from 'lucide-react'
 import { MOCK_OBRAS, MOCK_OBRAS_LINKS, MOCK_OBRAS_FONOGRAMAS } from '@/lib/mock-obras'
 import { STORE_KEYS } from '@/lib/store'
-import { useSupabaseQuery } from '@/lib/hooks/use-supabase-query'
 import { createClient as createBrowserClient } from '@/lib/supabase/client'
 import { createClient } from '@supabase/supabase-js'
 import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
@@ -131,9 +130,9 @@ function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => 
     const sb = createBrowserClient()
     sb.from('obras_links')
       .select(`
-        id, numero_link, percentual_link, tipo_link, controlado,
+        id, obra_id, numero_link, percentual_link, tipo_link, controlado,
         obras_links_titulares (
-          id, nome, papel, funcao_no_link,
+          id, obra_link_id, nome, papel, funcao_no_link,
           percentual_exec_publica, percentual_fonomecanico, percentual_sincronizacao,
           controlado, cpf_cnpj, tipo_pessoa, pseudonimo_fantasia,
           codigo_interno_legado_titular, contrato_file, titular_id, editora_id
@@ -943,13 +942,46 @@ export default function ObrasPage() {
     }
   }
 
-  // Carrega obras: Supabase → localStorage → mock
-  const { data: obrasData } = useSupabaseQuery<any>({
-    table: 'obras',
-    storeKey: STORE_KEYS.obras,
-    fallback: MOCK_OBRAS,
-    orderBy: { column: 'titulo', ascending: true },
-  })
+  // Carrega obras via API route server-side (garante autenticação via token Bearer)
+  const [obrasData, setObrasData] = useState<any[]>([])
+  const [obrasLoading, setObrasLoading] = useState(true)
+  const [obrasSource, setObrasSource] = useState<'api' | 'mock'>('mock')
+
+  useEffect(() => {
+    async function carregarObras() {
+      setObrasLoading(true)
+      try {
+        const sb = createBrowserClient()
+        const { data: { session } } = await sb.auth.getSession()
+        const token = session?.access_token ?? ''
+        if (!token) {
+          // Sem sessão → usar mock para não quebrar a UI
+          setObrasData(MOCK_OBRAS)
+          setObrasSource('mock')
+          return
+        }
+        const res = await fetch('/api/obras?per_page=200', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (res.ok) {
+          const json = await res.json()
+          setObrasData(json.data ?? [])
+          setObrasSource('api')
+        } else {
+          console.warn('[obras] API retornou', res.status)
+          setObrasData(MOCK_OBRAS)
+          setObrasSource('mock')
+        }
+      } catch (e) {
+        console.error('[obras] erro ao carregar:', e)
+        setObrasData(MOCK_OBRAS)
+        setObrasSource('mock')
+      } finally {
+        setObrasLoading(false)
+      }
+    }
+    carregarObras()
+  }, [])
 
   // Catálogo unificado: deduplicado por codigo, com % controlado recalculado dinamicamente
   const catalogoCompleto = useMemo(() => {
@@ -1172,7 +1204,13 @@ export default function ObrasPage() {
             <option value="com">Com fonograma</option>
             <option value="sem">Sem fonograma</option>
           </select>
-          <span className="text-xs text-white/30 ml-auto">{obras.length} obras</span>
+          <span className="text-xs text-white/30 ml-auto">
+            {obrasLoading ? (
+              <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> carregando...</span>
+            ) : (
+              <>{obras.length} obras{obrasSource === 'mock' && <span className="ml-1 text-amber-500/60">(demo)</span>}</>
+            )}
+          </span>
         </div>
 
         {/* Tabela com scroll independente */}
@@ -1271,7 +1309,14 @@ export default function ObrasPage() {
             </tbody>
           </table>
 
-          {obras.length === 0 && (
+          {obrasLoading && (
+            <div className="flex flex-col items-center gap-2 py-12 text-white/30">
+              <Loader2 className="w-8 h-8 animate-spin text-violet-400" />
+              <p className="text-sm">Carregando obras...</p>
+            </div>
+          )}
+
+          {!obrasLoading && obras.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-12 text-white/30">
               <Music className="w-8 h-8" />
               <p className="text-sm">Nenhuma obra encontrada</p>
