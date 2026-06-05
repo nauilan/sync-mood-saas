@@ -46,18 +46,31 @@ export async function GET(req: NextRequest) {
   const token = getToken(req)
   const { searchParams } = new URL(req.url)
   const status = searchParams.get('status') ?? 'ativo'
+  const headers = { apikey: ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
+  // Tenta query completa (com colunas adicionadas em migrations 012/014)
   let qs = `select=id,nome_fantasia,razao_social,cnpj,tipo_editora,controlada,status,codigo_publisher_cwr,created_at&order=nome_fantasia.asc`
   if (status && status !== 'todos') qs += `&status=eq.${status}`
+  let res = await fetch(`${SUPABASE_URL}/rest/v1/editoras?${qs}`, { headers })
+  let data = await res.json()
 
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/editoras?${qs}`, {
-    headers: {
-      apikey: ANON_KEY,
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  })
-  const data = await res.json()
+  // Fallback: se colunas extras não existem, usa apenas colunas base
+  if (!res.ok && Array.isArray(data) === false && String(data?.message ?? data?.error ?? '').includes('does not exist')) {
+    let qsBasic = `select=id,nome_fantasia,razao_social,cnpj,status,created_at&order=nome_fantasia.asc`
+    if (status && status !== 'todos') qsBasic += `&status=eq.${status}`
+    res = await fetch(`${SUPABASE_URL}/rest/v1/editoras?${qsBasic}`, { headers })
+    data = await res.json()
+    if (!res.ok) return NextResponse.json({ error: data }, { status: res.status })
+    // normaliza campos ausentes para compatibilidade com o frontend
+    const normalized = (data as any[]).map(e => ({
+      ...e,
+      tipo_editora: null,
+      controlada: false,
+      codigo_publisher_cwr: null,
+    }))
+    return NextResponse.json({ editoras: normalized, _schema_v1: true })
+  }
+
   if (!res.ok) return NextResponse.json({ error: data }, { status: res.status })
   return NextResponse.json({ editoras: data })
 }
@@ -79,7 +92,10 @@ export async function POST(req: NextRequest) {
   }
 
   const key = SERVICE_KEY || ANON_KEY
-  const payload = {
+  const postHeaders = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=representation' }
+
+  // Tenta inserção completa (com colunas extras de migrations 012/014)
+  const payloadFull = {
     tenant_id,
     nome_fantasia: nome_fantasia.trim(),
     razao_social: razao_social.trim(),
@@ -89,18 +105,16 @@ export async function POST(req: NextRequest) {
     codigo_publisher_cwr: codigo_publisher_cwr?.trim() || null,
     status: 'ativo',
   }
+  let res = await fetch(`${SUPABASE_URL}/rest/v1/editoras`, { method: 'POST', headers: postHeaders, body: JSON.stringify(payloadFull) })
+  let data = await res.json()
 
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/editoras`, {
-    method: 'POST',
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=representation',
-    },
-    body: JSON.stringify(payload),
-  })
-  const data = await res.json()
+  // Fallback: se colunas extras não existem, insere apenas campos base
+  if (!res.ok && String(data?.message ?? data?.error ?? '').includes('does not exist')) {
+    const payloadBase = { tenant_id, nome_fantasia: nome_fantasia.trim(), razao_social: razao_social.trim(), cnpj: cnpj?.trim() || null, status: 'ativo' }
+    res = await fetch(`${SUPABASE_URL}/rest/v1/editoras`, { method: 'POST', headers: postHeaders, body: JSON.stringify(payloadBase) })
+    data = await res.json()
+  }
+
   if (!res.ok) return NextResponse.json({ error: data }, { status: res.status })
   const editora = Array.isArray(data) ? data[0] : data
   return NextResponse.json({ editora }, { status: 201 })
