@@ -36,25 +36,31 @@ export async function GET(req: NextRequest) {
   const page = Math.max(Number(searchParams.get('page') ?? 1), 1)
   const offset = (page - 1) * per_page
 
-  // Colunas reais de cc_obras: id, tenant_id, obra_id, saldo_atual, saldo_bloqueado,
-  //   saldo_distribuido, saldo_pendente, moeda, status, created_at, updated_at
+  // Busca cc_obras SEM join — mais confiável no PostgREST
   const { data: ccObras, error, count } = await sb
     .from('cc_obras')
-    .select(`
-      id, obra_id, saldo_atual, saldo_bloqueado, saldo_distribuido, saldo_pendente,
-      moeda, status, updated_at,
-      obras ( id, titulo, codigo_obra, iswc, status )
-    `, { count: 'exact' })
+    .select('id, obra_id, saldo_atual, saldo_bloqueado, saldo_distribuido, saldo_pendente, moeda, status, updated_at', { count: 'exact' })
     .eq('tenant_id', tenant_id)
     .order('updated_at', { ascending: false, nullsFirst: false })
     .range(offset, offset + per_page - 1)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Busca movimentos recentes das obras do resultado
+  // IDs das obras retornadas
   const obraIds = (ccObras ?? []).map((c: any) => c.obra_id).filter(Boolean)
-  const movimentosMap: Map<string, any[]> = new Map()
 
+  // Busca dados das obras separadamente
+  const obrasMap: Map<string, any> = new Map()
+  if (obraIds.length > 0) {
+    const { data: obras } = await sb
+      .from('obras')
+      .select('id, titulo, codigo_obra, iswc, status')
+      .in('id', obraIds)
+    for (const o of obras ?? []) obrasMap.set(o.id, o)
+  }
+
+  // Busca movimentos recentes
+  const movimentosMap: Map<string, any[]> = new Map()
   if (obraIds.length > 0) {
     const { data: movs } = await sb
       .from('cc_obras_movimentos')
@@ -77,30 +83,31 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Normaliza para formato da interface
-  const result = (ccObras ?? [])
-    .filter((cc: any) => {
-      if (!search) return true
-      const q = search.toLowerCase()
-      const obra = cc.obras
-      return (
-        obra?.titulo?.toLowerCase().includes(q) ||
-        obra?.codigo_obra?.toLowerCase().includes(q)
-      )
-    })
-    .map((cc: any) => ({
+  // Normaliza — usa obrasMap em vez do join
+  const normalized = (ccObras ?? []).map((cc: any) => {
+    const obra = obrasMap.get(cc.obra_id)
+    return {
       id: cc.id,
       obra_id: cc.obra_id,
-      obra_titulo: cc.obras?.titulo ?? '—',
-      obra_codigo: cc.obras?.codigo_obra ?? '—',
-      obra_iswc: cc.obras?.iswc ?? null,
+      obra_titulo: obra?.titulo ?? '—',
+      obra_codigo: obra?.codigo_obra ?? '—',
+      obra_iswc: obra?.iswc ?? null,
       saldo_atual: Number(cc.saldo_atual ?? 0),
       saldo_bloqueado: Number(cc.saldo_bloqueado ?? 0),
       saldo_distribuido: Number(cc.saldo_distribuido ?? 0),
       saldo_pendente: Number(cc.saldo_pendente ?? 0),
       data_ultima_movimentacao: cc.updated_at ?? null,
       movimentos: movimentosMap.get(cc.obra_id) ?? [],
-    }))
+    }
+  })
+
+  // Filtro por search (client-side após normalização)
+  const result = search
+    ? normalized.filter(o => {
+        const q = search.toLowerCase()
+        return o.obra_titulo.toLowerCase().includes(q) || o.obra_codigo.toLowerCase().includes(q)
+      })
+    : normalized
 
   // KPIs globais
   const { data: kpiData } = await sb
@@ -111,20 +118,19 @@ export async function GET(req: NextRequest) {
   const saldo_total = (kpiData ?? []).reduce((s: number, r: any) => s + Number(r.saldo_atual ?? 0), 0)
   const distribuido_total = (kpiData ?? []).reduce((s: number, r: any) => s + Number(r.saldo_distribuido ?? 0), 0)
 
-  // Entradas e distribuição no mês — via movimentos
+  // Entradas no mês
   const mesInicio = new Date(); mesInicio.setDate(1); mesInicio.setHours(0, 0, 0, 0)
   const { data: movMes } = await sb
     .from('cc_obras_movimentos')
-    .select('tipo, valor, valor_bruto_participante')
+    .select('tipo, valor')
     .eq('tenant_id', tenant_id)
     .gte('created_at', mesInicio.toISOString())
 
   const entradas_mes = (movMes ?? [])
     .filter((m: any) => m.tipo === 'entrada')
-    .reduce((s: number, m: any) => s + Number(m.valor ?? m.valor_bruto_participante ?? 0), 0)
-  const distribuido_mes = distribuido_total // simplificado: usa total distribuído como proxy
+    .reduce((s: number, m: any) => s + Number(m.valor ?? 0), 0)
 
-  // Obras com bloqueio ativo
+  // Obras com bloqueio
   const { count: bloqueiosCount } = await sb
     .from('cc_obras_movimentos')
     .select('obra_id', { count: 'exact', head: true })
@@ -138,7 +144,7 @@ export async function GET(req: NextRequest) {
       saldo_total_obras: saldo_total,
       total_distribuido: distribuido_total,
       total_entradas_mes: entradas_mes,
-      total_distribuido_mes: distribuido_mes,
+      total_distribuido_mes: distribuido_total,
       obras_com_bloqueio: bloqueiosCount ?? 0,
     },
   })
