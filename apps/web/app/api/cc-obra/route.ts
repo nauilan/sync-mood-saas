@@ -36,18 +36,20 @@ export async function GET(req: NextRequest) {
   const page = Math.max(Number(searchParams.get('page') ?? 1), 1)
   const offset = (page - 1) * per_page
 
-  // Busca cc_obras SEM join — mais confiável no PostgREST
-  // Sem range/nullsFirst para evitar edge-cases com campos NULL
+  // Diagnóstico: logar tenant_id resolvido
+  console.log('[cc-obra] tenant_id:', tenant_id, '| per_page:', per_page)
+
+  // Busca cc_obras SEM join — sem ORDER BY para evitar edge-cases com NULL
   const { data: ccObras, error } = await sb
     .from('cc_obras')
     .select('id, obra_id, saldo_atual, saldo_bloqueado, saldo_distribuido, saldo_pendente, moeda, status, updated_at')
     .eq('tenant_id', tenant_id)
-    .order('updated_at', { ascending: false })
     .limit(per_page)
 
+  console.log('[cc-obra] ccObras count:', ccObras?.length, '| error:', error?.message ?? 'none')
+
   if (error) {
-    console.error('[cc-obra] query error:', error.message, error.code)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error.message, code: error.code }, { status: 500 })
   }
   const count = ccObras?.length ?? 0
 
@@ -145,6 +147,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     data: result,
     total: search ? result.length : (count ?? 0),
+    _debug: { ccObrasRaw: ccObras?.length ?? 0, tenant_id },
     kpis: {
       saldo_total_obras: saldo_total,
       total_distribuido: distribuido_total,
