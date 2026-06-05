@@ -36,20 +36,13 @@ export async function GET(req: NextRequest) {
 
   let query = sb
     .from('obras')
-    .select(`
-      id, titulo, titulo_alternativo, subtitulo, codigo, iswc,
-      idioma, genero, ano_criacao, duracao, status,
-      codigo_interno_legado, codigo_obra_cwr_original,
-      backoffice_song_id, backoffice_work_id, backoffice_status,
-      origem_importacao, contrato_file, letra, editora_id,
-      created_at, updated_at, tenant_id
-    `, { count: 'exact' })
+    .select('*', { count: 'exact' })
     .eq('tenant_id', usuario.tenant_id)
     .order('titulo', { ascending: true })
     .range(offset, offset + per_page - 1)
 
   if (status) query = query.eq('status', status)
-  if (search) query = query.or(`titulo.ilike.%${search}%,codigo.ilike.%${search}%`)
+  if (search) query = query.ilike('titulo', `%${search}%`)
 
   const { data, error, count } = await query
 
