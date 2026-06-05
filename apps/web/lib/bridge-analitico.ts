@@ -265,7 +265,7 @@ function negocioCobreAbrangencia(
 
 /**
  * Encontra o negócio editorial mais específico e vigente.
- * Prioridade: específico de obra/autor > catálogo inteiro.
+ * Prioridade: obra_especifica/grupo_obras > autor_especifico/grupo_autores > catalogo_inteiro.
  */
 function resolverNegocio(
   negocios: NegocioEditorialInput[],
@@ -284,9 +284,17 @@ function resolverNegocio(
     negocioCobreAbrangencia(n, obraId, autorId)
   )
   if (candidatos.length === 0) return null
-  // Prefere abrangência específica
-  const especifico = candidatos.find(n => n.abrangencia_tipo !== 'catalogo_inteiro')
-  return especifico ?? candidatos[0]
+  // Hierarquia de especificidade:
+  // 0 = obra específica / grupo de obras
+  // 1 = autor específico / grupo de autores
+  // 2 = catálogo inteiro (mais genérico)
+  const prioridade = (tipo: string): number => {
+    if (tipo === 'obras_especificas' || tipo === 'grupo_obras') return 0
+    if (tipo === 'autor_especifico' || tipo === 'grupo_autores') return 1
+    return 2
+  }
+  candidatos.sort((a, b) => prioridade(a.abrangencia_tipo) - prioridade(b.abrangencia_tipo))
+  return candidatos[0]
 }
 
 /**
