@@ -46,7 +46,6 @@ const RECEITAS_OPCOES = [
   { value: 'execucao_publica', label: 'Execução Pública' },
   { value: 'internacional',    label: 'Internacional' },
   { value: 'licenciamento',    label: 'Licenciamento' },
-  { value: 'outras',           label: 'Outras' },
   { value: 'direitos_futuros', label: 'Direitos Futuros / Novas Receitas' },
 ]
 const TERRITORIOS_RAPIDOS = [

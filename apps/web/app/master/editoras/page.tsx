@@ -30,6 +30,9 @@ interface Editora {
   codigo_publisher_cwr: string | null
   codigo_cae: string | null
   codigo_ipi: string | null
+  codigo_interno_cwr: string | null
+  pais_registro: string | null
+  codigo_ecad: string | null
   created_at: string
 }
 
@@ -42,6 +45,9 @@ const FORM_INITIAL = {
   codigo_publisher_cwr: '',
   codigo_cae: '',
   codigo_ipi: '',
+  codigo_interno_cwr: '',
+  pais_registro: 'BR',
+  codigo_ecad: '',
 }
 
 function getInitials(name: string): string {
@@ -247,6 +253,36 @@ export default function EditorasPage() {
                     onChange={e => setForm(f => ({ ...f, codigo_ipi: e.target.value }))}
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 font-mono focus:outline-none focus:border-violet-500/50"
                     placeholder="IPI"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-white/50 mb-1.5">Código Interno CWR</label>
+                <input
+                  value={form.codigo_interno_cwr}
+                  onChange={e => setForm(f => ({ ...f, codigo_interno_cwr: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 font-mono focus:outline-none focus:border-violet-500/50"
+                  placeholder="Ex: TS01"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] font-medium text-white/50 mb-1.5">Código ECAD</label>
+                  <input
+                    value={form.codigo_ecad}
+                    onChange={e => setForm(f => ({ ...f, codigo_ecad: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 font-mono focus:outline-none focus:border-violet-500/50"
+                    placeholder="ECAD"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-white/50 mb-1.5">País de Registro</label>
+                  <input
+                    value={form.pais_registro}
+                    onChange={e => setForm(f => ({ ...f, pais_registro: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 font-mono focus:outline-none focus:border-violet-500/50"
+                    placeholder="BR"
+                    maxLength={2}
                   />
                 </div>
               </div>
