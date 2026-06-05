@@ -46,19 +46,22 @@ export default function CCObraPage() {
   const [loading, setLoading] = useState(true)
   const [fonte, setFonte] = useState<'api' | 'vazio'>('vazio')
 
+  const [debugInfo, setDebugInfo] = useState<string>('')
+
   useEffect(() => {
     const token = getAccessToken()
-    if (!token) { setLoading(false); return }
+    if (!token) { setLoading(false); setDebugInfo('NO_TOKEN'); return }
     fetch('/api/cc-obra?per_page=100', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(json => {
+        setDebugInfo(JSON.stringify({ raw: json._debug, dataLen: json.data?.length ?? 'undef', status: json.error ?? 'ok' }))
         if (json.data) {
           setCcObras(json.data)
           if (json.kpis) setKpis(json.kpis)
           setFonte('api')
         }
       })
-      .catch(() => {})
+      .catch(e => setDebugInfo('CATCH: ' + e.message))
       .finally(() => setLoading(false))
   }, [])
 
@@ -141,6 +144,13 @@ export default function CCObraPage() {
           Efetuar distribuição →
         </Link>
       </div>
+
+      {/* DEBUG TEMPORÁRIO */}
+      {debugInfo && (
+        <div className="text-xs font-mono bg-yellow-900/30 border border-yellow-500/30 text-yellow-300 rounded px-3 py-2 break-all">
+          DEBUG: {debugInfo}
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative max-w-sm">
