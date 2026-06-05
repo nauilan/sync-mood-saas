@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
     data_fim:                  body.data_fim ?? null,
     contrato_url:              body.contrato_url ?? null,
     contrato_nome_arquivo:     body.contrato_nome_arquivo ?? null,
+    tipo_direito_id:           body.tipo_direito_id ?? null,
     observacoes:               body.observacoes ?? null,
   }
 

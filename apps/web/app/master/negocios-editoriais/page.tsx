@@ -11,6 +11,7 @@ import { createClient } from '@supabase/supabase-js'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Editora { id: string; nome_fantasia: string; razao_social: string; cnpj?: string }
+interface TipoDireito { id: string; nome: string; codigo: string }
 interface Negocio {
   id: string
   tenant_id: string
@@ -31,6 +32,7 @@ interface Negocio {
   data_fim?: string
   contrato_url?: string
   contrato_nome_arquivo?: string
+  tipo_direito_id?: string | null
   observacoes?: string
   created_at: string
   updated_at: string
@@ -83,6 +85,9 @@ const FORM_EMPTY = {
   territorios: ['mundial'],
   data_inicio: new Date().toISOString().slice(0, 10),
   data_fim: '',
+  tipo_direito_id: '',
+  contrato_url: '',
+  contrato_nome_arquivo: '',
   observacoes: '',
 }
 
@@ -95,10 +100,11 @@ function fmtPct(n: number) { return n.toFixed(4).replace(/\.?0+$/, '') + '%' }
 
 // ─── Componente de formulário inline ─────────────────────────────────────────
 function NegocioForm({
-  initial, editoras, tenantId, onSave, onCancel,
+  initial, editoras, tipoDireitos, tenantId, onSave, onCancel,
 }: {
   initial: typeof FORM_EMPTY & { id?: string }
   editoras: Editora[]
+  tipoDireitos: TipoDireito[]
   tenantId: string
   onSave: (n: Negocio) => void
   onCancel: () => void
@@ -161,6 +167,9 @@ function NegocioForm({
         data_fim: form.data_fim || null,
         percentual_administrada:   Number(form.percentual_administrada),
         percentual_administradora: Number(form.percentual_administradora),
+        tipo_direito_id: (form as any).tipo_direito_id || null,
+        contrato_url: (form as any).contrato_url || null,
+        contrato_nome_arquivo: (form as any).contrato_nome_arquivo || null,
       }
       const url = (initial as any).id
         ? `/api/negocios-editoriais/${(initial as any).id}`
@@ -340,6 +349,28 @@ function NegocioForm({
         </div>
       </div>
 
+      {/* Tipo de Direito + Documento */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={labelCls}>Tipo de Direito (vazio = todos)</label>
+          <select value={(form as any).tipo_direito_id ?? ''} onChange={e => set('tipo_direito_id', e.target.value || null)} className={inputCls}>
+            <option value="">— Todos os direitos —</option>
+            {tipoDireitos.map(td => <option key={td.id} value={td.id}>{td.nome}</option>)}
+          </select>
+          <p className="text-[10px] text-white/25 mt-0.5">Regra se aplica a esse direito específico</p>
+        </div>
+        <div>
+          <label className={labelCls}>Nome do Arquivo do Contrato</label>
+          <input value={(form as any).contrato_nome_arquivo ?? ''} onChange={e => set('contrato_nome_arquivo', e.target.value)}
+            placeholder="Ex: contrato-adm-2025.pdf" className={inputCls} />
+        </div>
+      </div>
+      <div>
+        <label className={labelCls}>URL do Documento do Contrato</label>
+        <input value={(form as any).contrato_url ?? ''} onChange={e => set('contrato_url', e.target.value)}
+          placeholder="https://... ou caminho no storage" className={inputCls} />
+      </div>
+
       {/* Observações */}
       <div>
         <label className={labelCls}>Observações</label>
@@ -475,6 +506,27 @@ function NegocioCard({
             </div>
           )}
 
+          {/* Tipo de Direito + Documento */}
+          {(negocio.tipo_direito_id || negocio.contrato_url || negocio.contrato_nome_arquivo) && (
+            <div className="bg-white/[0.03] rounded-xl px-4 py-3 space-y-2">
+              {negocio.tipo_direito_id && (
+                <p className="text-[11px] text-white/50">
+                  <span className="text-white/30 text-[10px] uppercase tracking-wider mr-1">Tipo de Direito:</span>
+                  <span className="font-semibold text-violet-300">{negocio.tipo_direito_id}</span>
+                </p>
+              )}
+              {(negocio.contrato_url || negocio.contrato_nome_arquivo) && (
+                <p className="text-[11px] text-white/50 flex items-center gap-1.5">
+                  <FileText className="w-3 h-3 text-white/30 shrink-0" />
+                  {negocio.contrato_url
+                    ? <a href={negocio.contrato_url} target="_blank" rel="noreferrer" className="text-sky-400 hover:underline truncate">{negocio.contrato_nome_arquivo || 'Ver contrato'}</a>
+                    : <span>{negocio.contrato_nome_arquivo}</span>
+                  }
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Aviso de obrigatoriedade */}
           <div className="flex items-start gap-2 bg-amber-500/5 border border-amber-500/15 rounded-xl px-4 py-3">
             <Info className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
@@ -505,6 +557,7 @@ function NegocioCard({
 export default function NegociosEditoriaisPage() {
   const [negocios, setNegocios] = useState<Negocio[]>([])
   const [editoras, setEditoras] = useState<Editora[]>([])
+  const [tipoDireitos, setTipoDireitos] = useState<TipoDireito[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Negocio | null>(null)
@@ -531,6 +584,10 @@ export default function NegociosEditoriaisPage() {
         // Editoras
         const { data: eds } = await (sb as any).from('editoras').select('id,nome_fantasia,razao_social,cnpj').eq('status','ativo')
         setEditoras(eds ?? [])
+
+        // Tipos de Direito
+        const { data: tds } = await (sb as any).from('tipos_direito').select('id,nome,codigo').order('nome')
+        setTipoDireitos(tds ?? [])
 
         // Negócios
         const res = await fetch('/api/negocios-editoriais?limit=200')
@@ -610,12 +667,20 @@ export default function NegociosEditoriaisPage() {
         <ShieldCheck className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-semibold text-amber-300 mb-0.5">Regra Fundamental do Analítico</p>
-          <p className="text-xs text-amber-400/70 leading-relaxed">
+          <p className="text-xs text-amber-400/70 leading-relaxed mb-2">
             O Analítico <strong>jamais</strong> deduz a divisão entre Editora Administrada e Administradora
             a partir do CWR, BackOffice, UBEM ou qualquer fonte externa.
             Se não houver negócio cadastrado aqui, o sistema emite alerta de <em>"Regra de negócio não localizada"</em>
             e envia o registro para conferência manual.
           </p>
+          <div className="bg-amber-500/8 border border-amber-500/20 rounded-lg px-3 py-2 text-[11px] text-amber-300/80 font-mono leading-relaxed">
+            <span className="text-amber-300/50">Exemplo — Obra: A CASA | Autor Roberto 50% | Editado 25% para LR Edições</span><br/>
+            Roberto = 50% × 75% = <strong>37,5%</strong> da obra<br/>
+            LR Edições = 50% × 25% = <strong>12,5%</strong> da obra<br/>
+            <span className="text-amber-300/50">Negócio LR Edições → Top Show Music: 60/40</span><br/>
+            LR Edições = 12,5% × 60% = <strong>7,5%</strong> · Top Show = 12,5% × 40% = <strong>5%</strong><br/>
+            <span className="text-amber-300/40">↳ A Top Show recebe 40% da parte editorial da LR — não 40% da obra inteira.</span>
+          </div>
         </div>
       </div>
 
@@ -624,6 +689,7 @@ export default function NegociosEditoriaisPage() {
         <NegocioForm
           initial={FORM_EMPTY}
           editoras={editoras}
+          tipoDireitos={tipoDireitos}
           tenantId={tenantId}
           onSave={handleSave}
           onCancel={() => setShowForm(false)}
@@ -635,6 +701,7 @@ export default function NegociosEditoriaisPage() {
         <NegocioForm
           initial={editingForm as any}
           editoras={editoras}
+          tipoDireitos={tipoDireitos}
           tenantId={tenantId}
           onSave={handleSave}
           onCancel={() => setEditing(null)}
