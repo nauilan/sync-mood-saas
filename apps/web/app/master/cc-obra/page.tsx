@@ -1,17 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { PageHeader } from '@/components/ui/page-header'
 import { KpiCard } from '@/components/ui/kpi-card'
 import {
-  Search, Filter, Music, DollarSign, TrendingUp, TrendingDown,
+  Search, Music, DollarSign, TrendingUp, TrendingDown,
   AlertTriangle, ChevronRight, BarChart3, Eye,
 } from 'lucide-react'
-import {
-  MOCK_CC_OBRAS, KPI_CC_OBRAS, fmtBRL, fmtDate,
-} from '@/lib/mock-cc'
 import { KPI_PREVIA, MOCK_PREVIA_OBRA } from '@/lib/mock-distribuicao-previa'
+import { getAccessToken } from '@/lib/supabase/client'
+
+function fmtBRL(v: number) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+function fmtDate(s: string) {
+  return new Date(s).toLocaleDateString('pt-BR')
+}
 
 // Extrai campos chave da descrição pipe-delimited
 function getMeta(desc?: string): { editora?: string; periodo?: string; fonte?: string } {
@@ -36,11 +41,34 @@ function BloqueioIndicator({ count }: { count: number }) {
 
 export default function CCObraPage() {
   const [search, setSearch] = useState('')
+  const [ccObras, setCcObras] = useState<any[]>([])
+  const [kpis, setKpis] = useState({ saldo_total_obras: 0, total_entradas_mes: 0, total_distribuido_mes: 0, obras_com_bloqueio: 0 })
+  const [loading, setLoading] = useState(true)
+  const [fonte, setFonte] = useState<'api' | 'vazio'>('vazio')
 
-  const filtered = MOCK_CC_OBRAS.filter(o => {
+  useEffect(() => {
+    const token = getAccessToken()
+    if (!token) { setLoading(false); return }
+    fetch('/api/cc-obra?per_page=100', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(json => {
+        if (json.data) {
+          setCcObras(json.data)
+          if (json.kpis) setKpis(json.kpis)
+          setFonte('api')
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const filtered = useMemo(() => {
     const q = search.toLowerCase()
-    return !q || o.obra_titulo.toLowerCase().includes(q) || o.obra_codigo.toLowerCase().includes(q)
-  })
+    if (!q) return ccObras
+    return ccObras.filter(o =>
+      o.obra_titulo?.toLowerCase().includes(q) || o.obra_codigo?.toLowerCase().includes(q)
+    )
+  }, [ccObras, search])
 
   // Mapa de previas por obra_codigo
   const previaMap = new Map(MOCK_PREVIA_OBRA.map(p => [p.obra_codigo, p.valor_previsto]))
@@ -65,28 +93,28 @@ export default function CCObraPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
           title="Saldo Total Obras"
-          value={fmtBRL(KPI_CC_OBRAS.saldo_total_obras)}
+          value={fmtBRL(kpis.saldo_total_obras)}
           subtitle="saldo acumulado nas obras"
           accent="emerald"
           icon={<DollarSign className="w-4 h-4 text-emerald-400" />}
         />
         <KpiCard
-          title="Entradas Mai/2026"
-          value={fmtBRL(KPI_CC_OBRAS.total_entradas_mes)}
+          title="Entradas este mês"
+          value={fmtBRL(kpis.total_entradas_mes)}
           subtitle="DSP + Sync este mês"
           accent="sky"
           icon={<TrendingUp className="w-4 h-4 text-sky-400" />}
         />
         <KpiCard
-          title="Distribuído Mai/2026"
-          value={fmtBRL(KPI_CC_OBRAS.total_distribuido_mes)}
+          title="Distribuído este mês"
+          value={fmtBRL(kpis.total_distribuido_mes)}
           subtitle="enviado aos titulares"
           accent="violet"
           icon={<TrendingDown className="w-4 h-4 text-violet-400" />}
         />
         <KpiCard
           title="Obras c/ Bloqueio"
-          value={KPI_CC_OBRAS.obras_com_bloqueio}
+          value={kpis.obras_com_bloqueio}
           subtitle="necessitam atenção"
           accent="rose"
           icon={<AlertTriangle className="w-4 h-4 text-rose-400" />}
@@ -141,7 +169,11 @@ export default function CCObraPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.04]">
-            {filtered.map(obra => {
+            {loading ? (
+              <tr><td colSpan={8} className="px-5 py-8 text-center text-sm text-white/30">Carregando...</td></tr>
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={8} className="px-5 py-8 text-center text-sm text-white/30">Nenhuma conta corrente encontrada.</td></tr>
+            ) : filtered.map(obra => {
               const meta = getMeta(obra.movimentos[0]?.descricao)
               return (
               <tr key={obra.id} className="hover:bg-white/[0.02] transition-colors group">

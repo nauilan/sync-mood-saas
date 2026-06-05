@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import {
   FileText, Plus, Search, Filter, CheckCircle2, Clock,
-  AlertTriangle, TrendingDown, ChevronRight, Building2, User,
+  AlertTriangle, ChevronRight, Building2, User,
   Bell, ShieldAlert, DollarSign, Calendar, Download,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
@@ -15,8 +15,9 @@ import {
   STATUS_CONTRATO_V2_LABELS, STATUS_CONTRATO_V2_COLORS,
 } from '@/lib/types-contratos-v2'
 import {
-  MOCK_CONTRATOS_V2, KPI_CONTRATOS_V2, ALERTAS_EXCLUSIVIDADE,
+  MOCK_CONTRATOS_V2, ALERTAS_EXCLUSIVIDADE,
 } from '@/lib/mock-contratos-v2'
+import { getAccessToken } from '@/lib/supabase/client'
 
 function formatDate(d?: string | null) {
   if (!d) return '—'
@@ -63,12 +64,30 @@ export default function ContratosPage() {
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('todos')
   const [filterEditora, setFilterEditora] = useState<FilterEditora>('todos')
   const [contratosObras, setContratosObras] = useState<any[]>([])
+  const [contratosApi, setContratosApi] = useState<any[]>([])
+  const [apiKpis, setApiKpis] = useState<any>(null)
+  const [loadingApi, setLoadingApi] = useState(true)
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem('sync_contratos_obras_v1')
       if (raw) setContratosObras(JSON.parse(raw))
     } catch { /* ignore */ }
+  }, [])
+
+  useEffect(() => {
+    const token = getAccessToken()
+    if (!token) { setLoadingApi(false); return }
+    fetch('/api/contratos?per_page=100', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(json => {
+        if (json.data) {
+          setContratosApi(json.data)
+          if (json.kpis) setApiKpis(json.kpis)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingApi(false))
   }, [])
 
   function downloadContratoObra(c: any, modo: 'rascunho' | 'assinado') {
@@ -120,26 +139,30 @@ export default function ContratosPage() {
   }
 
   const editoras = useMemo(() => {
-    const nomes = [...new Set(MOCK_CONTRATOS_V2.map(c => c.editora_nome))]
+    // Prioriza editoras do banco; fallback para mock para exibição dos filtros
+    const nomes = [...new Set([...contratosApi, ...MOCK_CONTRATOS_V2].map((c: any) => c.editora_nome).filter(Boolean))]
     return ['todos', ...nomes]
-  }, [])
+  }, [contratosApi])
+
+  // Usa contratos do banco se disponível, senão usa mock como fallback visual
+  const fonteContratos = contratosApi.length > 0 ? contratosApi : MOCK_CONTRATOS_V2
 
   const contratos = useMemo(() => {
-    return MOCK_CONTRATOS_V2.filter(c => {
+    return fonteContratos.filter((c: any) => {
       if (filterTipo !== 'todos' && c.tipo !== filterTipo) return false
       if (filterStatus !== 'todos' && c.status !== filterStatus) return false
       if (filterEditora !== 'todos' && c.editora_nome !== filterEditora) return false
       if (search) {
         const q = search.toLowerCase()
         return (
-          c.numero.toLowerCase().includes(q) ||
+          (c.numero ?? '').toLowerCase().includes(q) ||
           (c.titular_principal ?? '').toLowerCase().includes(q) ||
-          c.editora_nome.toLowerCase().includes(q)
+          (c.editora_nome ?? '').toLowerCase().includes(q)
         )
       }
       return true
     })
-  }, [search, filterTipo, filterStatus, filterEditora])
+  }, [search, filterTipo, filterStatus, filterEditora, fonteContratos])
 
   return (
     <div className="space-y-6">
@@ -184,31 +207,31 @@ export default function ContratosPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard
           title="Contratos Ativos"
-          value={KPI_CONTRATOS_V2.ativos}
-          subtitle={`de ${KPI_CONTRATOS_V2.total} total`}
+          value={apiKpis?.em_vigor ?? 0}
+          subtitle={`de ${apiKpis?.total ?? 0} total`}
           accent="emerald"
           icon={<CheckCircle2 className="w-4 h-4 text-emerald-400" />}
         />
         <KpiCard
-          title="Vencendo em 90d"
-          value={KPI_CONTRATOS_V2.vencendo_90d}
+          title="Vencendo em 30d"
+          value={apiKpis?.vencendo ?? 0}
           subtitle="requerem renovacao"
           accent="amber"
           icon={<AlertTriangle className="w-4 h-4 text-amber-400" />}
         />
         <KpiCard
-          title="Recoupment Aberto"
-          value={KPI_CONTRATOS_V2.recoupment_aberto}
-          subtitle="contratos com saldo"
+          title="Ag. Assinatura"
+          value={apiKpis?.aguardando_assinatura ?? 0}
+          subtitle="pendentes"
           accent="rose"
-          icon={<TrendingDown className="w-4 h-4 text-rose-400" />}
+          icon={<Clock className="w-4 h-4 text-rose-400" />}
         />
         <KpiCard
-          title="Valor Total"
-          value={formatCurrency(KPI_CONTRATOS_V2.valor_total)}
-          subtitle="em contratos ativos"
+          title="Vencidos"
+          value={apiKpis?.vencidos ?? 0}
+          subtitle="precisam de acao"
           accent="violet"
-          icon={<DollarSign className="w-4 h-4 text-violet-400" />}
+          icon={<Calendar className="w-4 h-4 text-violet-400" />}
         />
       </div>
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
 import {
   Users, Plus, Search, Filter, UserCheck, Building2,
@@ -13,11 +13,9 @@ import { PageHeader } from '@/components/ui/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { KpiCard } from '@/components/ui/kpi-card'
-import { MOCK_TITULARES, MOCK_EDITORAS } from '@/lib/mock-cadastros'
-import { MOCK_OBRAS, MOCK_OBRAS_LINKS } from '@/lib/mock-obras'
+import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
 import { MOCK_CONTRATOS_V2 } from '@/lib/mock-contratos-v2'
-import { STORE_KEYS } from '@/lib/store'
-import { useSupabaseQuery } from '@/lib/hooks/use-supabase-query'
+import { getAccessToken } from '@/lib/supabase/client'
 import { FUNCAO_LABEL, nomeTitular, cpfCnpjTitular, nomeArtistico, emailPrincipal } from '@/lib/types-cadastros'
 import type { FuncaoTitular, TipoPessoa, TitularComDados } from '@/lib/types-cadastros'
 
@@ -440,20 +438,30 @@ export default function TitularesPage() {
   const [filterEditora, setFilterEditora] = useState('')
   const [filterStatus, setFilterStatus] = useState<'ativo' | 'inativo' | ''>('')
   const [showFilters, setShowFilters] = useState(false)
+  const [rawTitulares, setRawTitulares] = useState<any[]>([])
+  const [apiKpis, setApiKpis] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
-  // Carrega titulares: Supabase → localStorage → mock
-  const { data: rawTitulares } = useSupabaseQuery<TitularComDados>({
-    table: 'titulares',
-    storeKey: STORE_KEYS.titulares,
-    fallback: MOCK_TITULARES,
-    orderBy: { column: 'nome_completo', ascending: true },
-  })
-  // Normaliza campos: banco usa 'pessoa' e 'status', o tipo usa 'tipo_pessoa' e 'ativo'
+  useEffect(() => {
+    const token = getAccessToken()
+    if (!token) { setLoading(false); return }
+    fetch('/api/titulares?per_page=200', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(json => {
+        if (json.data) {
+          setRawTitulares(json.data)
+          if (json.kpis) setApiKpis(json.kpis)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  // Normaliza campos: banco usa flat columns
   const allTitulares = useMemo(() => rawTitulares.map((t: any) => ({
     ...t,
     tipo_pessoa: t.tipo_pessoa ?? t.pessoa ?? 'PF',
     ativo: t.ativo !== undefined ? t.ativo : (t.status === 'ativo'),
-    // nome via flat columns (schema 004) ou sub-tabelas (schema 00100)
     _pf: t._pf ?? (t.tipo_pessoa === 'PF' || t.pessoa === 'PF' ? {
       nome_completo: t.nome_completo ?? '',
       cpf: t.cpf_cnpj ?? null,
@@ -499,12 +507,12 @@ export default function TitularesPage() {
   }, [search, filterPessoa, filterFuncao, filterEditora, filterStatus])
 
   const kpis = useMemo(() => ({
-    total: allTitulares.length,
+    total: apiKpis?.total ?? allTitulares.length,
     pf: allTitulares.filter(t => t.tipo_pessoa === 'PF').length,
     pj: allTitulares.filter(t => t.tipo_pessoa === 'PJ').length,
-    ativos: allTitulares.filter(t => t.ativo).length,
+    ativos: apiKpis?.ativos ?? allTitulares.filter(t => t.ativo).length,
     semContrato: allTitulares.filter(t => (t._contratos ?? 0) === 0).length,
-  }), [allTitulares])
+  }), [allTitulares, apiKpis])
 
   return (
     <div className="space-y-6">
@@ -623,7 +631,17 @@ export default function TitularesPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.04]">
-              {filtered.map(t => {
+              {loading ? (
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-white/30">Carregando...</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-14 text-center">
+                    <Users className="w-8 h-8 text-white/10 mx-auto mb-3" />
+                    <p className="text-sm text-white/30">Nenhum titular encontrado com os filtros atuais.</p>
+                    <button onClick={() => { setSearch(''); setFilterPessoa(''); setFilterFuncao(''); setFilterEditora(''); setFilterStatus('') }} className="mt-2 text-xs text-violet-400 hover:text-violet-300">Limpar filtros</button>
+                  </td>
+                </tr>
+              ) : filtered.map(t => {
                 const nome = nomeTitular(t)
                 const docNum = cpfCnpjTitular(t)
                 const pseudo = nomeArtistico(t)
@@ -689,15 +707,6 @@ export default function TitularesPage() {
                   </tr>
                 )
               })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-14 text-center">
-                    <Users className="w-8 h-8 text-white/10 mx-auto mb-3" />
-                    <p className="text-sm text-white/30">Nenhum titular encontrado com os filtros atuais.</p>
-                    <button onClick={() => { setSearch(''); setFilterPessoa(''); setFilterFuncao(''); setFilterEditora(''); setFilterStatus('') }} className="mt-2 text-xs text-violet-400 hover:text-violet-300">Limpar filtros</button>
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
