@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
     .from('titulares')
     .select('*', { count: 'exact' })
     .eq('tenant_id', tenant_id)
-    .order('nome')
+    .order('nome_completo')
     .range(offset, offset + per_page - 1)
 
   if (tipo !== 'todos') query = query.eq('tipo', tipo)
