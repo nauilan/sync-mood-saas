@@ -31,18 +31,7 @@ function formatPeriodo(inicio: string, fim: string) {
   return `${fmt(inicio)} – ${fmt(fim)}`
 }
 
-function getAuthToken(): string {
-  if (typeof window === 'undefined') return ''
-  try {
-    const keys = Object.keys(localStorage).filter(k => k.includes('supabase') && k.includes('auth'))
-    for (const k of keys) {
-      const val = JSON.parse(localStorage.getItem(k) ?? '{}')
-      if (val?.access_token) return val.access_token
-      if (val?.session?.access_token) return val.session.access_token
-    }
-  } catch { /* ignore */ }
-  return ''
-}
+import { getAccessToken } from '@/lib/supabase/client'
 
 // ── Tipos locais ──────────────────────────────────────────────────────────────
 
@@ -152,7 +141,7 @@ export default function RecebimentosPage() {
     setLoading(true)
     setError(null)
     try {
-      const token = getAuthToken()
+      const token = getAccessToken()
       const res = await fetch('/api/recebimentos?per_page=100', {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
@@ -184,7 +173,7 @@ export default function RecebimentosPage() {
   const processarCC = async (id: string) => {
     setProcessando(id)
     try {
-      const token = getAuthToken()
+      const token = getAccessToken()
       const res = await fetch(`/api/recebimentos/${id}`, {
         method: 'PATCH',
         headers: {
