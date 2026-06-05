@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { MOCK_OBRAS, MOCK_OBRAS_LINKS, MOCK_OBRAS_FONOGRAMAS } from '@/lib/mock-obras'
 import { STORE_KEYS } from '@/lib/store'
-import { createClient as createBrowserClient } from '@/lib/supabase/client'
+import { createClient as createBrowserClient, getAccessToken } from '@/lib/supabase/client'
 import { createClient } from '@supabase/supabase-js'
 import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
 import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, normalizarLinksObra } from '@/lib/types-obras'
@@ -127,7 +127,13 @@ function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => 
     if (!obraInicial.id) { setLoadingLinks(false); return }
     setLoadingLinks(true)
     setRealLinks(null)
-    const sb = createBrowserClient()
+    const token = getAccessToken()
+    if (!token) { setLoadingLinks(false); return }
+    const sb = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    )
     sb.from('obras_links')
       .select(`
         id, obra_id, numero_link, percentual_link, tipo_link, controlado,
@@ -158,9 +164,7 @@ function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => 
     setAnaliticoError(null)
     setAnaliticoResult(null)
     try {
-      const sb = createBrowserClient()
-      const { data: { session } } = await sb.auth.getSession()
-      const token = session?.access_token ?? ''
+      const token = getAccessToken()
       const res = await fetch(`/api/obras/${obra.id}/analitico`, {
         method: 'POST',
         headers: {
@@ -951,9 +955,7 @@ export default function ObrasPage() {
     async function carregarObras() {
       setObrasLoading(true)
       try {
-        const sb = createBrowserClient()
-        const { data: { session } } = await sb.auth.getSession()
-        const token = session?.access_token ?? ''
+        const token = getAccessToken()
         if (!token) {
           // Sem sessão → usar mock para não quebrar a UI
           setObrasData(MOCK_OBRAS)
