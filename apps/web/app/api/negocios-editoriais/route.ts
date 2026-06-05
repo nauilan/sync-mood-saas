@@ -13,10 +13,17 @@ async function autenticar(sb: ReturnType<typeof supabase>, req: NextRequest): Pr
   const auth = req.headers.get('authorization') ?? ''
   let token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
   if (!token) {
+    // Suporte a cookies chunked (sb-xxx-auth-token.0, .1, …)
+    const chunks: string[] = []
     for (const c of req.cookies.getAll()) {
-      if (c.name.includes('auth-token') && !c.name.includes('.')) {
-        try { const p = JSON.parse(decodeURIComponent(c.value)); if (p?.access_token) { token = p.access_token; break } } catch { /* */ }
-      }
+      const m = c.name.match(/auth-token\.(\d+)$/)
+      if (m) { chunks[parseInt(m[1])] = c.value; continue }
+      if (c.name.endsWith('auth-token') && !c.name.match(/\.\d+$/)) { chunks[0] = c.value }
+    }
+    const joined = chunks.filter(Boolean).join('')
+    if (joined) {
+      try { const p = JSON.parse(decodeURIComponent(joined)); if (p?.access_token) token = p.access_token } catch { /* */ }
+      if (!token) { try { const p = JSON.parse(joined); if (p?.access_token) token = p.access_token } catch { /* */ } }
     }
   }
   if (!token) return null
