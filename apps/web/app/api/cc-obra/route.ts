@@ -36,43 +36,37 @@ export async function GET(req: NextRequest) {
   const page = Math.max(Number(searchParams.get('page') ?? 1), 1)
   const offset = (page - 1) * per_page
 
-  // Busca cc_obras com dados da obra
-  let query = sb
+  // Colunas reais de cc_obras: id, tenant_id, obra_id, saldo_atual, saldo_bloqueado,
+  //   saldo_distribuido, saldo_pendente, moeda, status, created_at, updated_at
+  const { data: ccObras, error, count } = await sb
     .from('cc_obras')
     .select(`
       id, obra_id, saldo_atual, saldo_bloqueado, saldo_distribuido, saldo_pendente,
-      total_entradas, total_saidas, data_ultima_movimentacao, created_at,
+      moeda, status, updated_at,
       obras ( id, titulo, codigo_obra, iswc, status )
     `, { count: 'exact' })
     .eq('tenant_id', tenant_id)
-    .order('data_ultima_movimentacao', { ascending: false, nullsFirst: false })
+    .order('updated_at', { ascending: false, nullsFirst: false })
     .range(offset, offset + per_page - 1)
-
-  if (search) {
-    // Filtra por título ou código via join — faremos no resultado
-  }
-
-  const { data: ccObras, error, count } = await query
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Busca movimentos recentes de todas as obras do resultado
+  // Busca movimentos recentes das obras do resultado
   const obraIds = (ccObras ?? []).map((c: any) => c.obra_id).filter(Boolean)
-  let movimentosMap: Map<string, any[]> = new Map()
+  const movimentosMap: Map<string, any[]> = new Map()
 
   if (obraIds.length > 0) {
     const { data: movs } = await sb
       .from('cc_obras_movimentos')
       .select(`
-        id, cc_obra_id, obra_id, tipo, valor, descricao, status,
+        id, obra_id, tipo, valor, nome_participante, status_movimento,
         territorio, competencia_inicio, competencia_fim,
-        recebimento_id, created_at,
-        tipos_direito ( codigo, nome )
+        recebimento_id, created_at
       `)
       .eq('tenant_id', tenant_id)
       .in('obra_id', obraIds)
       .order('created_at', { ascending: false })
-      .limit(obraIds.length * 5) // até 5 movimentos por obra
+      .limit(obraIds.length * 10)
 
     for (const mov of movs ?? []) {
       const list = movimentosMap.get(mov.obra_id) ?? []
@@ -83,25 +77,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Conta bloqueios (movimentos tipo='bloqueio' com status='ativo')
-  let bloqueiosMap: Map<string, any[]> = new Map()
-  if (obraIds.length > 0) {
-    const { data: bloqueios } = await sb
-      .from('cc_obras_movimentos')
-      .select('id, obra_id, descricao, valor')
-      .eq('tenant_id', tenant_id)
-      .eq('tipo', 'bloqueio')
-      .eq('status', 'ativo')
-      .in('obra_id', obraIds)
-
-    for (const b of bloqueios ?? []) {
-      const list = bloqueiosMap.get(b.obra_id) ?? []
-      list.push(b)
-      bloqueiosMap.set(b.obra_id, list)
-    }
-  }
-
-  // Normaliza para o formato da interface ContaCorrenteObra
+  // Normaliza para formato da interface
   const result = (ccObras ?? [])
     .filter((cc: any) => {
       if (!search) return true
@@ -122,40 +98,38 @@ export async function GET(req: NextRequest) {
       saldo_bloqueado: Number(cc.saldo_bloqueado ?? 0),
       saldo_distribuido: Number(cc.saldo_distribuido ?? 0),
       saldo_pendente: Number(cc.saldo_pendente ?? 0),
-      total_entradas: Number(cc.total_entradas ?? 0),
-      total_saidas: Number(cc.total_saidas ?? 0),
-      data_ultima_movimentacao: cc.data_ultima_movimentacao ?? null,
-      bloqueios: bloqueiosMap.get(cc.obra_id) ?? [],
+      data_ultima_movimentacao: cc.updated_at ?? null,
       movimentos: movimentosMap.get(cc.obra_id) ?? [],
     }))
 
   // KPIs globais
   const { data: kpiData } = await sb
     .from('cc_obras')
-    .select('saldo_atual, saldo_distribuido, saldo_pendente, obra_id')
+    .select('saldo_atual, saldo_distribuido, saldo_pendente')
     .eq('tenant_id', tenant_id)
 
   const saldo_total = (kpiData ?? []).reduce((s: number, r: any) => s + Number(r.saldo_atual ?? 0), 0)
   const distribuido_total = (kpiData ?? []).reduce((s: number, r: any) => s + Number(r.saldo_distribuido ?? 0), 0)
 
-  // Entradas e distribuído no mês atual
+  // Entradas e distribuição no mês — via movimentos
   const mesInicio = new Date(); mesInicio.setDate(1); mesInicio.setHours(0, 0, 0, 0)
   const { data: movMes } = await sb
     .from('cc_obras_movimentos')
-    .select('tipo, valor')
+    .select('tipo, valor, valor_bruto_participante')
     .eq('tenant_id', tenant_id)
     .gte('created_at', mesInicio.toISOString())
 
-  const entradas_mes = (movMes ?? []).filter((m: any) => m.tipo === 'entrada').reduce((s: number, m: any) => s + Number(m.valor ?? 0), 0)
-  const distribuido_mes = (movMes ?? []).filter((m: any) => m.tipo === 'distribuicao').reduce((s: number, m: any) => s + Number(m.valor ?? 0), 0)
+  const entradas_mes = (movMes ?? [])
+    .filter((m: any) => m.tipo === 'entrada')
+    .reduce((s: number, m: any) => s + Number(m.valor ?? m.valor_bruto_participante ?? 0), 0)
+  const distribuido_mes = distribuido_total // simplificado: usa total distribuído como proxy
 
   // Obras com bloqueio ativo
   const { count: bloqueiosCount } = await sb
     .from('cc_obras_movimentos')
     .select('obra_id', { count: 'exact', head: true })
     .eq('tenant_id', tenant_id)
-    .eq('tipo', 'bloqueio')
-    .eq('status', 'ativo')
+    .eq('status_movimento', 'bloqueado')
 
   return NextResponse.json({
     data: result,
