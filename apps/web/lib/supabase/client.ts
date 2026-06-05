@@ -9,42 +9,51 @@ export function createClient() {
 }
 
 /**
- * Extrai o access_token da sessão Supabase lendo diretamente o cookie do browser.
- * Escaneia todos os cookies com padrão sb-*-auth-token sem depender de env vars
- * (que podem não estar inlined no bundle cliente em alguns deploys).
+ * Extrai o access_token da sessão Supabase lendo diretamente os cookies do browser.
+ * Suporta cookie único (sb-xxx-auth-token) e cookies em chunks (sb-xxx-auth-token.0, .1, ...).
  */
 export function getAccessToken(): string {
   if (typeof document === 'undefined') return ''
 
   const pairs = document.cookie.split(';')
+  const cookieMap: Record<string, string> = {}
   for (const pair of pairs) {
-    const [key, ...rest] = pair.trim().split('=')
-    // Padrão: sb-{projectRef}-auth-token ou sb-{projectRef}-auth-token.0 etc.
-    if (/^sb-[a-z0-9]+-auth-token$/.test(key)) {
-      try {
-        const decoded = decodeURIComponent(rest.join('='))
-        const parsed = JSON.parse(decoded)
-        if (parsed.access_token) return parsed.access_token
-      } catch { /* continua para o próximo cookie */ }
-    }
+    const idx = pair.indexOf('=')
+    if (idx < 0) continue
+    const key = pair.slice(0, idx).trim()
+    const val = pair.slice(idx + 1).trim()
+    cookieMap[key] = val
   }
 
-  // Fallback: tentar construir o nome a partir da URL (quando env var está disponível)
-  try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-    if (supabaseUrl) {
-      const projectRef = new URL(supabaseUrl).hostname.split('.')[0]
-      const cookieName = `sb-${projectRef}-auth-token`
-      for (const pair of pairs) {
-        const [key, ...rest] = pair.trim().split('=')
-        if (key === cookieName) {
-          const decoded = decodeURIComponent(rest.join('='))
-          const parsed = JSON.parse(decoded)
-          if (parsed.access_token) return parsed.access_token
-        }
-      }
+  // Encontrar o projectRef a partir dos cookies existentes
+  const baseKeys = Object.keys(cookieMap).filter(k => /^sb-[a-z0-9]+-auth-token(\.0)?$/.test(k))
+  for (const baseKey of baseKeys) {
+    // Extrair o nome base sem índice
+    const base = baseKey.replace(/\.\d+$/, '')
+
+    // Tentar ler como cookie único primeiro
+    if (cookieMap[base]) {
+      try {
+        const decoded = decodeURIComponent(cookieMap[base])
+        const parsed = JSON.parse(decoded)
+        if (parsed.access_token) return parsed.access_token
+      } catch { /* continua */ }
     }
-  } catch { /* ignorar */ }
+
+    // Montar a partir de chunks .0, .1, .2, ...
+    let assembled = ''
+    for (let i = 0; i < 10; i++) {
+      const chunk = cookieMap[`${base}.${i}`]
+      if (!chunk) break
+      assembled += decodeURIComponent(chunk)
+    }
+    if (assembled) {
+      try {
+        const parsed = JSON.parse(assembled)
+        if (parsed.access_token) return parsed.access_token
+      } catch { /* continua */ }
+    }
+  }
 
   return ''
 }
