@@ -1,77 +1,129 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
-const sanitize = (v: string | undefined) => (v ?? '').replace(/^\uFEFF/, '').trim()
-const SUPABASE_URL = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL)
-const ANON_KEY     = sanitize(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY)
+function supabase() {
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()
+  if (!url || !key) return null
+  return createClient(url, key, { auth: { persistSession: false } })
+}
 
-function getToken(req: NextRequest): string {
-  const auth = req.headers.get('authorization')
-  if (auth?.startsWith('Bearer ')) return auth.slice(7)
-  for (const c of req.cookies.getAll()) {
-    if (c.name.includes('auth-token') && !c.name.includes('.')) {
-      try { const p = JSON.parse(decodeURIComponent(c.value)); if (p?.access_token) return p.access_token } catch { /* */ }
+async function autenticar(sb: ReturnType<typeof supabase>, req: NextRequest): Promise<string | null> {
+  if (!sb) return null
+  const auth = req.headers.get('authorization') ?? ''
+  let token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  if (!token) {
+    for (const c of req.cookies.getAll()) {
+      if (c.name.includes('auth-token') && !c.name.includes('.')) {
+        try { const p = JSON.parse(decodeURIComponent(c.value)); if (p?.access_token) { token = p.access_token; break } } catch { /* */ }
+      }
     }
   }
-  return ANON_KEY
+  if (!token) return null
+  const { data: { user }, error } = await sb.auth.getUser(token)
+  if (error || !user) return null
+  const { data: usuario } = await sb
+    .from('usuarios').select('tenant_id').eq('auth_user_id', user.id).single()
+  return (usuario as any)?.tenant_id ?? null
 }
 
-// ── GET /api/negocios-editoriais/[id] ────────────────────────────
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!SUPABASE_URL || !ANON_KEY) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
+// ── GET /api/negocios-editoriais/[id] ──────────────────────────
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const sb = supabase()
+  if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
+  const tenant_id = await autenticar(sb, req)
+  if (!tenant_id) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const { id } = await params
-  const token = getToken(req)
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/negocios_editoriais?id=eq.${id}&select=*`, {
-    headers: { apikey: ANON_KEY, Authorization: `Bearer ${token}` },
-  })
-  const data = await res.json()
-  if (!res.ok) return NextResponse.json({ error: data }, { status: res.status })
-  const row = Array.isArray(data) ? data[0] : null
-  if (!row) return NextResponse.json({ error: 'Não encontrado' }, { status: 404 })
-  return NextResponse.json({ negocio: row })
+
+  const { data, error } = await sb
+    .from('negocios_editoriais')
+    .select('*')
+    .eq('id', id)
+    .eq('tenant_id', tenant_id)
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: (error as any).code === 'PGRST116' ? 404 : 500 })
+  return NextResponse.json({ negocio: data })
 }
 
-// ── PUT /api/negocios-editoriais/[id] ────────────────────────────
-export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!SUPABASE_URL || !ANON_KEY) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
+// ── PUT /api/negocios-editoriais/[id] ──────────────────────────
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const sb = supabase()
+  if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
+  const tenant_id = await autenticar(sb, req)
+  if (!tenant_id) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const { id } = await params
-  const token = getToken(req)
 
   let body: Record<string, unknown>
   try { body = await req.json() } catch { return NextResponse.json({ error: 'JSON inválido' }, { status: 400 }) }
 
-  // Re-valida percentuais se ambos foram enviados
-  if (body.percentual_administrada !== undefined && body.percentual_administradora !== undefined) {
-    const soma = Number(body.percentual_administrada) + Number(body.percentual_administradora)
-    if (Math.round(soma * 10000) !== 1000000) {
-      return NextResponse.json({ error: 'Percentuais devem somar exatamente 100%' }, { status: 400 })
-    }
+  if (!body.editora_administrada_id)   return NextResponse.json({ error: 'editora_administrada_id obrigatório' }, { status: 400 })
+  if (!body.editora_administradora_id) return NextResponse.json({ error: 'editora_administradora_id obrigatório' }, { status: 400 })
+  if (!body.data_inicio)               return NextResponse.json({ error: 'data_inicio obrigatório' }, { status: 400 })
+
+  const pAdm  = Number(body.percentual_administrada  ?? 0)
+  const pAdmR = Number(body.percentual_administradora ?? 0)
+  if (Math.round((pAdm + pAdmR) * 10000) !== 1000000) {
+    return NextResponse.json({ error: 'Percentuais devem somar exatamente 100%' }, { status: 400 })
   }
 
-  // Remove campos não-editáveis
-  const { id: _id, tenant_id: _t, created_at: _c, ...patch } = body as any
+  const update: Record<string, unknown> = {
+    nome:                        body.nome,
+    codigo_interno:              body.codigo_interno ?? null,
+    status:                      body.status ?? 'ativo',
+    editora_administrada_id:     body.editora_administrada_id,
+    editora_administrada_nome:   body.editora_administrada_nome ?? null,
+    editora_administradora_id:   body.editora_administradora_id,
+    editora_administradora_nome: body.editora_administradora_nome ?? null,
+    percentual_administrada:     pAdm,
+    percentual_administradora:   pAdmR,
+    receitas_aplicaveis:         body.receitas_aplicaveis ?? ['digital','sync','mecanico','internacional','licenciamento'],
+    abrangencia_tipo:            body.abrangencia_tipo ?? 'catalogo_inteiro',
+    abrangencia_ids:             body.abrangencia_ids ?? [],
+    territorios:                 body.territorios ?? ['mundial'],
+    data_inicio:                 body.data_inicio,
+    data_fim:                    body.data_fim ?? null,
+    contrato_url:                body.contrato_url ?? null,
+    contrato_nome_arquivo:       body.contrato_nome_arquivo ?? null,
+    tipo_direito_id:             body.tipo_direito_id || null,
+    observacoes:                 body.observacoes ?? null,
+  }
 
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/negocios_editoriais?id=eq.${id}`, {
-    method: 'PATCH',
-    headers: { apikey: ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
-    body: JSON.stringify(patch),
-  })
-  const data = await res.json()
-  if (!res.ok) return NextResponse.json({ error: data }, { status: res.status })
-  return NextResponse.json({ negocio: Array.isArray(data) ? data[0] : data })
+  const { data, error } = await sb
+    .from('negocios_editoriais')
+    .update(update)
+    .eq('id', id)
+    .eq('tenant_id', tenant_id)
+    .select()
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: (error as any).code === 'PGRST116' ? 404 : 500 })
+  return NextResponse.json({ negocio: data })
 }
 
-// ── DELETE /api/negocios-editoriais/[id] ─────────────────────────
-export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!SUPABASE_URL || !ANON_KEY) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
+// ── DELETE /api/negocios-editoriais/[id] ───────────────────────
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const sb = supabase()
+  if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
+  const tenant_id = await autenticar(sb, req)
+  if (!tenant_id) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const { id } = await params
-  const token = getToken(req)
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/negocios_editoriais?id=eq.${id}`, {
-    method: 'DELETE',
-    headers: { apikey: ANON_KEY, Authorization: `Bearer ${token}` },
-  })
-  if (!res.ok) {
-    const data = await res.json()
-    return NextResponse.json({ error: data }, { status: res.status })
-  }
+
+  const { error } = await sb
+    .from('negocios_editoriais')
+    .delete()
+    .eq('id', id)
+    .eq('tenant_id', tenant_id)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
