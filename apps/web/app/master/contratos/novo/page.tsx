@@ -121,14 +121,7 @@ const TIPO_CONFIG: Record<TipoContratoV2, {
   },
 }
 
-const TITULARES_MOCK = [
-  { id: 'tit-pf-1', nome: 'NAUILAN BARBOSA SILVA', tipo_pessoa: 'PF' as const },
-  { id: 'tit-pf-2', nome: 'GIOVANI ALVES RODRIGUES', tipo_pessoa: 'PF' as const },
-  { id: 'tit-pf-3', nome: 'MARCELO COSTA FERREIRA', tipo_pessoa: 'PF' as const },
-  { id: 'tit-pf-4', nome: 'JOAO PEDRO MORAES LIMA', tipo_pessoa: 'PF' as const },
-  { id: 'tit-pj-1', nome: 'NAUILAN MUSIC PRODUCOES LTDA', tipo_pessoa: 'PJ' as const },
-  { id: 'tit-pj-2', nome: 'EDI MUSIC EDICOES MUSICAIS LTDA', tipo_pessoa: 'PJ' as const },
-]
+// Titulares carregados da API — não usar mock
 
 type TitularItem = { id: string; nome: string; tipo_pessoa: 'PF' | 'PJ'; ipi?: string; cpf_cnpj?: string }
 
@@ -307,13 +300,7 @@ function TitularBusca({
   )
 }
 
-const EDITORAS_MOCK = [
-  { id: 'ed-tsm',  nome: 'TOP SHOW MUSIC EDICOES MUSICAIS LTDA', cnpj: '12.345.678/0001-90' },
-  { id: 'ed-edi',  nome: 'EDI MUSIC EDICOES MUSICAIS LTDA', cnpj: '23.456.789/0001-01' },
-  { id: 'ed-lr',   nome: 'LR EDICOES MUSICAIS LTDA', cnpj: '34.567.890/0001-12' },
-  { id: 'ed-p3',   nome: 'P3 EDITORA MUSICAL LTDA', cnpj: '45.678.901/0001-23' },
-  { id: 'ed-lamu', nome: 'EDITORA LAMU EDICOES MUSICAIS LTDA', cnpj: '56.789.012/0001-34' },
-]
+// Editoras carregadas da API — não usar mock
 
 const TIPOS: TipoContratoV2[] = [
   'administracao_editorial',
@@ -419,7 +406,42 @@ export default function NovoContratoPage() {
   const [form, setForm] = useState<FormState>(INITIAL_FORM)
   const [showPreview, setShowPreview] = useState(false)
   const [extraTitulares, setExtraTitulares] = useState<TitularItem[]>([])
-  const todosOsTitulares: TitularItem[] = [...TITULARES_MOCK, ...extraTitulares]
+  const [titularesReais, setTitularesReais] = useState<TitularItem[]>([])
+  const [editorasReais, setEditorasReais] = useState<Array<{ id: string; nome: string; cnpj: string }>>([])
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function carregar() {
+      try {
+        const [tRes, eRes] = await Promise.all([
+          fetch('/api/titulares?per_page=200&status=ativo'),
+          fetch('/api/editoras'),
+        ])
+        const tJson = await tRes.json()
+        const eJson = await eRes.json()
+        if (Array.isArray(tJson.data)) {
+          setTitularesReais(tJson.data.map((t: Record<string, unknown>) => ({
+            id: t.id as string,
+            nome: (t.nome_completo ?? t.nome ?? '') as string,
+            tipo_pessoa: ((t.pessoa ?? t.tipo_pessoa ?? 'PF') as 'PF' | 'PJ'),
+            cpf_cnpj: (t.cpf_cnpj ?? '') as string,
+            ipi: (t.ipi ?? t.codigo_ipi ?? '') as string,
+          })))
+        }
+        if (Array.isArray(eJson.editoras)) {
+          setEditorasReais(eJson.editoras.map((e: Record<string, unknown>) => ({
+            id: e.id as string,
+            nome: (e.nome_fantasia ?? e.nome ?? '') as string,
+            cnpj: (e.cnpj ?? '') as string,
+          })))
+        }
+      } catch { /* silencioso */ }
+    }
+    carregar()
+  }, [])
+
+  const todosOsTitulares: TitularItem[] = [...titularesReais, ...extraTitulares]
 
   function next() { if (step < TOTAL_STEPS - 1) setStep(s => s + 1) }
   function prev() { if (step > 0) setStep(s => s - 1) }
@@ -446,7 +468,7 @@ export default function NovoContratoPage() {
 
   const cfg = form.tipo ? TIPO_CONFIG[form.tipo] : null
   const selectedModelo = MODELOS_JURIDICOS_V2.find(m => m.id === form.modelo_juridico_id)
-  const selectedEditora = EDITORAS_MOCK.find(e => e.id === form.editora_id)
+  const selectedEditora = editorasReais.find(e => e.id === form.editora_id)
   const termObrig = form.tipo ? dataTerminoObrigatorio(form.tipo) : false
   const podeRenovar = form.tipo ? permiteRenovacaoAutomatica(form.tipo) : false
 
@@ -501,7 +523,9 @@ export default function NovoContratoPage() {
       <div>
         <p className="text-sm text-white/60 mb-3">Editora responsavel:</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {EDITORAS_MOCK.map(e => (
+          {editorasReais.length === 0 ? (
+            <div className="col-span-2 text-xs text-white/30 py-4 text-center">Carregando editoras...</div>
+          ) : editorasReais.map(e => (
             <button
               key={e.id}
               onClick={() => updateForm({ editora_id: e.id })}
@@ -1195,22 +1219,90 @@ export default function NovoContratoPage() {
         )}
       </div>
       <button
-        onClick={() => {
-          const contratos = JSON.parse(localStorage.getItem('sync_contratos_v2') || '[]')
-          const novo = {
-            id: `cnt-${Date.now()}`,
-            numero: `CTR-${String(contratos.length + 1).padStart(4, '0')}`,
-            ...form,
-            status: 'rascunho',
-            created_at: new Date().toISOString(),
+        onClick={async () => {
+          // ── Validações ──
+          const mainParte = form.partes[0]
+          if (!mainParte?.titular_id || mainParte.titular_id.startsWith('tit-novo-')) {
+            setSaveError('Selecione um titular válido cadastrado no banco.')
+            return
           }
-          localStorage.setItem('sync_contratos_v2', JSON.stringify([...contratos, novo]))
-          router.push('/master/contratos')
+          if (!form.editora_id) { setSaveError('Selecione uma editora.'); return }
+          if (!form.vigencia_inicio) { setSaveError('Informe a data de início da vigência.'); return }
+          if (!form.tipo) { setSaveError('Selecione o tipo de contrato.'); return }
+
+          // ── Mapeamento tipo wizard → enum banco ──
+          const tipoMap: Record<string, string> = {
+            cessao_parcial: 'cessao', cessao_total: 'cessao',
+            cessao_internacional: 'cessao', cessionario_pf: 'cessao', cessionario_pj: 'cessao',
+            licenciamento: 'licenciamento', licenciamento_licenciante_pf: 'licenciamento',
+            licenciamento_licenciante_pj: 'licenciamento',
+            administracao_editorial: 'administracao',
+            coedicao: 'coedicao', subedicao: 'subedicao',
+            exclusividade_autor_editora: 'autorizacao',
+          }
+          const tipoEnum = tipoMap[form.tipo] ?? 'cessao'
+
+          // ── Percentuais ──
+          const percentualAutor = Number(mainParte.percentual ?? 75)
+          const percentualEditora = Math.round((100 - percentualAutor) * 10000) / 10000
+
+          // ── Splits por direito (strip prefixo BR_/EXT_) ──
+          const splitsDireitos: Record<string, { percentual_editora: number; percentual_autor: number }> = {}
+          for (const d of form.direitos) {
+            if (!d.ativo) continue
+            const codigo = d.codigo.replace(/^(BR_|EXT_)/, '')
+            if (splitsDireitos[codigo]) continue // BR prevalece sobre EXT
+            splitsDireitos[codigo] = {
+              percentual_editora: Number(d.pct_editora) || 0,
+              percentual_autor:   Number(d.pct_titular) || 0,
+            }
+          }
+
+          const payload = {
+            tipo:                tipoEnum,
+            editora_id:          form.editora_id,
+            titular_id:          mainParte.titular_id,
+            percentual_editora:  percentualEditora,
+            percentual_autor:    percentualAutor,
+            splits_direitos:     splitsDireitos,
+            data_inicio:         form.vigencia_inicio,
+            data_fim:            form.prazo_indeterminado ? null : (form.vigencia_fim || null),
+            prazo_indeterminado: form.prazo_indeterminado,
+            territorio:          form.territorio,
+            exclusividade:       form.exclusividade,
+            status:              'assinado',
+            numero:              `CTR-${Date.now()}`,
+            observacoes:         [form.tipo, form.descricao_recoupment].filter(Boolean).join(' — ') || null,
+          }
+
+          setSaving(true)
+          setSaveError(null)
+          try {
+            const res = await fetch('/api/contratos', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            })
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}))
+              setSaveError((err as Record<string, string>).error ?? `Erro ${res.status} ao salvar contrato.`)
+              return
+            }
+            router.push('/master/contratos')
+          } catch {
+            setSaveError('Erro inesperado ao salvar. Verifique a conexão.')
+          } finally {
+            setSaving(false)
+          }
         }}
-        className="w-full h-10 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold rounded-xl transition-colors"
+        disabled={saving}
+        className="w-full h-10 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
       >
-        Criar Contrato
+        {saving ? 'Salvando...' : 'Criar Contrato'}
       </button>
+      {saveError && (
+        <p className="text-xs text-rose-400 text-center mt-1">{saveError}</p>
+      )}
     </div>
   )
 

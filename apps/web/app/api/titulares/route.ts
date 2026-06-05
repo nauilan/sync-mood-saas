@@ -70,3 +70,42 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ data: data ?? [], total: count ?? 0, kpis: totais })
 }
+
+export async function POST(req: NextRequest) {
+  const sb = getAdminClient()
+  if (!sb) return NextResponse.json({ error: 'Config inválida' }, { status: 500 })
+
+  const tenant_id = await autenticar(sb, req)
+  if (!tenant_id) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  const body = await req.json()
+  const nomeCompleto = (body.nome_completo ?? body.nome ?? '').trim()
+  if (!nomeCompleto) {
+    return NextResponse.json({ error: 'nome obrigatório' }, { status: 400 })
+  }
+
+  // Gera código interno sequencial
+  const { count: total } = await sb
+    .from('titulares')
+    .select('*', { count: 'exact', head: true })
+    .eq('tenant_id', tenant_id)
+  const seq = (total ?? 0) + 1
+  const codigo_titular = `T${String(seq).padStart(4, '0')}`
+
+  const payload: Record<string, unknown> = {
+    tenant_id,
+    codigo_titular,
+    tipo: body.tipo ?? 'autor',
+    pessoa: body.tipo_pessoa ?? body.pessoa ?? 'PF',
+    nome_completo: nomeCompleto,
+    status: 'ativo',
+  }
+  if (body.nome_artistico) payload.nome_artistico = body.nome_artistico
+  if (body.cpf_cnpj) payload.cpf_cnpj = body.cpf_cnpj
+  if (body.ipi) payload.ipi = body.ipi
+  if (body.codigo_ipi) payload.codigo_ipi = body.codigo_ipi
+
+  const { data, error } = await sb.from('titulares').insert(payload).select().single()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ data }, { status: 201 })
+}
