@@ -45,8 +45,9 @@ export async function GET(
       obras_links_titulares (
         id, obra_link_id, nome, papel, funcao_no_link,
         percentual_exec_publica, percentual_fonomecanico, percentual_sincronizacao,
-        controlado, cpf_cnpj, tipo_pessoa, pseudonimo_fantasia,
-        codigo_interno_legado_titular, contrato_file, titular_id, editora_id
+        controlado, ipi, cae,
+        titular_id, editora_id, editora_original_id, editora_administradora_id,
+        contrato_id, status_controle
       )
     `)
     .eq('obra_id', obra_id)
