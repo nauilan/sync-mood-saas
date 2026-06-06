@@ -5,11 +5,12 @@ import { useParams, useRouter } from 'next/navigation'
 import {
   ChevronLeft, Pencil, Users, FileText, CreditCard,
   MapPin, Phone, Briefcase, UserCircle2, Shield, History,
-  Trash2, AlertTriangle, Loader2
+  Trash2, AlertTriangle, Loader2, Building2, Link2, Link2Off, Check, X
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { getAccessToken } from '@/lib/supabase/client'
 
 type Tab = 'dados' | 'funcoes' | 'pseudonimos' | 'endereco' | 'contatos' | 'bancario' | 'documentos' | 'historico'
 
@@ -35,6 +36,8 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
+interface EditoraOpcao { id: string; nome_fantasia: string; razao_social: string }
+
 export default function TitularDetalhePage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -49,6 +52,13 @@ export default function TitularDetalhePage() {
   const [deleting, setDeleting]             = useState(false)
   const [deleteError, setDeleteError]       = useState<{ msg: string; vinculos?: string[] } | null>(null)
 
+  // Editora vinculada
+  const [editoras, setEditoras]                 = useState<EditoraOpcao[]>([])
+  const [showVincular, setShowVincular]         = useState(false)
+  const [vinculandoId, setVinculandoId]         = useState('')
+  const [salvandoVinculo, setSalvandoVinculo]   = useState(false)
+  const [vinculoMsg, setVinculoMsg]             = useState<string | null>(null)
+
   const carregar = useCallback(async () => {
     setLoading(true)
     setErro(null)
@@ -58,6 +68,7 @@ export default function TitularDetalhePage() {
       if (!res.ok) { setErro('Erro ao carregar titular.'); return }
       const json = await res.json()
       setTitular(json.data)
+      setVinculandoId(json.data?.editora_vinculada_id ?? '')
     } catch {
       setErro('Falha de conexão ao carregar titular.')
     } finally {
@@ -66,6 +77,18 @@ export default function TitularDetalhePage() {
   }, [id])
 
   useEffect(() => { carregar() }, [carregar])
+
+  // Carrega editoras quando titular for do tipo editora
+  useEffect(() => {
+    if (titular?.tipo !== 'editora') return
+    const tok = getAccessToken()
+    fetch('/api/editoras?status=todos', {
+      headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+    })
+      .then(r => r.json())
+      .then(d => setEditoras((d.editoras ?? []).map((e: any) => ({ id: e.id, nome_fantasia: e.nome_fantasia, razao_social: e.razao_social }))))
+      .catch(() => { /* silencioso */ })
+  }, [titular?.tipo])
 
   async function excluir() {
     setDeleting(true)
@@ -82,6 +105,32 @@ export default function TitularDetalhePage() {
       setDeleteError({ msg: 'Falha de conexão ao excluir.' })
     } finally {
       setDeleting(false)
+    }
+  }
+
+  async function salvarVinculo() {
+    setSalvandoVinculo(true)
+    setVinculoMsg(null)
+    try {
+      const tok = getAccessToken()
+      const res = await fetch(`/api/titulares/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
+        },
+        body: JSON.stringify({ editora_vinculada_id: vinculandoId || null }),
+        credentials: 'include',
+      })
+      const json = await res.json()
+      if (!res.ok) { setVinculoMsg('Erro: ' + (json.error ?? 'Falha ao salvar')); return }
+      setTitular((prev: any) => ({ ...prev, editora_vinculada_id: vinculandoId || null }))
+      setShowVincular(false)
+      setVinculoMsg(null)
+    } catch {
+      setVinculoMsg('Falha de conexão.')
+    } finally {
+      setSalvandoVinculo(false)
     }
   }
 
@@ -121,8 +170,10 @@ export default function TitularDetalhePage() {
   if (!titular) return null
 
   const isPF    = (titular.pessoa ?? titular.tipo_pessoa) === 'PF'
+  const isEditora = titular.tipo === 'editora'
   const nome    = titular.nome_completo ?? '—'
   const status  = titular.status ?? 'ativo'
+  const editoraVinculada = editoras.find(e => e.id === titular.editora_vinculada_id)
 
   return (
     <div className="space-y-6">
@@ -144,6 +195,7 @@ export default function TitularDetalhePage() {
                 <Badge variant={status === 'ativo' ? 'emerald' : 'rose'}>
                   {status === 'ativo' ? 'Ativo' : 'Inativo'}
                 </Badge>
+                {isEditora && <Badge variant="violet">Editora</Badge>}
                 <Button variant="ghost" size="sm">
                   <Pencil className="w-4 h-4" /> Editar
                 </Button>
@@ -200,28 +252,122 @@ export default function TitularDetalhePage() {
 
         <div className="p-6">
           {tab === 'dados' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div>
-                <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">Identificação</h4>
-                <InfoRow label="Nome completo"    value={titular.nome_completo} />
-                <InfoRow label="Nome artístico"   value={titular.nome_artistico} />
-                <InfoRow label={isPF ? 'CPF' : 'CNPJ'} value={<span className="font-mono">{titular.cpf_cnpj}</span>} />
-                <InfoRow label="Nacionalidade"    value={titular.nacionalidade} />
-                <InfoRow label="Sociedade autoral" value={titular.sociedade_autoral} />
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                  <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">Identificação</h4>
+                  <InfoRow label="Nome completo"    value={titular.nome_completo} />
+                  <InfoRow label="Nome artístico"   value={titular.nome_artistico} />
+                  <InfoRow label={isPF ? 'CPF' : 'CNPJ'} value={<span className="font-mono">{titular.cpf_cnpj}</span>} />
+                  <InfoRow label="Nacionalidade"    value={titular.nacionalidade} />
+                  <InfoRow label="Sociedade autoral" value={titular.sociedade_autoral} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">Arrecadação</h4>
+                  <InfoRow label="Código CAE"     value={titular.codigo_cae} />
+                  <InfoRow label="Código IPI"     value={titular.codigo_ipi ?? titular.ipi} />
+                  <InfoRow label="Código titular" value={<span className="font-mono text-violet-400">{titular.codigo_titular}</span>} />
+                  <InfoRow label="Cadastrado em"  value={titular.created_at ? new Date(titular.created_at).toLocaleDateString('pt-BR') : null} />
+                  {titular.observacoes && (
+                    <>
+                      <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3 mt-5">Observações</h4>
+                      <p className="text-sm text-white/60 bg-white/[0.02] rounded-lg p-3">{titular.observacoes}</p>
+                    </>
+                  )}
+                </div>
               </div>
-              <div>
-                <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">Arrecadação</h4>
-                <InfoRow label="Código CAE"     value={titular.codigo_cae} />
-                <InfoRow label="Código IPI"     value={titular.codigo_ipi ?? titular.ipi} />
-                <InfoRow label="Código titular" value={<span className="font-mono text-violet-400">{titular.codigo_titular}</span>} />
-                <InfoRow label="Cadastrado em"  value={titular.created_at ? new Date(titular.created_at).toLocaleDateString('pt-BR') : null} />
-                {titular.observacoes && (
-                  <>
-                    <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3 mt-5">Observações</h4>
-                    <p className="text-sm text-white/60 bg-white/[0.02] rounded-lg p-3">{titular.observacoes}</p>
-                  </>
-                )}
-              </div>
+
+              {/* Editora Vinculada — visível apenas quando tipo === 'editora' */}
+              {isEditora && (
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-violet-400/60" />
+                      <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider">Editora Vinculada</h4>
+                    </div>
+                    {!showVincular && (
+                      <button
+                        onClick={() => { setShowVincular(true); setVinculoMsg(null) }}
+                        className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 bg-violet-500/10 hover:bg-violet-500/15 border border-violet-500/20 rounded-lg px-3 py-1.5 transition-colors"
+                      >
+                        <Link2 className="w-3.5 h-3.5" />
+                        {titular.editora_vinculada_id ? 'Alterar vínculo' : 'Vincular editora'}
+                      </button>
+                    )}
+                  </div>
+
+                  {!showVincular && (
+                    titular.editora_vinculada_id ? (
+                      <div className="flex items-center gap-3 bg-violet-500/5 border border-violet-500/15 rounded-xl px-4 py-3">
+                        <Building2 className="w-4 h-4 text-violet-400 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-white/80">
+                            {editoraVinculada?.nome_fantasia ?? 'Editora vinculada'}
+                          </p>
+                          {editoraVinculada?.razao_social && (
+                            <p className="text-xs text-white/40">{editoraVinculada.razao_social}</p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => {
+                            setVinculandoId('')
+                            setShowVincular(true)
+                            setVinculoMsg(null)
+                          }}
+                          className="text-white/20 hover:text-rose-400 transition-colors"
+                          title="Remover vínculo"
+                        >
+                          <Link2Off className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-white/20 bg-white/[0.02] rounded-xl px-4 py-3 border border-white/[0.04]">
+                        Nenhuma editora vinculada. Este titular do tipo editora ainda não foi associado a um cadastro oficial de editora.
+                      </p>
+                    )
+                  )}
+
+                  {showVincular && (
+                    <div className="bg-white/[0.03] border border-white/[0.08] rounded-xl p-4 space-y-3">
+                      <p className="text-xs text-white/40">
+                        Selecione a editora que corresponde a este titular. O vínculo permite que o sistema use os dados CWR/CAE/IPI do cadastro oficial de editoras.
+                      </p>
+                      <select
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500/50"
+                        value={vinculandoId}
+                        onChange={e => setVinculandoId(e.target.value)}
+                      >
+                        <option value="">— Sem vínculo —</option>
+                        {editoras.map(e => (
+                          <option key={e.id} value={e.id}>{e.nome_fantasia} — {e.razao_social}</option>
+                        ))}
+                      </select>
+                      {vinculoMsg && (
+                        <p className="text-xs text-rose-400">{vinculoMsg}</p>
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { setShowVincular(false); setVinculoMsg(null); setVinculandoId(titular.editora_vinculada_id ?? '') }}
+                          className="flex items-center gap-1.5 text-xs text-white/50 hover:text-white/70 px-3 py-1.5 rounded-lg border border-white/10 transition-colors"
+                          disabled={salvandoVinculo}
+                        >
+                          <X className="w-3.5 h-3.5" /> Cancelar
+                        </button>
+                        <button
+                          onClick={salvarVinculo}
+                          disabled={salvandoVinculo}
+                          className="flex items-center gap-1.5 text-xs bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          {salvandoVinculo
+                            ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando...</>
+                            : <><Check className="w-3.5 h-3.5" /> Salvar vínculo</>
+                          }
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

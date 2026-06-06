@@ -46,6 +46,11 @@ interface TenantForm {
   tipo_conta: string; titular_conta: string; operacao: string
   pix_chave: string; pix_tipo: string
   codigo_interno: string
+  // Identificadores CWR
+  codigo_interno_cwr: string
+  codigo_publisher_cwr: string
+  codigo_cae: string
+  codigo_ipi: string
 }
 // Editora simples para seletor de acesso de usuários
 interface EditoraOpcao { id: string; nome_fantasia: string; razao_social: string; cnpj?: string | null }
@@ -82,6 +87,7 @@ const EMPTY_TENANT: TenantForm = {
   telefone: '', email: '', site: '',
   banco: '', agencia: '', conta: '', conta_digito: '', tipo_conta: '', titular_conta: '', operacao: '', pix_chave: '', pix_tipo: '',
   codigo_interno: '',
+  codigo_interno_cwr: '', codigo_publisher_cwr: '', codigo_cae: '', codigo_ipi: '',
 }
 const EMPTY_USR: Usuario = { id: '', nome: '', cpf: '', email: '', perfil: 'operador', ativo: true, editoras_acesso: [] }
 const EMPTY_CFG: Config = {
@@ -122,6 +128,7 @@ function Toast({ msg, onClose }: { msg: string; onClose: () => void }) {
 // ── ABAS ──────────────────────────────────────────────────────
 const ABAS = [
   { id: 'empresa',       label: 'Dados da Empresa',      icon: Building2 },
+  { id: 'codigos',       label: 'Codigos e IDs',         icon: Shield },
   { id: 'banco',         label: 'Dados Bancarios',       icon: CreditCard },
   { id: 'administradas', label: 'Editoras Administradas',icon: Building2 },
   { id: 'usuarios',      label: 'Usuarios',              icon: Users },
@@ -213,6 +220,10 @@ export default function EditoraPage() {
               pix_chave: banco.pix_chave ?? '',
               pix_tipo: banco.pix_tipo ?? '',
               codigo_interno: e.codigo_interno ?? '',
+              codigo_interno_cwr: e.codigo_interno_cwr ?? '',
+              codigo_publisher_cwr: e.codigo_publisher_cwr ?? '',
+              codigo_cae: e.codigo_cae ?? '',
+              codigo_ipi: e.codigo_ipi ?? '',
             })
           }
         }
@@ -283,6 +294,10 @@ export default function EditoraPage() {
         site: form.site,
         codigo_ecad: form.registro_ecad,
         codigo_interno: form.codigo_interno || undefined,
+        codigo_interno_cwr: form.codigo_interno_cwr || undefined,
+        codigo_publisher_cwr: form.codigo_publisher_cwr || undefined,
+        codigo_cae: form.codigo_cae || undefined,
+        codigo_ipi: form.codigo_ipi || undefined,
         dados_bancarios: {
           banco: form.banco,
           agencia: form.agencia,
@@ -418,9 +433,6 @@ export default function EditoraPage() {
             <Field label="Codigo ECAD">
               <input className={inputCls} placeholder="CODIGO ECAD" value={form.registro_ecad} onChange={setUpper('registro_ecad')} />
             </Field>
-            <Field label="Codigo Interno">
-              <input className={inputCls} placeholder="CODIGO INTERNO" value={form.codigo_interno} onChange={setUpper('codigo_interno')} />
-            </Field>
           </div>
 
           <Divider label="Endereco" />
@@ -475,6 +487,60 @@ export default function EditoraPage() {
                 <input className={inputCls + ' pl-9'} placeholder="www.editora.com.br" value={form.site} onChange={set('site')} />
               </div>
             </Field>
+          </div>
+        </div>
+      )}
+
+      {/* ─── ABA CODIGOS ─────────────────────────────── */}
+      {aba === 'codigos' && (
+        <div className={`${card} p-6 space-y-6`}>
+          <div className="bg-sky-500/5 border border-sky-500/15 rounded-xl px-4 py-3 text-xs text-sky-300/70 space-y-1">
+            <p className="font-semibold text-sky-300">Identificadores estratégicos</p>
+            <p>Esses campos são utilizados para matching automático na importação CWR, vínculo com sociedades autorais e identificação internacional. Após a editora possuir obras ou contratos vinculados, alterações requerem perfil master e geram log de auditoria.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Codigo Interno (Sync Mood)">
+              <input className={inputCls} placeholder="Ex: TOPSHOW" value={form.codigo_interno} onChange={setUpper('codigo_interno')} />
+            </Field>
+            <Field label="Codigo ECAD">
+              <input className={inputCls} placeholder="CODIGO ECAD" value={form.registro_ecad} onChange={setUpper('registro_ecad')} />
+            </Field>
+          </div>
+
+          <Divider label="Identificadores CWR" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Codigo Interno CWR">
+              <input className={inputCls} placeholder="Ex: TS01 — identifica a editora dentro do arquivo CWR" value={form.codigo_interno_cwr} onChange={setUpper('codigo_interno_cwr')} />
+            </Field>
+            <Field label="Codigo Publisher CWR">
+              <input className={inputCls} placeholder="Codigo de publisher registrado no CWR" value={form.codigo_publisher_cwr} onChange={setUpper('codigo_publisher_cwr')} />
+            </Field>
+          </div>
+
+          <Divider label="Identificadores CISAC / Sociedades" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Codigo CAE">
+              <input className={inputCls} placeholder="CAE-00000000" value={form.codigo_cae} onChange={setUpper('codigo_cae')} />
+            </Field>
+            <Field label="Codigo IPI">
+              <input className={inputCls} placeholder="00000000000 (11 digitos)" value={form.codigo_ipi} onChange={setUpper('codigo_ipi')} />
+            </Field>
+          </div>
+
+          <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl px-4 py-3 text-xs text-amber-300/70 space-y-1">
+            <p className="font-semibold text-amber-300">Sender Code CISAC</p>
+            <p>O Sender Code não fica nesta tela. Ele pertence exclusivamente às Configurações CWR da Organização Gestora — disponível futuramente na aba CWR.</p>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={salvarEmpresa}
+              disabled={salvando}
+              className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors"
+            >
+              {salvando ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4" /> Salvar Codigos</>}
+            </button>
           </div>
         </div>
       )}

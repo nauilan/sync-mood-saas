@@ -56,6 +56,53 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json({ data })
 }
 
+// PUT /api/titulares/[id] — atualizar campos do titular
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const sb = getAdminClient()
+  if (!sb) return NextResponse.json({ error: 'Config inválida' }, { status: 500 })
+
+  const tenant_id = await autenticar(sb, req)
+  if (!tenant_id) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  const { data: titular } = await sb
+    .from('titulares')
+    .select('id')
+    .eq('id', id)
+    .eq('tenant_id', tenant_id)
+    .is('deleted_at', null)
+    .single()
+
+  if (!titular) return NextResponse.json({ error: 'Titular não encontrado' }, { status: 404 })
+
+  const body = await req.json()
+
+  const ALLOWED = [
+    'nome_completo', 'nome_artistico', 'cpf_cnpj', 'tipo', 'tipo_pessoa',
+    'codigo_titular', 'codigo_cae', 'codigo_ipi', 'ipi', 'dados_bancarios',
+    'status', 'observacoes', 'editora_vinculada_id',
+  ]
+
+  const update: Record<string, unknown> = {}
+  for (const k of ALLOWED) {
+    if (k in body) update[k] = body[k]
+  }
+
+  if (Object.keys(update).length === 0)
+    return NextResponse.json({ error: 'Nenhum campo válido para atualizar' }, { status: 400 })
+
+  const { data, error } = await sb
+    .from('titulares')
+    .update(update)
+    .eq('id', id)
+    .eq('tenant_id', tenant_id)
+    .select()
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ data })
+}
+
 // DELETE /api/titulares/[id] — soft delete com verificação de vínculos
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
