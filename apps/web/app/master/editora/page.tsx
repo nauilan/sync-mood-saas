@@ -46,9 +46,6 @@ interface TenantForm {
   tipo_conta: string; titular_conta: string; operacao: string
   pix_chave: string; pix_tipo: string
   codigo_interno: string
-  // Identificadores CWR
-  codigo_interno_cwr: string
-  codigo_publisher_cwr: string
   codigo_cae: string
   codigo_ipi: string
   sender_code: string
@@ -90,7 +87,7 @@ const EMPTY_TENANT: TenantForm = {
   telefone: '', email: '', site: '',
   banco: '', agencia: '', conta: '', conta_digito: '', tipo_conta: '', titular_conta: '', operacao: '', pix_chave: '', pix_tipo: '',
   codigo_interno: '',
-  codigo_interno_cwr: '', codigo_publisher_cwr: '', codigo_cae: '', codigo_ipi: '',
+  codigo_cae: '', codigo_ipi: '',
   sender_code: '', sender_name: '', sender_type: 'PB',
 }
 const EMPTY_USR: Usuario = { id: '', nome: '', cpf: '', email: '', perfil: 'operador', ativo: true, editoras_acesso: [] }
@@ -221,8 +218,6 @@ export default function EditoraPage() {
               pix_chave: banco.pix_chave ?? '',
               pix_tipo: banco.pix_tipo ?? '',
               codigo_interno: e.codigo_interno ?? '',
-              codigo_interno_cwr: e.codigo_interno_cwr ?? '',
-              codigo_publisher_cwr: e.codigo_publisher_cwr ?? '',
               codigo_cae: e.codigo_cae ?? '',
               codigo_ipi: e.codigo_ipi ?? '',
               sender_code: e.sender_code ?? '',
@@ -298,8 +293,6 @@ export default function EditoraPage() {
         site: form.site,
         codigo_ecad: form.registro_ecad,
         codigo_interno: form.codigo_interno || undefined,
-        codigo_interno_cwr: form.codigo_interno_cwr || undefined,
-        codigo_publisher_cwr: form.codigo_publisher_cwr || undefined,
         codigo_cae: form.codigo_cae || undefined,
         codigo_ipi: form.codigo_ipi || undefined,
         sender_code: form.sender_code || undefined,
@@ -503,21 +496,11 @@ export default function EditoraPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Codigo Interno (Sync Mood)">
-              <input className={inputCls} placeholder="Ex: TOPSHOW" value={form.codigo_interno} onChange={setUpper('codigo_interno')} />
+            <Field label="ID Interno">
+              <input className={inputCls} placeholder="Ex: 2646326, TOPSHOW" value={form.codigo_interno} onChange={setUpper('codigo_interno')} />
             </Field>
             <Field label="Codigo ECAD">
               <input className={inputCls} placeholder="CODIGO ECAD" value={form.registro_ecad} onChange={setUpper('registro_ecad')} />
-            </Field>
-          </div>
-
-          <Divider label="Identificadores CWR" />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Codigo Interno CWR">
-              <input className={inputCls} placeholder="Ex: TS01 — identifica a editora dentro do arquivo CWR" value={form.codigo_interno_cwr} onChange={setUpper('codigo_interno_cwr')} />
-            </Field>
-            <Field label="Codigo Publisher CWR">
-              <input className={inputCls} placeholder="Codigo de publisher registrado no CWR" value={form.codigo_publisher_cwr} onChange={setUpper('codigo_publisher_cwr')} />
             </Field>
           </div>
 
@@ -533,7 +516,7 @@ export default function EditoraPage() {
 
           <Divider label="CWR Remetente (Sender)" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Field label="Sender Code CISAC">
+            <Field label="Sender ID Code">
               <input className={inputCls} placeholder="Ex: TSL" value={form.sender_code} onChange={setUpper('sender_code')} />
             </Field>
             <Field label="Sender Name">

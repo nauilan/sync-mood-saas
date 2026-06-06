@@ -90,6 +90,7 @@ export default function EditarTitularPage() {
     estado_civil: '',
     profissao: '',
     sociedade_autoral: '',
+    codigo_interno: '',
     codigo_cae: '',
     codigo_ipi: '',
     codigo_titular: '',
@@ -130,6 +131,7 @@ export default function EditarTitularPage() {
         estado_civil:   t.estado_civil ?? '',
         profissao:      t.profissao ?? '',
         sociedade_autoral: t.sociedade_autoral ?? '',
+        codigo_interno: t.codigo_interno ?? '',
         codigo_cae:     t.codigo_cae ?? '',
         codigo_ipi:     t.codigo_ipi ?? t.ipi ?? '',
         codigo_titular: t.codigo_titular ?? '',
@@ -189,6 +191,7 @@ export default function EditarTitularPage() {
         cpf_cnpj:       f.cpf_cnpj.trim() || undefined,
         tipo:           f.tipo || undefined,
         tipo_pessoa:    f.tipo_pessoa,
+        codigo_interno: f.codigo_interno.trim() || undefined,
         codigo_cae:     f.codigo_cae.trim() || undefined,
         codigo_ipi:     f.codigo_ipi.trim() || undefined,
         ipi:            f.codigo_ipi.trim() || undefined,
@@ -357,6 +360,9 @@ export default function EditarTitularPage() {
 
       {/* Arrecadação */}
       <Section icon={<Briefcase className="w-4 h-4" />} title="Arrecadação e Registro">
+        <Field label="ID Interno">
+          <input className={inputCls} value={f.codigo_interno} onChange={setUpper('codigo_interno')} placeholder="Ex: JD01, HR01, 2646326" />
+        </Field>
         <Field label="Código CAE">
           <input className={inputCls} value={f.codigo_cae} onChange={setUpper('codigo_cae')} placeholder="000000000" />
         </Field>

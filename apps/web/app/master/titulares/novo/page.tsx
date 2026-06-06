@@ -68,6 +68,7 @@ interface FormState {
   sociedade_autoral: string
   cae: string
   ipi: string
+  codigo_interno: string
   // PJ
   razao_social: string
   nome_fantasia: string
@@ -110,7 +111,7 @@ interface FormState {
 
 const EMPTY: FormState = {
   tipo_pessoa: 'PF', editora_id: '', codigo_titular: '',
-  nome_completo: '', cpf: '', rg: '', data_nasc: '', nacionalidade: 'Brasileira', estado_civil: '', profissao: '', nome_artistico_principal: '', sociedade_autoral: '', cae: '', ipi: '',
+  nome_completo: '', cpf: '', rg: '', data_nasc: '', nacionalidade: 'Brasileira', estado_civil: '', profissao: '', nome_artistico_principal: '', sociedade_autoral: '', cae: '', ipi: '', codigo_interno: '',
   razao_social: '', nome_fantasia: '', cnpj: '', ie: '', im: '', responsavel_legal: '', site: '', socios: [],
   funcoes: [],
   pseudonimos: [],
@@ -355,6 +356,7 @@ export default function NovoTitularWizardPage() {
         codigo_cae:           form.cae.trim() || undefined,
         ipi:                  form.ipi.trim() || undefined,
         codigo_ipi:           form.ipi.trim() || undefined,
+        codigo_interno:       form.codigo_interno.trim() || undefined,
         dados_bancarios: (form.banco || form.agencia || form.conta) ? {
           banco:         form.banco.trim() || undefined,
           agencia:       form.agencia.trim() || undefined,
@@ -507,6 +509,9 @@ export default function NovoTitularWizardPage() {
             <Field label="Codigo IPI (SOCINPRO)">
               <input className={inputCls} placeholder="00000000" value={form.ipi} onChange={setUpper('ipi')} />
             </Field>
+            <Field label="ID Interno">
+              <input className={inputCls} placeholder="Ex: JD01, HR01" value={form.codigo_interno} onChange={setUpper('codigo_interno')} />
+            </Field>
             <div className="md:col-span-2">
               <Field label="Observacoes">
                 <textarea className={inputCls + ' h-20 resize-none'} placeholder="NOTAS INTERNAS..." value={form.observacoes} onChange={setUpper('observacoes')} />
@@ -556,6 +561,9 @@ export default function NovoTitularWizardPage() {
             </Field>
             <Field label="Codigo IPI">
               <input className={inputCls} placeholder="00000000" value={form.ipi} onChange={setUpper('ipi')} />
+            </Field>
+            <Field label="ID Interno">
+              <input className={inputCls} placeholder="Ex: 2646326, 8961236" value={form.codigo_interno} onChange={setUpper('codigo_interno')} />
             </Field>
             <div className="md:col-span-2">
               <Field label="Observacoes">

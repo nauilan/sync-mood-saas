@@ -20,10 +20,8 @@ interface Editora {
   tipo_editora: string
   controlada: boolean
   status: string
-  codigo_publisher_cwr: string | null
   codigo_cae: string | null
   codigo_ipi: string | null
-  codigo_interno_cwr: string | null
   pais_registro: string | null
   codigo_ecad: string | null
   codigo_interno: string | null
@@ -79,10 +77,8 @@ export default function EditoraDetalhePage() {
       tipo_editora:       editora.tipo_editora,
       controlada:         editora.controlada,
       status:             editora.status,
-      codigo_publisher_cwr: editora.codigo_publisher_cwr ?? '',
       codigo_cae:         editora.codigo_cae ?? '',
       codigo_ipi:         editora.codigo_ipi ?? '',
-      codigo_interno_cwr: editora.codigo_interno_cwr ?? '',
       pais_registro:      editora.pais_registro ?? 'BR',
       codigo_ecad:        editora.codigo_ecad ?? '',
       codigo_interno:     editora.codigo_interno ?? '',
@@ -183,9 +179,7 @@ export default function EditoraDetalhePage() {
             <Hash className="w-3.5 h-3.5 text-white/30" />
             <h3 className="text-xs font-semibold text-white/30 uppercase tracking-wider">Identificadores</h3>
           </div>
-          <InfoRow label="Código Interno (Sistema)" value={editora.codigo_interno} />
-          <InfoRow label="Código Publisher CWR"     value={editora.codigo_publisher_cwr} />
-          <InfoRow label="Código Interno CWR"       value={editora.codigo_interno_cwr} />
+          <InfoRow label="ID Interno"               value={editora.codigo_interno} />
           <InfoRow label="CAE"                      value={editora.codigo_cae} />
           <InfoRow label="IPI"                      value={editora.codigo_ipi} />
           <InfoRow label="ECAD"                     value={editora.codigo_ecad} />
@@ -271,25 +265,11 @@ export default function EditoraDetalhePage() {
               <div className="grid grid-cols-1 gap-3">
                 <div>
                   <label className="block text-[11px] font-medium text-white/50 mb-1.5">
-                    Código Interno <span className="text-violet-400/70">(Sistema)</span>
+                    ID Interno
                   </label>
-                  <input value={form.codigo_interno ?? ''} onChange={e => setForm(f => ({ ...f, codigo_interno: e.target.value }))}
+                  <input value={form.codigo_interno ?? ''} onChange={e => setForm(f => ({ ...f, codigo_interno: e.target.value.toUpperCase() }))}
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 font-mono focus:outline-none focus:border-violet-500/50"
-                    placeholder="Ex: TOPSHOW, EDI001, LR001" />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[11px] font-medium text-white/50 mb-1.5">Código Publisher CWR</label>
-                    <input value={form.codigo_publisher_cwr ?? ''} onChange={e => setForm(f => ({ ...f, codigo_publisher_cwr: e.target.value }))}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 font-mono focus:outline-none focus:border-violet-500/50"
-                      placeholder="Ex: 2646326" />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-medium text-white/50 mb-1.5">Código Interno CWR</label>
-                    <input value={form.codigo_interno_cwr ?? ''} onChange={e => setForm(f => ({ ...f, codigo_interno_cwr: e.target.value }))}
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 font-mono focus:outline-none focus:border-violet-500/50"
-                      placeholder="Ex: TS01" />
-                  </div>
+                    placeholder="Ex: 2646326, TOPSHOW, EDI001" />
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
