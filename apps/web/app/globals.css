@@ -161,3 +161,50 @@ select option {
   background: #11111d;
   color: #f4f4f8;
 }
+
+/* ── Responsividade global ─────────────────────────────────────────────────── */
+
+/* Padding padrão das páginas: menor em mobile */
+.page-content {
+  padding: 1rem;
+}
+@media (min-width: 768px) {
+  .page-content {
+    padding: 1.5rem 2rem;
+  }
+}
+
+/* Tabelas com scroll horizontal em telas pequenas */
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Grids de KPI: 2 colunas em mobile, 4 em desktop */
+.kpi-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (min-width: 768px) {
+  .kpi-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* Grids de 3 colunas: 1 em mobile, 3 em desktop */
+.grid-3 {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 640px) {
+  .grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

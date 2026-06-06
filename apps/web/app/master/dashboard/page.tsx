@@ -60,7 +60,7 @@ export default function MasterDashboardPage() {
   }, [])
 
   return (
-    <div className="px-6 py-6 space-y-6 animate-[fade-in-up_0.4s_cubic-bezier(0.16,1,0.3,1)_both]">
+    <div className="px-4 py-4 md:px-6 md:py-6 space-y-6 animate-[fade-in-up_0.4s_cubic-bezier(0.16,1,0.3,1)_both]">
 
       <PageHeader
         title="Dashboard Global"
@@ -222,3 +222,4 @@ export default function MasterDashboardPage() {
     </div>
   )
 }
+

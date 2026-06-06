@@ -1,3 +1,6 @@
+'use client'
+
+import { useState } from 'react'
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
 import type { NavSection } from './nav-config'
@@ -16,11 +19,33 @@ interface AppShellProps {
   children: React.ReactNode
 }
 
-export function AppShell({ nav, role, editoraNome, userName, userInitials, breadcrumb, topbarBadge, topbarBadgeColor, topbarActions, notificationCount, children }: AppShellProps) {
+export function AppShell({
+  nav, role, editoraNome, userName, userInitials,
+  breadcrumb, topbarBadge, topbarBadgeColor, topbarActions,
+  notificationCount, children,
+}: AppShellProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
   return (
-    // h-screen + overflow-hidden: trava a altura no viewport — cada coluna rola de forma independente
     <div className="flex h-screen overflow-hidden bg-[#07060f]">
-      <Sidebar nav={nav} role={role} editoraNome={editoraNome} userName={userName ?? 'Marina Lopes'} userInitials={userInitials ?? 'ML'} />
+      {/* Mobile overlay backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <Sidebar
+        nav={nav}
+        role={role}
+        editoraNome={editoraNome}
+        userName={userName ?? 'Marina Lopes'}
+        userInitials={userInitials ?? 'ML'}
+        mobileOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
+
       <div className="flex flex-col flex-1 min-w-0 h-screen overflow-hidden">
         <Topbar
           breadcrumb={breadcrumb}
@@ -30,6 +55,7 @@ export function AppShell({ nav, role, editoraNome, userName, userInitials, bread
           notificationCount={notificationCount ?? 3}
           userName={userName ?? 'Marina Lopes'}
           userInitials={userInitials ?? 'ML'}
+          onMenuClick={() => setSidebarOpen(true)}
         />
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>

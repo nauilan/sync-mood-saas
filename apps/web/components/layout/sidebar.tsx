@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef } from 'react'
+import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, Music, DollarSign, Shield, Link as LinkIcon, GitBranch,
@@ -33,16 +34,23 @@ interface SidebarProps {
   editoraNome?: string
   userName?: string
   userInitials?: string
+  mobileOpen?: boolean
+  onClose?: () => void
 }
 
 const NAV_SCROLL_KEY = 'sidebar_scroll_top'
 
-export function Sidebar({ nav, role, editoraNome, userName, userInitials }: SidebarProps) {
+export function Sidebar({ nav, role, editoraNome, userName, userInitials, mobileOpen, onClose }: SidebarProps) {
   const pathname = usePathname()
   const navRef    = useRef<HTMLElement>(null)
   const activeRef = useRef<HTMLAnchorElement>(null)
 
-  // Restaura posicao de scroll salva ao montar
+  // Fecha sidebar mobile ao navegar
+  useEffect(() => {
+    onClose?.()
+  }, [pathname]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Restaura posição de scroll salva ao montar
   useEffect(() => {
     const nav = navRef.current
     if (!nav) return
@@ -50,7 +58,7 @@ export function Sidebar({ nav, role, editoraNome, userName, userInitials }: Side
     if (saved !== null) nav.scrollTop = parseInt(saved, 10)
   }, [])
 
-  // Persiste posicao de scroll ao rolar
+  // Persiste posição de scroll ao rolar
   useEffect(() => {
     const nav = navRef.current
     if (!nav) return
@@ -59,28 +67,36 @@ export function Sidebar({ nav, role, editoraNome, userName, userInitials }: Side
     return () => nav.removeEventListener('scroll', onScroll)
   }, [])
 
-  // Quando rota muda: centraliza o item ativo NO container da nav (nao na pagina)
+  // Centraliza item ativo no container da nav
   useEffect(() => {
     const nav  = navRef.current
     const item = activeRef.current
     if (!nav || !item) return
-
     const navRect  = nav.getBoundingClientRect()
     const itemRect = item.getBoundingClientRect()
     const relTop   = itemRect.top - navRect.top + nav.scrollTop
     const target   = relTop - nav.clientHeight / 2 + itemRect.height / 2
-
     nav.scrollTo({ top: Math.max(0, target), behavior: 'smooth' })
   }, [pathname])
 
   return (
-    <aside className="flex flex-col h-full w-[242px] bg-[#0a0916] border-r border-white/[0.05] shrink-0">
+    <aside
+      className={cn(
+        // Desktop: sempre visível
+        'flex flex-col h-full w-[242px] bg-[#0a0916] border-r border-white/[0.05] shrink-0',
+        // Mobile: drawer deslizante (z-50 acima do overlay z-40)
+        'fixed md:relative inset-y-0 left-0 z-50',
+        'transition-transform duration-300 ease-in-out',
+        mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+      )}
+    >
       {/* Logo — Sync Mood */}
-      <div className="flex items-center gap-3 px-5 pt-6 pb-5">
+      <div className="flex items-center justify-between px-5 pt-6 pb-5">
         <Link href="/" className="flex items-center gap-3 group">
-          {/* Circle logo with violet gradient */}
-          <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-[0_0_16px_rgb(139_92_246_/_0.5)]"
-            style={{ background: 'radial-gradient(circle at 30% 30%, #a78bfa, #6d28d9)' }}>
+          <div
+            className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 shadow-[0_0_16px_rgb(139_92_246_/_0.5)]"
+            style={{ background: 'radial-gradient(circle at 30% 30%, #a78bfa, #6d28d9)' }}
+          >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
               <circle cx="9" cy="9" r="3.5" stroke="white" strokeWidth="1.5"/>
               <path d="M9 2.5 C9 2.5 14 5 14 9 C14 13 9 15.5 9 15.5" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
@@ -92,6 +108,14 @@ export function Sidebar({ nav, role, editoraNome, userName, userInitials }: Side
             <span className="text-[9px] font-medium tracking-[0.25em] text-white/40 uppercase">Gestão Inteligente</span>
           </div>
         </Link>
+
+        {/* Botão fechar — apenas mobile */}
+        <button
+          onClick={onClose}
+          className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white/80 hover:bg-white/[0.06] transition-colors"
+        >
+          <X className="w-4 h-4" strokeWidth={1.5} />
+        </button>
       </div>
 
       {/* Navigation */}
