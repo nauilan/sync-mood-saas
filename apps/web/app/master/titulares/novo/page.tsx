@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { verificarDuplicidade } from '@/lib/mock-cadastros'
 import { maskCpf, maskCnpj } from '@/lib/masks'
+import { getAccessToken } from '@/lib/supabase/client'
 import { PhoneInput } from '@/components/ui/phone-input'
 import {
   FUNCAO_LABEL, FUNCAO_SIGLA, FUNCOES_PF, FUNCOES_PJ,
@@ -215,7 +216,10 @@ export default function NovoTitularWizardPage() {
   // Editoras reais do banco
   const [editorasReais, setEditorasReais] = useState<{ id: string; nome_fantasia: string }[]>([])
   useEffect(() => {
-    fetch('/api/editoras?status=todos')
+    const token = getAccessToken()
+    fetch('/api/editoras?status=todos', {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    })
       .then(r => r.json())
       .then(d => setEditorasReais(d.editoras ?? []))
       .catch(() => {/* usa vazio */})
@@ -357,7 +361,10 @@ export default function NovoTitularWizardPage() {
 
       const res  = await fetch('/api/titulares', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getAccessToken() ? { 'Authorization': `Bearer ${getAccessToken()}` } : {})
+        },
         body:    JSON.stringify(payload),
       })
       const data = await res.json()
