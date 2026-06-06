@@ -28,10 +28,8 @@ interface Editora {
   tipo_editora: TipoEditora
   controlada: boolean
   status: string
-  codigo_publisher_cwr: string | null
   codigo_cae: string | null
   codigo_ipi: string | null
-  codigo_interno_cwr: string | null
   pais_registro: string | null
   codigo_ecad: string | null
   codigo_interno: string | null
@@ -44,10 +42,8 @@ const FORM_INITIAL = {
   cnpj: '',
   tipo_editora: 'administrada' as TipoEditora,
   controlada: false,
-  codigo_publisher_cwr: '',
   codigo_cae: '',
   codigo_ipi: '',
-  codigo_interno_cwr: '',
   pais_registro: 'BR',
   codigo_ecad: '',
   codigo_interno: '',
@@ -97,8 +93,8 @@ function EditoraCard({ editora, idx }: { editora: Editora; idx: number }) {
             </div>
             <p className="text-xs text-white/30 truncate">{editora.razao_social}</p>
             {editora.cnpj && <p className="text-xs text-white/20 font-mono">{editora.cnpj}</p>}
-            {editora.codigo_publisher_cwr && (
-              <p className="text-[10px] font-mono text-amber-400/60 mt-0.5">CWR: {editora.codigo_publisher_cwr}</p>
+            {editora.codigo_interno && (
+              <p className="text-[10px] font-mono text-violet-400/60 mt-0.5">ID: {editora.codigo_interno}</p>
             )}
           </div>
           <ArrowRight className="w-4 h-4 text-white/10 group-hover:text-white/30 transition-colors flex-shrink-0 mt-1" />
@@ -235,22 +231,13 @@ export default function EditorasPage() {
               </div>
               <div>
                 <label className="block text-[11px] font-medium text-white/50 mb-1.5">
-                  Código Interno <span className="text-violet-400/70">(Sistema)</span>
+                  ID Interno
                 </label>
                 <input
                   value={form.codigo_interno}
-                  onChange={e => setForm(f => ({ ...f, codigo_interno: e.target.value }))}
+                  onChange={e => setForm(f => ({ ...f, codigo_interno: e.target.value.toUpperCase() }))}
                   className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 font-mono focus:outline-none focus:border-violet-500/50"
-                  placeholder="Ex: TOPSHOW, EDI001, LR001"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-medium text-white/50 mb-1.5">Código Publisher CWR</label>
-                <input
-                  value={form.codigo_publisher_cwr}
-                  onChange={e => setForm(f => ({ ...f, codigo_publisher_cwr: e.target.value }))}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 font-mono focus:outline-none focus:border-violet-500/50"
-                  placeholder="Ex: ED01"
+                  placeholder="Ex: 2646326, EDI001, LR001"
                 />
               </div>
               <div>
@@ -269,15 +256,6 @@ export default function EditorasPage() {
                     placeholder="IPI"
                   />
                 </div>
-              </div>
-              <div>
-                <label className="block text-[11px] font-medium text-white/50 mb-1.5">Código Interno CWR</label>
-                <input
-                  value={form.codigo_interno_cwr}
-                  onChange={e => setForm(f => ({ ...f, codigo_interno_cwr: e.target.value }))}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 font-mono focus:outline-none focus:border-violet-500/50"
-                  placeholder="Ex: TS01"
-                />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -307,8 +285,8 @@ export default function EditorasPage() {
                   onChange={e => setForm(f => ({ ...f, tipo_editora: e.target.value as TipoEditora }))}
                   className="w-full bg-[#0d1526] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500/50"
                 >
-                  <option value="master">Própria (Gestora)</option>
-                  <option value="administrada">Administrada</option>
+                  <option value="master">Própria / Gestora</option>
+                  <option value="administrada">Parceira</option>
                   <option value="externa">Externa</option>
                 </select>
               </div>
@@ -358,7 +336,7 @@ export default function EditorasPage() {
           </div>
           {loading
             ? <div className="h-8 bg-white/5 rounded animate-pulse" />
-            : <><p className="text-2xl font-bold text-violet-400">{editoras.length}</p><p className="text-xs text-white/25">{administradas.length} administradas</p></>
+            : <><p className="text-2xl font-bold text-violet-400">{editoras.length}</p><p className="text-xs text-white/25">{administradas.length} parceiras</p></>
           }
         </div>
         <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4">
