@@ -8,6 +8,7 @@ import {
   CheckCircle2, ChevronRight, ExternalLink, Music, Users2, Globe2, DollarSign, Users,
 } from 'lucide-react'
 import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, PAPEL_TITULAR_LABELS, PAPEL_TITULAR_COLORS, normalizarLinksObra } from '@/lib/types-obras'
+import { formatarPercentual } from '@/lib/percentual'
 import { getObraById, getLinksById, getFonogramasById } from '@/lib/mock-obras'
 import { getAutorizacoesByObra } from '@/lib/mock-autorizacoes'
 import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
@@ -73,7 +74,7 @@ function ControleBadge({ pct, label, color }: { pct: number; label: string; colo
   return (
     <div className={`flex flex-col items-start px-4 py-3 rounded-xl border min-w-[160px] ${color}`}>
       <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{label}</span>
-      <span className="text-xl font-bold tabular-nums">{pct.toFixed(2).replace('.', ',')}%</span>
+      <span className="text-xl font-bold tabular-nums">{formatarPercentual(pct)}</span>
       <div className="w-full h-1 bg-black/20 rounded-full mt-1.5 overflow-hidden">
         <div className="h-full rounded-full bg-current opacity-60" style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
@@ -284,7 +285,7 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
                         </td>
                         <td className="px-5 py-3 text-right">
                           <span className="font-semibold tabular-nums text-sky-300/90 text-sm">
-                            {t.percentual.toFixed(2).replace('.', ',')}%
+                            {formatarPercentual(t.percentual)}
                           </span>
                         </td>
                       </tr>
@@ -295,7 +296,7 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
                   <tr className="border-t border-white/[0.08]">
                     <td colSpan={4} className="px-4 py-2 text-right text-xs text-white/25 font-medium">Total</td>
                     <td className="px-5 py-2 text-right font-bold tabular-nums text-xs text-white/50">
-                      {links.flatMap(l => l.titulares ?? []).reduce((s, t) => s + t.percentual, 0).toFixed(2).replace('.', ',')}%
+                      {formatarPercentual(links.flatMap(l => l.titulares ?? []).reduce((s, t) => s + t.percentual, 0))}
                     </td>
                   </tr>
                 </tfoot>

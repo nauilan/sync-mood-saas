@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import type { PapelTitularLink } from '@/lib/types-obras'
 import { PAPEL_TITULAR_LABELS, PAPEL_TITULAR_COLORS, GENEROS_MUSICAIS } from '@/lib/types-obras'
+import { formatarPercentual } from '@/lib/percentual'
 import { MOCK_TITULARES } from '@/lib/mock-cadastros'
 import { MOCK_CONTRATOS_V2, getContratoV2ById } from '@/lib/mock-contratos-v2'
 
@@ -782,7 +783,7 @@ export default function NovaObraPage() {
             </div>
             <div className="flex-1 rounded-xl p-3 text-center border bg-violet-500/10 border-violet-500/20">
               <p className="text-[10px] text-white/40 mb-0.5">Percentual Controlado</p>
-              <p className="text-xl font-bold text-violet-400">{pcControlado.toFixed(2)}%</p>
+              <p className="text-xl font-bold text-violet-400">{formatarPercentual(pcControlado)}</p>
             </div>
           </div>
 
@@ -855,11 +856,11 @@ export default function NovaObraPage() {
                         ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                         : <AlertCircle  className="w-3.5 h-3.5 text-rose-400 shrink-0" />}
                       <span className={`text-xs font-semibold ${linkValido ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {linkValido ? 'Soma OK — 100%' : `Soma ${somaLink.toFixed(2)}% — faltam ${(100 - somaLink).toFixed(2)}% para fechar`}
+                        {linkValido ? 'Soma OK — 100%' : `Soma ${formatarPercentual(somaLink)} — faltam ${formatarPercentual(100 - somaLink)} para fechar`}
                       </span>
                     </div>
                     <span className={`text-xs font-bold tabular-nums ${linkValido ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {somaLink.toFixed(2)}%
+                      {formatarPercentual(somaLink)}
                     </span>
                   </div>
                 )}
@@ -1183,8 +1184,8 @@ export default function NovaObraPage() {
             </div>
             <div className="grid grid-cols-3 gap-3 text-center">
               {[
-                { label: 'Percentual Total', value: `${somaPct.toFixed(2)}%`, ok: Math.abs(somaPct - 100) < 0.01, color: 'text-cyan-400' },
-                { label: 'Controlado', value: `${pcControlado.toFixed(2)}%`, ok: true, color: 'text-violet-400' },
+                { label: 'Percentual Total', value: formatarPercentual(somaPct), ok: Math.abs(somaPct - 100) < 0.01, color: 'text-cyan-400' },
+                { label: 'Controlado', value: formatarPercentual(pcControlado), ok: true, color: 'text-violet-400' },
                 { label: 'Fonogramas', value: fonogramas.length, ok: true, color: 'text-sky-400' },
               ].map(col => (
                 <div key={col.label} className="bg-white/5 rounded-lg p-3">

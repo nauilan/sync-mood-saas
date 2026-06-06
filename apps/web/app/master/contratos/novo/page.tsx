@@ -8,6 +8,7 @@ import {
   AlertTriangle, Info, Plus, X, Search,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
+import { formatarPercentual } from '@/lib/percentual'
 import type { TipoContratoV2, PapelParte } from '@/lib/types-contratos-v2'
 import {
   TIPO_CONTRATO_V2_LABELS, TIPO_CONTRATO_V2_COLORS,
@@ -651,7 +652,7 @@ export default function NovoContratoPage() {
                 className="w-20 h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-xs text-white/70 outline-none focus:border-sky-500/40"
               />
               <span className="text-xs text-white/40">
-                % · Editora original fica com {Math.max(0, 100 - parseFloat(form.pct_administradora || '0')).toFixed(1)}%
+                % · Editora original fica com {formatarPercentual(Math.max(0, 100 - parseFloat(form.pct_administradora || '0')))}
               </span>
             </div>
           </div>
@@ -733,7 +734,7 @@ export default function NovoContratoPage() {
           + Adicionar parte
         </button>
         <span className="text-xs text-white/30">
-          Soma: {form.partes.reduce((s, p) => s + (parseFloat(p.percentual) || 0), 0).toFixed(1)}%
+          Soma: {formatarPercentual(form.partes.reduce((s, p) => s + (parseFloat(p.percentual) || 0), 0))}
           {form.partes.reduce((s, p) => s + (parseFloat(p.percentual) || 0), 0) !== 100 && (
             <span className="text-amber-400 ml-1">(deve somar 100%)</span>
           )}
@@ -811,7 +812,7 @@ export default function NovoContratoPage() {
                       disabled={!d.ativo}
                       className="w-16 h-7 bg-white/[0.04] border border-white/[0.08] rounded px-2 text-xs text-white/70 outline-none focus:border-violet-500/40 disabled:opacity-30"
                     />
-                    <span className="text-xs text-white/30">/ {d.pct_editora}%</span>
+                    <span className="text-xs text-white/30">/ {formatarPercentual(Number(d.pct_editora))}</span>
                   </div>
                 </div>
               )
@@ -862,7 +863,7 @@ export default function NovoContratoPage() {
                       disabled={!d.ativo}
                       className="w-16 h-7 bg-white/[0.04] border border-white/[0.08] rounded px-2 text-xs text-white/70 outline-none focus:border-violet-500/40 disabled:opacity-30"
                     />
-                    <span className="text-xs text-white/30">/ {d.pct_editora}%</span>
+                    <span className="text-xs text-white/30">/ {formatarPercentual(Number(d.pct_editora))}</span>
                   </div>
                 </div>
               )

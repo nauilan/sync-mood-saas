@@ -9,6 +9,7 @@ import {
   ToggleLeft, ToggleRight, Globe, MapPin, Plus, X,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
+import { formatarPercentual } from '@/lib/percentual'
 import {
   DIREITO_CESSAO_LABELS, DIREITO_CESSAO_SIGLA, DIREITO_CESSAO_ICONS,
   TODOS_DIREITOS_CESSAO, SPLIT_PADRAO_BR, SPLIT_PADRAO_EXT,
@@ -743,10 +744,10 @@ export default function WizardCessaoPage() {
                       return (
                         <tr key={item.direito}>
                           <td className="py-2 pr-4 text-white/60 font-mono">{DIREITO_CESSAO_SIGLA[item.direito]}</td>
-                          <td className="text-center py-2 px-3 text-emerald-400 font-semibold">{br?.pct_titular ?? 75}%</td>
-                          <td className="text-center py-2 px-3 text-white/50">{br?.pct_editora ?? 25}%</td>
-                          <td className="text-center py-2 px-3 text-sky-400 font-semibold">{ext?.pct_titular ?? 50}%</td>
-                          <td className="text-center py-2 px-3 text-white/50">{ext?.pct_editora ?? 50}%</td>
+                          <td className="text-center py-2 px-3 text-emerald-400 font-semibold">{formatarPercentual(br?.pct_titular ?? 75)}</td>
+                          <td className="text-center py-2 px-3 text-white/50">{formatarPercentual(br?.pct_editora ?? 25)}</td>
+                          <td className="text-center py-2 px-3 text-sky-400 font-semibold">{formatarPercentual(ext?.pct_titular ?? 50)}</td>
+                          <td className="text-center py-2 px-3 text-white/50">{formatarPercentual(ext?.pct_editora ?? 50)}</td>
                         </tr>
                       )
                     })}

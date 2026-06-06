@@ -8,6 +8,7 @@ import {
   Calendar, Percent, ShieldCheck, Info,
 } from 'lucide-react'
 // (Supabase client removido — carregamento via API routes server-side)
+import { formatarPercentual } from '@/lib/percentual'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Editora { id: string; nome_fantasia: string; razao_social: string; cnpj?: string }
@@ -129,7 +130,7 @@ function fmtDate(d?: string | null) {
   if (!d) return 'Indeterminado'
   return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR')
 }
-function fmtPct(n: number) { return n.toFixed(4).replace(/\.?0+$/, '') + '%' }
+function fmtPct(n: number) { return formatarPercentual(n) }
 function getTerritoryLabel(v: string): string {
   return TERRITORIOS_TODOS.find(t => t.value === v)?.label
     ?? LEGACY_TERRITORIO_LABELS[v]
@@ -296,7 +297,7 @@ function NegocioForm({
           <Percent className="w-4 h-4 text-violet-400" />
           <p className="text-xs font-semibold text-white/70">Divisão Contratual</p>
           <span className={`ml-auto text-xs font-bold ${somaOk ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {soma.toFixed(4)}% {somaOk ? '✓' : '≠ 100%'}
+            {formatarPercentual(soma)} {somaOk ? '✓' : '≠ 100%'}
           </span>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -320,8 +321,8 @@ function NegocioForm({
           <div className="h-full bg-violet-500 transition-all flex-1" />
         </div>
         <div className="flex items-center justify-between text-[10px]">
-          <span className="text-sky-400 font-semibold">{form.editora_administrada_nome || 'Administrada'} — {form.percentual_administrada}%</span>
-          <span className="text-violet-400 font-semibold">{form.editora_administradora_nome || 'Administradora'} — {form.percentual_administradora}%</span>
+          <span className="text-sky-400 font-semibold">{form.editora_administrada_nome || 'Administrada'} — {formatarPercentual(form.percentual_administrada)}</span>
+          <span className="text-violet-400 font-semibold">{form.editora_administradora_nome || 'Administradora'} — {formatarPercentual(form.percentual_administradora)}</span>
         </div>
         <p className="text-[10px] text-amber-400/60 flex items-center gap-1.5">
           <Info className="w-3 h-3 shrink-0" />
@@ -551,12 +552,12 @@ function NegocioCard({
         {/* Percentuais — destaque visual */}
         <div className="flex items-center gap-3 shrink-0">
           <div className="text-center">
-            <p className="text-lg font-bold text-sky-400 tabular-nums">{negocio.percentual_administrada}%</p>
+            <p className="text-lg font-bold text-sky-400 tabular-nums">{formatarPercentual(negocio.percentual_administrada)}</p>
             <p className="text-[9px] text-white/30">Adm.</p>
           </div>
           <div className="text-white/20 text-xs font-bold">/</div>
           <div className="text-center">
-            <p className="text-lg font-bold text-violet-400 tabular-nums">{negocio.percentual_administradora}%</p>
+            <p className="text-lg font-bold text-violet-400 tabular-nums">{formatarPercentual(negocio.percentual_administradora)}</p>
             <p className="text-[9px] text-white/30">Admra.</p>
           </div>
         </div>
@@ -576,8 +577,8 @@ function NegocioCard({
               <div className="h-full bg-violet-500 rounded-r-full flex-1" />
             </div>
             <div className="flex justify-between mt-1.5 text-[11px]">
-              <span className="text-sky-400 font-semibold">{negocio.editora_administrada_nome} — {negocio.percentual_administrada}%</span>
-              <span className="text-violet-400 font-semibold">{negocio.editora_administradora_nome} — {negocio.percentual_administradora}%</span>
+              <span className="text-sky-400 font-semibold">{negocio.editora_administrada_nome} — {formatarPercentual(negocio.percentual_administrada)}</span>
+              <span className="text-violet-400 font-semibold">{negocio.editora_administradora_nome} — {formatarPercentual(negocio.percentual_administradora)}</span>
             </div>
           </div>
 
