@@ -1,72 +1,128 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import Link from 'next/link'
 import {
-  ChevronLeft, Pencil, Users, Music, FileText, CreditCard,
+  ChevronLeft, Pencil, Users, FileText, CreditCard,
   MapPin, Phone, Briefcase, UserCircle2, Shield, History,
-  CheckCircle2, AlertCircle, Clock, Building2, Hash
+  Trash2, AlertTriangle, Loader2
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { MOCK_TITULARES, MOCK_EDITORAS, getTitularById } from '@/lib/mock-cadastros'
-import {
-  FUNCAO_LABEL, nomeTitular, cpfCnpjTitular, nomeArtistico, emailPrincipal
-} from '@/lib/types-cadastros'
 
 type Tab = 'dados' | 'funcoes' | 'pseudonimos' | 'endereco' | 'contatos' | 'bancario' | 'documentos' | 'historico'
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'dados', label: 'Dados', icon: <Users className="w-4 h-4" /> },
-  { id: 'funcoes', label: 'Funcoes', icon: <Briefcase className="w-4 h-4" /> },
-  { id: 'pseudonimos', label: 'Pseudonimos', icon: <UserCircle2 className="w-4 h-4" /> },
-  { id: 'endereco', label: 'Endereco', icon: <MapPin className="w-4 h-4" /> },
-  { id: 'contatos', label: 'Contatos', icon: <Phone className="w-4 h-4" /> },
-  { id: 'bancario', label: 'Bancario', icon: <CreditCard className="w-4 h-4" /> },
-  { id: 'documentos', label: 'Documentos', icon: <Shield className="w-4 h-4" /> },
-  { id: 'historico', label: 'Historico', icon: <History className="w-4 h-4" /> },
+  { id: 'dados',       label: 'Dados',       icon: <Users        className="w-4 h-4" /> },
+  { id: 'funcoes',     label: 'Funções',      icon: <Briefcase    className="w-4 h-4" /> },
+  { id: 'pseudonimos', label: 'Pseudônimos',  icon: <UserCircle2  className="w-4 h-4" /> },
+  { id: 'endereco',    label: 'Endereço',     icon: <MapPin       className="w-4 h-4" /> },
+  { id: 'contatos',    label: 'Contatos',     icon: <Phone        className="w-4 h-4" /> },
+  { id: 'bancario',    label: 'Bancário',     icon: <CreditCard   className="w-4 h-4" /> },
+  { id: 'documentos',  label: 'Documentos',   icon: <Shield       className="w-4 h-4" /> },
+  { id: 'historico',   label: 'Histórico',    icon: <History      className="w-4 h-4" /> },
 ]
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between py-2.5 border-b border-white/[0.04] last:border-0">
       <span className="text-xs text-white/40 w-44 flex-shrink-0">{label}</span>
-      <span className="text-sm text-white/80 text-right flex-1 min-w-0 break-words">{value || <span className="text-white/20">—</span>}</span>
+      <span className="text-sm text-white/80 text-right flex-1 min-w-0 break-words">
+        {value ?? <span className="text-white/20">—</span>}
+      </span>
     </div>
   )
 }
 
-const MOCK_CONTRATOS = [
-  { id: 'c1', numero: 'TSM-2024-001', tipo: 'cessao', status: 'ativo', data_inicio: '2024-01-10', obras_vinculadas: 8 },
-  { id: 'c2', numero: 'TSM-2024-015', tipo: 'administracao', status: 'em_analise', data_inicio: '2024-03-01', obras_vinculadas: 4 },
-]
-
-const MOCK_OBRAS = [
-  { id: 'o1', titulo: 'Amo Noite e Dia', status: 'ativa', pct: 37.5 },
-  { id: 'o2', titulo: 'Deixa eu Te Amar', status: 'ativa', pct: 50.0 },
-  { id: 'o3', titulo: 'Saudade de Voce', status: 'validada', pct: 25.0 },
-]
-
-const MOCK_HISTORICO = [
-  { data: '2024-05-10', descricao: 'Dados bancarios atualizados', usuario: 'Marina Lopes' },
-  { data: '2024-03-01', descricao: 'Contrato TSM-2024-015 gerado', usuario: 'Marina Lopes' },
-  { data: '2024-01-10', descricao: 'Titular cadastrado', usuario: 'Marina Lopes' },
-]
-
 export default function TitularDetalhePage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const [tab, setTab] = useState<Tab>('dados')
+  const [tab, setTab]           = useState<Tab>('dados')
+  const [titular, setTitular]   = useState<any>(null)
+  const [loading, setLoading]   = useState(true)
+  const [notFound, setNotFound] = useState(false)
+  const [erro, setErro]         = useState<string | null>(null)
 
-  const titular = getTitularById(id) ?? MOCK_TITULARES[0]
-  const editora = MOCK_EDITORAS.find(e => e.id === titular.editora_id)
-  const nome = nomeTitular(titular)
-  const docNum = cpfCnpjTitular(titular)
-  const pseudo = nomeArtistico(titular)
+  // Modal exclusão
+  const [confirmDelete, setConfirmDelete]   = useState(false)
+  const [deleting, setDeleting]             = useState(false)
+  const [deleteError, setDeleteError]       = useState<{ msg: string; vinculos?: string[] } | null>(null)
 
-  const isPF = titular.tipo_pessoa === 'PF'
+  const carregar = useCallback(async () => {
+    setLoading(true)
+    setErro(null)
+    try {
+      const res = await fetch(`/api/titulares/${id}`, { credentials: 'include' })
+      if (res.status === 404) { setNotFound(true); return }
+      if (!res.ok) { setErro('Erro ao carregar titular.'); return }
+      const json = await res.json()
+      setTitular(json.data)
+    } catch {
+      setErro('Falha de conexão ao carregar titular.')
+    } finally {
+      setLoading(false)
+    }
+  }, [id])
+
+  useEffect(() => { carregar() }, [carregar])
+
+  async function excluir() {
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      const res = await fetch(`/api/titulares/${id}`, { method: 'DELETE', credentials: 'include' })
+      const json = await res.json()
+      if (!res.ok) {
+        setDeleteError({ msg: json.error, vinculos: json.vinculos })
+        return
+      }
+      router.push('/master/titulares')
+    } catch {
+      setDeleteError({ msg: 'Falha de conexão ao excluir.' })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  // ── Estados de loading / erro / não encontrado ──────────────
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh] gap-3 text-white/40">
+        <Loader2 className="w-5 h-5 animate-spin" />
+        <span className="text-sm">Carregando titular...</span>
+      </div>
+    )
+  }
+
+  if (notFound) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4 text-white/40">
+        <Users className="w-12 h-12 opacity-30" />
+        <p className="text-base font-medium">Titular não encontrado</p>
+        <p className="text-sm text-white/20">O ID informado não existe ou foi excluído.</p>
+        <Button variant="ghost" size="sm" onClick={() => router.push('/master/titulares')}>
+          <ChevronLeft className="w-4 h-4" /> Voltar para titulares
+        </Button>
+      </div>
+    )
+  }
+
+  if (erro) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4 text-rose-400">
+        <AlertTriangle className="w-10 h-10" />
+        <p className="text-sm">{erro}</p>
+        <Button variant="ghost" size="sm" onClick={carregar}>Tentar novamente</Button>
+      </div>
+    )
+  }
+
+  if (!titular) return null
+
+  const isPF    = (titular.pessoa ?? titular.tipo_pessoa) === 'PF'
+  const nome    = titular.nome_completo ?? '—'
+  const status  = titular.status ?? 'ativo'
 
   return (
     <div className="space-y-6">
@@ -79,15 +135,25 @@ export default function TitularDetalhePage() {
           <PageHeader
             title={nome}
             description={[
-              isPF ? 'Pessoa Fisica' : 'Pessoa Juridica',
-              pseudo && pseudo !== nome ? pseudo : null,
-              docNum ?? null,
+              isPF ? 'Pessoa Física' : 'Pessoa Jurídica',
+              titular.nome_artistico ?? null,
+              titular.cpf_cnpj ?? null,
             ].filter(Boolean).join(' · ')}
             actions={
               <div className="flex items-center gap-2">
-                <Badge variant={titular.ativo ? 'emerald' : 'rose'}>{titular.ativo ? 'Ativo' : 'Inativo'}</Badge>
+                <Badge variant={status === 'ativo' ? 'emerald' : 'rose'}>
+                  {status === 'ativo' ? 'Ativo' : 'Inativo'}
+                </Badge>
                 <Button variant="ghost" size="sm">
                   <Pencil className="w-4 h-4" /> Editar
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-rose-400 hover:text-rose-300 hover:bg-rose-500/10"
+                  onClick={() => { setConfirmDelete(true); setDeleteError(null) }}
+                >
+                  <Trash2 className="w-4 h-4" /> Excluir
                 </Button>
               </div>
             }
@@ -98,76 +164,60 @@ export default function TitularDetalhePage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4">
-          <p className="text-xs text-white/40 mb-1">Codigo Titular</p>
+          <p className="text-xs text-white/40 mb-1">Código Titular</p>
           <p className="text-base font-mono font-bold text-violet-400">{titular.codigo_titular}</p>
-          <p className="text-xs text-white/20">{titular.id_interno}</p>
         </div>
         <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4">
-          <p className="text-xs text-white/40 mb-1">Obras no Catalogo</p>
-          <p className="text-xl font-bold text-violet-400">{titular._obras ?? 0}</p>
+          <p className="text-xs text-white/40 mb-1">Tipo</p>
+          <p className="text-sm font-semibold text-sky-400 capitalize">{titular.tipo ?? '—'}</p>
         </div>
         <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4">
-          <p className="text-xs text-white/40 mb-1">Contratos</p>
-          <p className={'text-xl font-bold ' + ((titular._contratos ?? 0) === 0 ? 'text-amber-400' : 'text-sky-400')}>{titular._contratos ?? 0}</p>
+          <p className="text-xs text-white/40 mb-1">CAE</p>
+          <p className="text-sm font-mono text-white/70">{titular.codigo_cae ?? '—'}</p>
         </div>
         <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4">
-          <p className="text-xs text-white/40 mb-1">Editora</p>
-          <p className="text-sm font-semibold text-emerald-400 truncate">{editora?.nome_fantasia ?? '—'}</p>
+          <p className="text-xs text-white/40 mb-1">IPI</p>
+          <p className="text-sm font-mono text-white/70">{titular.codigo_ipi ?? titular.ipi ?? '—'}</p>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
         <div className="flex border-b border-white/[0.06] overflow-x-auto">
-          {TABS.map(t => (
-            // Filtrar pseudonimos se PJ
-            isPF || t.id !== 'pseudonimos' ? (
+          {TABS.map(t =>
+            (isPF || t.id !== 'pseudonimos') ? (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={'flex items-center gap-1.5 px-4 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ' + (tab === t.id ? 'text-violet-300 border-violet-500' : 'text-white/40 border-transparent hover:text-white/70')}
+                className={'flex items-center gap-1.5 px-4 py-3 text-sm font-medium transition-colors border-b-2 whitespace-nowrap ' +
+                  (tab === t.id ? 'text-violet-300 border-violet-500' : 'text-white/40 border-transparent hover:text-white/70')}
               >
                 {t.icon}{t.label}
               </button>
             ) : null
-          ))}
+          )}
         </div>
 
         <div className="p-6">
-          {/* TAB: DADOS */}
           {tab === 'dados' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div>
-                <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">Identificacao</h4>
-                {isPF ? (<>
-                  <InfoRow label="Nome completo" value={titular._pf?.nome_completo} />
-                  <InfoRow label="CPF" value={<span className="font-mono">{titular._pf?.cpf}</span>} />
-                  <InfoRow label="RG" value={titular._pf?.rg} />
-                  <InfoRow label="Data de nascimento" value={titular._pf?.data_nasc ? new Date(titular._pf.data_nasc + 'T12:00:00').toLocaleDateString('pt-BR') : null} />
-                  <InfoRow label="Nacionalidade" value={titular._pf?.nacionalidade} />
-                  <InfoRow label="Estado civil" value={titular._pf?.estado_civil} />
-                  <InfoRow label="Profissao" value={titular._pf?.profissao} />
-                  <InfoRow label="Nome artistico" value={titular._pf?.nome_artistico_principal} />
-                </>) : (<>
-                  <InfoRow label="Razao social" value={titular._pj?.razao_social} />
-                  <InfoRow label="Nome fantasia" value={titular._pj?.nome_fantasia} />
-                  <InfoRow label="CNPJ" value={<span className="font-mono">{titular._pj?.cnpj}</span>} />
-                  <InfoRow label="IE" value={titular._pj?.ie} />
-                  <InfoRow label="IM" value={titular._pj?.im} />
-                  <InfoRow label="Responsavel legal" value={titular._pj?.responsavel_legal} />
-                  <InfoRow label="Site" value={titular._pj?.site} />
-                </>)}
+                <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">Identificação</h4>
+                <InfoRow label="Nome completo"    value={titular.nome_completo} />
+                <InfoRow label="Nome artístico"   value={titular.nome_artistico} />
+                <InfoRow label={isPF ? 'CPF' : 'CNPJ'} value={<span className="font-mono">{titular.cpf_cnpj}</span>} />
+                <InfoRow label="Nacionalidade"    value={titular.nacionalidade} />
+                <InfoRow label="Sociedade autoral" value={titular.sociedade_autoral} />
               </div>
               <div>
-                <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">Arrecadacao</h4>
-                <InfoRow label="Sociedade autoral" value={isPF ? titular._pf?.sociedade_autoral : titular._pj?.sociedade_autoral} />
-                <InfoRow label="Codigo CAE" value={isPF ? titular._pf?.cae : titular._pj?.cae} />
-                <InfoRow label="Codigo IPI" value={isPF ? titular._pf?.ipi : titular._pj?.ipi} />
-                <InfoRow label="Codigo titular" value={<span className="font-mono text-violet-400">{titular.codigo_titular}</span>} />
-                <InfoRow label="ID interno" value={<span className="font-mono text-xs text-white/30">{titular.id_interno}</span>} />
+                <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">Arrecadação</h4>
+                <InfoRow label="Código CAE"     value={titular.codigo_cae} />
+                <InfoRow label="Código IPI"     value={titular.codigo_ipi ?? titular.ipi} />
+                <InfoRow label="Código titular" value={<span className="font-mono text-violet-400">{titular.codigo_titular}</span>} />
+                <InfoRow label="Cadastrado em"  value={titular.created_at ? new Date(titular.created_at).toLocaleDateString('pt-BR') : null} />
                 {titular.observacoes && (
                   <>
-                    <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3 mt-5">Observacoes</h4>
+                    <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3 mt-5">Observações</h4>
                     <p className="text-sm text-white/60 bg-white/[0.02] rounded-lg p-3">{titular.observacoes}</p>
                   </>
                 )}
@@ -175,189 +225,71 @@ export default function TitularDetalhePage() {
             </div>
           )}
 
-          {/* TAB: FUNCOES */}
-          {tab === 'funcoes' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider">Funcoes cadastradas</h4>
-                <Button variant="ghost" size="sm"><Briefcase className="w-3.5 h-3.5" /> Adicionar funcao</Button>
-              </div>
-              {(titular._funcoes ?? []).length === 0 ? (
-                <div className="text-center py-8 text-white/20 text-sm">Nenhuma funcao cadastrada.</div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {(titular._funcoes ?? []).map(f => (
-                    <div key={f.id} className="flex items-center justify-between bg-white/[0.02] rounded-xl px-4 py-3 border border-white/[0.04]">
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono text-xs bg-violet-600/20 text-violet-400 px-2 py-1 rounded">{f.funcao}</span>
-                        <span className="text-sm text-white/70">{FUNCAO_LABEL[f.funcao]}</span>
-                      </div>
-                      <Badge variant={f.ativa ? 'emerald' : 'rose'}>{f.ativa ? 'Ativa' : 'Inativa'}</Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB: PSEUDONIMOS */}
-          {tab === 'pseudonimos' && isPF && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider">Pseudonimos artisticos</h4>
-                <Button variant="ghost" size="sm"><UserCircle2 className="w-3.5 h-3.5" /> Adicionar pseudonimo</Button>
-              </div>
-              {(titular._pseudonimos ?? []).length === 0 ? (
-                <div className="text-center py-8 text-white/20 text-sm">Nenhum pseudonimo cadastrado.</div>
-              ) : (
-                <div className="space-y-2">
-                  {(titular._pseudonimos ?? []).map(p => (
-                    <div key={p.id} className="flex items-center justify-between bg-white/[0.02] rounded-xl px-4 py-3 border border-white/[0.04]">
-                      <div className="flex items-center gap-3">
-                        <UserCircle2 className="w-4 h-4 text-violet-400" />
-                        <span className="text-sm text-white/80 font-medium">{p.pseudonimo}</span>
-                        {p.principal && <Badge variant="violet">Principal</Badge>}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {p.data_inicio && <span className="text-xs text-white/30">desde {new Date(p.data_inicio).toLocaleDateString('pt-BR')}</span>}
-                        <Badge variant={p.ativo ? 'emerald' : 'rose'}>{p.ativo ? 'Ativo' : 'Inativo'}</Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB: ENDERECO */}
-          {tab === 'endereco' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider">Enderecos</h4>
-                <Button variant="ghost" size="sm"><MapPin className="w-3.5 h-3.5" /> Adicionar endereco</Button>
-              </div>
-              {(titular._enderecos ?? []).length === 0 ? (
-                <div className="text-center py-8 text-white/20 text-sm">Nenhum endereco cadastrado.</div>
-              ) : (
-                <div className="space-y-3">
-                  {(titular._enderecos ?? []).map(e => (
-                    <div key={e.id} className="bg-white/[0.02] rounded-xl px-5 py-4 border border-white/[0.04] space-y-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        {e.principal && <Badge variant="violet">Principal</Badge>}
-                        <span className="text-xs text-white/30">{e.pais}</span>
-                      </div>
-                      <p className="text-sm text-white/80">{[e.endereco, e.numero, e.compl].filter(Boolean).join(', ')}</p>
-                      <p className="text-xs text-white/40">{[e.bairro, e.cidade, e.estado].filter(Boolean).join(' — ')}{e.cep ? ` · CEP ${e.cep}` : ''}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB: CONTATOS */}
-          {tab === 'contatos' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider">Contatos</h4>
-                <Button variant="ghost" size="sm"><Phone className="w-3.5 h-3.5" /> Adicionar contato</Button>
-              </div>
-              {(titular._contatos ?? []).length === 0 ? (
-                <div className="text-center py-8 text-white/20 text-sm">Nenhum contato cadastrado.</div>
-              ) : (
-                <div className="space-y-2">
-                  {(titular._contatos ?? []).map(c => (
-                    <div key={c.id} className="flex items-center justify-between bg-white/[0.02] rounded-xl px-4 py-3 border border-white/[0.04]">
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs font-semibold text-white/30 uppercase w-16">{c.tipo}</span>
-                        <span className="text-sm text-white/70">{c.valor}</span>
-                        {c.principal && <Badge variant="violet">Principal</Badge>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB: BANCARIO */}
-          {tab === 'bancario' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider">Dados bancarios</h4>
-                <Button variant="ghost" size="sm"><CreditCard className="w-3.5 h-3.5" /> Adicionar conta</Button>
-              </div>
-              {(titular._dados_bancarios ?? []).length === 0 ? (
-                <div className="text-center py-8 text-white/20 text-sm">Nenhum dado bancario cadastrado.</div>
-              ) : (
-                <div className="space-y-3">
-                  {(titular._dados_bancarios ?? []).map(b => (
-                    <div key={b.id} className="bg-white/[0.02] rounded-xl px-5 py-4 border border-white/[0.04]">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm font-semibold text-white/80">{b.banco}</span>
-                        {b.principal && <Badge variant="violet">Principal</Badge>}
-                      </div>
-                      <InfoRow label="Tipo de conta" value={b.tipo_conta ?? '—'} />
-                      <InfoRow label="Agencia" value={b.agencia} />
-                      <InfoRow label="Conta" value={b.conta} />
-                      <InfoRow label="Titular da conta" value={b.titular_conta} />
-                      {b.pix_chave && <InfoRow label={'PIX (' + (b.pix_tipo ?? '') + ')'} value={<span className="font-mono text-violet-400">{b.pix_chave}</span>} />}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB: DOCUMENTOS */}
-          {tab === 'documentos' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider">Documentos</h4>
-                <Button variant="ghost" size="sm"><Shield className="w-3.5 h-3.5" /> Adicionar documento</Button>
-              </div>
-              {(titular._documentos ?? []).length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-white/20">
-                  <Shield className="w-10 h-10 mb-3" />
-                  <p className="text-sm">Nenhum documento anexado.</p>
-                  <p className="text-xs mt-1 text-white/10">Upload disponivel apos configuracao do Supabase Storage.</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {(titular._documentos ?? []).map(d => (
-                    <div key={d.id} className="flex items-center justify-between bg-white/[0.02] rounded-xl px-4 py-3 border border-white/[0.04]">
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-4 h-4 text-white/30" />
-                        <div>
-                          <p className="text-sm text-white/70">{d.tipo}</p>
-                          {d.numero && <p className="text-xs text-white/30 font-mono">{d.numero}</p>}
-                        </div>
-                      </div>
-                      {d.validade && <span className="text-xs text-white/30">val: {new Date(d.validade).toLocaleDateString('pt-BR')}</span>}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB: HISTORICO */}
-          {tab === 'historico' && (
-            <div className="space-y-4">
-              <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider">Historico de alteracoes</h4>
-              <div className="space-y-2">
-                {MOCK_HISTORICO.map((h, i) => (
-                  <div key={i} className="flex items-center gap-4 py-2.5 border-b border-white/[0.04] last:border-0">
-                    <span className="text-xs text-white/30 w-24 flex-shrink-0">{new Date(h.data).toLocaleDateString('pt-BR')}</span>
-                    <span className="text-sm text-white/60 flex-1">{h.descricao}</span>
-                    <span className="text-xs text-white/30">{h.usuario}</span>
-                  </div>
-                ))}
-              </div>
+          {tab !== 'dados' && (
+            <div className="flex flex-col items-center justify-center py-12 text-white/20 gap-2">
+              <FileText className="w-8 h-8" />
+              <p className="text-sm">Seção em construção — dados serão exibidos em breve.</p>
             </div>
           )}
         </div>
       </div>
+
+      {/* Modal de confirmação de exclusão */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-[#0d1526] border border-white/[0.08] rounded-2xl p-6 w-full max-w-md space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-rose-500/10 rounded-lg">
+                <Trash2 className="w-5 h-5 text-rose-400" />
+              </div>
+              <div>
+                <p className="font-semibold text-white">Excluir titular</p>
+                <p className="text-sm text-white/40">Esta ação não pode ser desfeita facilmente.</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-white/60">
+              Você está prestes a excluir <span className="text-white font-medium">{nome}</span> ({titular.codigo_titular}).
+              O titular será desativado e não aparecerá mais nas listagens.
+            </p>
+
+            {deleteError && (
+              <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 space-y-2">
+                <p className="text-sm font-medium text-rose-400 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" /> {deleteError.msg}
+                </p>
+                {deleteError.vinculos && deleteError.vinculos.length > 0 && (
+                  <ul className="text-xs text-rose-300/70 space-y-1 pl-6 list-disc">
+                    {deleteError.vinculos.map((v, i) => <li key={i}>{v}</li>)}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="ghost"
+                className="flex-1"
+                onClick={() => { setConfirmDelete(false); setDeleteError(null) }}
+                disabled={deleting}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="ghost"
+                className="flex-1 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20"
+                onClick={excluir}
+                disabled={deleting}
+              >
+                {deleting
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Excluindo...</>
+                  : <><Trash2 className="w-4 h-4" /> Confirmar exclusão</>
+                }
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
