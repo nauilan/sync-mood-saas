@@ -970,11 +970,11 @@ export default function NovoTitularWizardPage() {
           </Button>
         )}
       </div>
+      {saveError && (
+        <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
+          {saveError}
+        </div>
+      )}
     </div>
-    {saveError && (
-      <div className="mx-6 mt-0 mb-4 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-        {saveError}
-      </div>
-    )}
   )
 }
