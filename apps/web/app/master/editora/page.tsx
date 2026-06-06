@@ -51,6 +51,9 @@ interface TenantForm {
   codigo_publisher_cwr: string
   codigo_cae: string
   codigo_ipi: string
+  sender_code: string
+  sender_name: string
+  sender_type: string
 }
 // Editora simples para seletor de acesso de usuários
 interface EditoraOpcao { id: string; nome_fantasia: string; razao_social: string; cnpj?: string | null }
@@ -88,6 +91,7 @@ const EMPTY_TENANT: TenantForm = {
   banco: '', agencia: '', conta: '', conta_digito: '', tipo_conta: '', titular_conta: '', operacao: '', pix_chave: '', pix_tipo: '',
   codigo_interno: '',
   codigo_interno_cwr: '', codigo_publisher_cwr: '', codigo_cae: '', codigo_ipi: '',
+  sender_code: '', sender_name: '', sender_type: 'PB',
 }
 const EMPTY_USR: Usuario = { id: '', nome: '', cpf: '', email: '', perfil: 'operador', ativo: true, editoras_acesso: [] }
 const EMPTY_CFG: Config = {
@@ -221,6 +225,9 @@ export default function EditoraPage() {
               codigo_publisher_cwr: e.codigo_publisher_cwr ?? '',
               codigo_cae: e.codigo_cae ?? '',
               codigo_ipi: e.codigo_ipi ?? '',
+              sender_code: e.sender_code ?? '',
+              sender_name: e.sender_name ?? '',
+              sender_type: e.sender_type ?? 'PB',
             })
           }
         }
@@ -295,6 +302,9 @@ export default function EditoraPage() {
         codigo_publisher_cwr: form.codigo_publisher_cwr || undefined,
         codigo_cae: form.codigo_cae || undefined,
         codigo_ipi: form.codigo_ipi || undefined,
+        sender_code: form.sender_code || undefined,
+        sender_name: form.sender_name || undefined,
+        sender_type: form.sender_type || undefined,
         dados_bancarios: {
           banco: form.banco,
           agencia: form.agencia,
@@ -521,10 +531,24 @@ export default function EditoraPage() {
             </Field>
           </div>
 
-          <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl px-4 py-3 text-xs text-amber-300/70 space-y-1">
-            <p className="font-semibold text-amber-300">Sender Code CISAC</p>
-            <p>O Sender Code não fica nesta tela. Ele pertence exclusivamente às Configurações CWR da Organização Gestora — disponível futuramente na aba CWR.</p>
+          <Divider label="CWR Remetente (Sender)" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Field label="Sender Code CISAC">
+              <input className={inputCls} placeholder="Ex: TSL" value={form.sender_code} onChange={setUpper('sender_code')} />
+            </Field>
+            <Field label="Sender Name">
+              <input className={inputCls} placeholder="Ex: TOP SHOW MUSIC" value={form.sender_name} onChange={setUpper('sender_name')} />
+            </Field>
+            <Field label="Sender Type">
+              <select className={inputCls} value={form.sender_type} onChange={set('sender_type')}>
+                <option value="PB">PB — Publisher</option>
+                <option value="SO">SO — Society</option>
+                <option value="WR">WR — Writer</option>
+                <option value="AA">AA — Association</option>
+              </select>
+            </Field>
           </div>
+          <p className="text-xs text-white/30 -mt-2">Campos exclusivos da Organização Gestora. Editoras administradas não possuem Sender Code próprio.</p>
 
           <div className="flex justify-end pt-2">
             <button
