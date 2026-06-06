@@ -150,6 +150,8 @@ function NegocioForm({
   const [form, setForm] = useState(initial)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [mostrarPaises, setMostrarPaises] = useState(false)
+  const [buscaPais, setBuscaPais] = useState('')
 
   const set = (k: string, v: unknown) => setForm(p => ({ ...p, [k]: v }))
 
@@ -188,6 +190,13 @@ function NegocioForm({
 
   const soma = Number(form.percentual_administrada) + Number(form.percentual_administradora)
   const somaOk = Math.round(soma * 10000) === 1000000
+  const specificSelected = (form.territorios as string[]).filter(v =>
+    PAISES_ESPECIFICOS.some(p => p.value === v)
+  )
+  const paisesFiltrados = PAISES_ESPECIFICOS.filter(p =>
+    p.label.toLowerCase().includes(buscaPais.toLowerCase()) ||
+    p.value.toLowerCase().includes(buscaPais.toLowerCase())
+  )
 
   const save = async () => {
     setErr(null)
@@ -342,6 +351,7 @@ function NegocioForm({
       {/* Territórios */}
       <div>
         <label className={labelCls}>Territórios</label>
+        {/* Atalhos rápidos + botão "Territórios Específicos" */}
         <div className="flex flex-wrap gap-2 mb-2">
           {TERRITORIOS_RAPIDOS.map(t => (
             <button key={t.value} type="button"
@@ -354,21 +364,69 @@ function NegocioForm({
               {t.label}
             </button>
           ))}
+          <button type="button"
+            onClick={() => setMostrarPaises(v => !v)}
+            className={`h-7 px-3 rounded-lg text-xs font-semibold transition-colors border ${
+              mostrarPaises || specificSelected.length > 0
+                ? 'bg-amber-600/20 border-amber-500/30 text-amber-300'
+                : 'bg-white/[0.03] border-white/[0.06] text-white/35 hover:text-white/60'
+            }`}>
+            Territórios Específicos{specificSelected.length > 0 ? ` (${specificSelected.length})` : ''}
+          </button>
         </div>
-        <p className="text-[10px] text-white/25 mb-1.5">Países específicos</p>
-        <div className="flex flex-wrap gap-1.5">
-          {PAISES_ESPECIFICOS.map(t => (
-            <button key={t.value} type="button"
-              onClick={() => toggleTerritorio(t.value)}
-              className={`h-6 px-2 rounded text-[11px] font-medium transition-colors border ${
-                (form.territorios as string[]).includes(t.value)
-                  ? 'bg-sky-600/25 border-sky-500/40 text-sky-300'
-                  : 'bg-white/[0.03] border-white/[0.06] text-white/35 hover:text-white/60'
-              }`}>
-              {t.label}
-            </button>
-          ))}
-        </div>
+
+        {/* Chips dos países selecionados */}
+        {specificSelected.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {specificSelected.map(v => {
+              const country = PAISES_ESPECIFICOS.find(p => p.value === v)
+              return (
+                <span key={v} className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11px] bg-sky-600/20 border border-sky-500/30 text-sky-300">
+                  {country?.label ?? v}
+                  <button type="button" onClick={() => toggleTerritorio(v)}
+                    className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-rose-500/20 hover:text-rose-400 transition-colors ml-0.5">
+                    ×
+                  </button>
+                </span>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Painel expansível com busca */}
+        {mostrarPaises && (
+          <div className="bg-white/[0.02] border border-white/[0.07] rounded-xl p-3">
+            <input
+              type="text"
+              value={buscaPais}
+              onChange={e => setBuscaPais(e.target.value)}
+              placeholder="Buscar país..."
+              className="w-full bg-white/5 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/25 mb-2 focus:outline-none focus:border-violet-500/50 transition-colors"
+            />
+            <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
+              {paisesFiltrados.length === 0 ? (
+                <p className="text-[11px] text-white/30 text-center py-3">Nenhum país encontrado</p>
+              ) : paisesFiltrados.map(p => {
+                const selected = (form.territorios as string[]).includes(p.value)
+                return (
+                  <button key={p.value} type="button"
+                    onClick={() => toggleTerritorio(p.value)}
+                    className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm transition-colors text-left ${
+                      selected ? 'bg-sky-600/15 text-sky-300' : 'hover:bg-white/[0.04] text-white/60'
+                    }`}>
+                    <div className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border transition-colors ${
+                      selected ? 'bg-sky-500 border-sky-500' : 'border-white/20'
+                    }`}>
+                      {selected && <Check className="w-2.5 h-2.5 text-white" />}
+                    </div>
+                    <span className="text-[12px]">{p.label}</span>
+                    <span className="text-[10px] text-white/25 ml-auto font-mono">{p.value}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Abrangência */}
