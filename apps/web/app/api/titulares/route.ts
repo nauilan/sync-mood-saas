@@ -62,6 +62,7 @@ export async function GET(req: NextRequest) {
     .from('titulares')
     .select('*', { count: 'exact' })
     .eq('tenant_id', tenant_id)
+    .is('deleted_at', null)
     .order('nome_completo')
     .range(offset, offset + per_page - 1)
 
@@ -80,6 +81,7 @@ export async function GET(req: NextRequest) {
     .from('titulares')
     .select('tipo, status')
     .eq('tenant_id', tenant_id)
+    .is('deleted_at', null)
 
   const totais = {
     total: kpiData?.length ?? 0,
