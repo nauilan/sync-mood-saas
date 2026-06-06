@@ -36,7 +36,10 @@ export function getAccessToken(): string {
       try {
         const decoded = decodeURIComponent(cookieMap[base])
         const parsed = JSON.parse(decoded)
-        if (parsed.access_token) return parsed.access_token
+        // @supabase/ssr v0.10+ armazena como { currentSession: { access_token } }
+        // versões anteriores armazenavam como { access_token }
+        const token = parsed?.access_token ?? parsed?.currentSession?.access_token
+        if (token) return token
       } catch { /* continua */ }
     }
 
@@ -50,7 +53,8 @@ export function getAccessToken(): string {
     if (assembled) {
       try {
         const parsed = JSON.parse(assembled)
-        if (parsed.access_token) return parsed.access_token
+        const token = parsed?.access_token ?? parsed?.currentSession?.access_token
+        if (token) return token
       } catch { /* continua */ }
     }
   }
