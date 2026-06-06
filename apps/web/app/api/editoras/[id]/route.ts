@@ -79,7 +79,7 @@ export async function PUT(
   const {
     nome_fantasia, razao_social, cnpj, tipo_editora, controlada,
     codigo_publisher_cwr, codigo_cae, codigo_ipi,
-    codigo_interno_cwr, pais_registro, codigo_ecad,
+    codigo_interno_cwr, pais_registro, codigo_ecad, codigo_interno,
     endereco, bairro, cep, cidade, estado, pais,
     telefone, email, site, sociedade_autoral_vinculada,
     dados_bancarios, status,
@@ -103,6 +103,7 @@ export async function PUT(
   if (codigo_interno_cwr !== undefined)       payload.codigo_interno_cwr       = codigo_interno_cwr?.trim() || null
   if (pais_registro !== undefined)            payload.pais_registro            = pais_registro?.trim() || null
   if (codigo_ecad !== undefined)              payload.codigo_ecad              = codigo_ecad?.trim() || null
+  if (codigo_interno !== undefined)           payload.codigo_interno           = codigo_interno?.trim() || null
   if (endereco !== undefined)                 payload.endereco                 = endereco?.trim() || null
   if (bairro !== undefined)                   payload.bairro                   = bairro?.trim() || null
   if (cep !== undefined)                      payload.cep                      = cep?.trim() || null

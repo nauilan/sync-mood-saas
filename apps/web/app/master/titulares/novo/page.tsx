@@ -10,8 +10,7 @@ import {
 import { PageHeader } from '@/components/ui/page-header'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { MOCK_EDITORAS, verificarDuplicidade, gerarCodigoTitular, codigoTitularExiste } from '@/lib/mock-cadastros'
-import { sincronizarAposEdicao } from '@/lib/codigos'
+import { verificarDuplicidade } from '@/lib/mock-cadastros'
 import { maskCpf, maskCnpj } from '@/lib/masks'
 import { PhoneInput } from '@/components/ui/phone-input'
 import {
@@ -208,19 +207,21 @@ export default function NovoTitularWizardPage() {
   const [form, setForm] = useState<FormState>(EMPTY)
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({})
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [duplicidades, setDuplicidades] = useState<ReturnType<typeof verificarDuplicidade>>([])
   const [buscandoCep, setBuscandoCep] = useState(false)
   const bancoInputRef = useRef<HTMLInputElement>(null)
   const [avisos, setAvisos] = useState<ReturnType<typeof verificarDuplicidade>>([])
-  const codigoAutoRef = useRef<string>('')  // guarda o valor gerado automaticamente
-
-  // Gera codigo automatico ao montar
+  // Editoras reais do banco
+  const [editorasReais, setEditorasReais] = useState<{ id: string; nome_fantasia: string }[]>([])
   useEffect(() => {
-    const codigo = gerarCodigoTitular()
-    codigoAutoRef.current = codigo
-    setForm(prev => ({ ...prev, codigo_titular: codigo }))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetch('/api/editoras?status=todos')
+      .then(r => r.json())
+      .then(d => setEditorasReais(d.editoras ?? []))
+      .catch(() => {/* usa vazio */})
   }, [])
+
+  // codigo_titular: deixado vazio → servidor auto-gera T####; se preenchido, usa o valor informado
 
   // Live duplicate check ao alterar nome, cpf/cnpj ou pseudonimos
   useEffect(() => {
@@ -284,8 +285,7 @@ export default function NovoTitularWizardPage() {
   function validatePasso(): boolean {
     const errs: typeof errors = {}
     if (passo.id === 'tipo') {
-      if (!form.codigo_titular.trim()) errs.codigo_titular = 'Informe o codigo do titular'
-      else if (codigoTitularExiste(form.codigo_titular)) errs.codigo_titular = 'Este codigo ja esta em uso por outro titular'
+      // código pode estar vazio (servidor auto-gera) — nenhuma validação local de unicidade
     }
     if (passo.id === 'dados_pf') {
       if (!form.nome_completo.trim()) errs.nome_completo = 'Nome obrigatorio'
@@ -334,63 +334,44 @@ export default function NovoTitularWizardPage() {
 
   async function handleSave() {
     setSaving(true)
-    await new Promise(r => setTimeout(r, 400))
+    setSaveError(null)
     try {
-      const id = 'LOCAL-' + Date.now()
-      const now = new Date().toISOString()
-      // Sincroniza sequencial caso código tenha sido editado manualmente
-      sincronizarAposEdicao('titular', form.codigo_titular)
-      const titular = {
-        id,
-        codigo_titular: form.codigo_titular,
-        id_interno: id,
-        tipo_pessoa: form.tipo_pessoa,
-        editora_id: form.editora_id || '',
-        ativo: true,
-        observacoes: form.observacoes || null,
-        created_at: now,
-        updated_at: now,
-        _pf: form.tipo_pessoa === 'PF' ? {
-          titular_id: id,
-          nome_completo: form.nome_completo,
-          cpf: form.cpf || null,
-          rg: form.rg || null,
-          data_nasc: form.data_nasc || null,
-          nacionalidade: form.nacionalidade || null,
-          estado_civil: form.estado_civil || null,
-          profissao: form.profissao || null,
-          nome_artistico_principal: form.nome_artistico_principal || null,
-          sociedade_autoral: form.sociedade_autoral || null,
-          cae: form.cae || null,
-          ipi: form.ipi || null,
-        } : undefined,
-        _pj: form.tipo_pessoa === 'PJ' ? {
-          titular_id: id,
-          razao_social: form.razao_social,
-          nome_fantasia: form.nome_fantasia || null,
-          cnpj: form.cnpj || null,
-          ie: form.ie || null,
-          im: form.im || null,
-          responsavel_legal: form.responsavel_legal || null,
-          sociedade_autoral: form.sociedade_autoral || null,
-          cae: form.cae || null,
-          ipi: form.ipi || null,
-          site: form.site || null,
-          socios: form.socios,
-        } : undefined,
-        _funcoes: form.funcoes.map((f, i) => ({ id: id + '-f' + i, titular_id: id, funcao: f, sigla: f, ativa: true, created_at: now })),
-        _pseudonimos: form.pseudonimos.map((p, i) => ({ id: id + '-p' + i, titular_id: id, pseudonimo: p.pseudonimo, principal: p.principal, ativo: true, data_inicio: null, data_fim: null })),
-        _enderecos: (form.cep || form.endereco) ? [{ id: id + '-e0', titular_id: id, cep: form.cep || null, endereco: form.endereco || null, numero: form.numero || null, compl: form.compl || null, bairro: form.bairro || null, cidade: form.cidade || null, estado: form.estado || null, pais: form.pais || 'Brasil', principal: true }] : [],
-        _contatos: form.contatos.filter(c => c.valor).map((c, i) => ({ id: id + '-c' + i, titular_id: id, tipo: c.tipo, valor: c.valor, principal: c.principal })),
-        _dados_bancarios: form.banco ? [{ id: id + '-b0', titular_id: id, banco: form.banco, agencia: form.agencia, conta: form.conta, tipo_conta: form.tipo_conta, titular_conta: form.titular_conta, pix_chave: form.pix_chave || null, pix_tipo: form.pix_tipo || null, operacao: form.operacao || null, principal: true }] : [],
-        _obras: 0,
-        _contratos: 0,
+      const nomeCompleto = form.tipo_pessoa === 'PF'
+        ? form.nome_completo.trim()
+        : (form.razao_social.trim() || form.nome_fantasia.trim())
+
+      const payload: Record<string, unknown> = {
+        nome_completo:   nomeCompleto,
+        tipo:            form.tipo_pessoa === 'PF' ? 'autor' : 'editora',
+        tipo_pessoa:     form.tipo_pessoa,
+        // Se em branco, o servidor gera T####; se preenchido, usa e valida unicidade
+        codigo_titular:  form.codigo_titular.trim() || undefined,
+        nome_artistico:  form.nome_artistico_principal.trim() || undefined,
+        cpf_cnpj:        form.tipo_pessoa === 'PF'
+          ? (form.cpf.trim() || undefined)
+          : (form.cnpj.trim() || undefined),
+        codigo_cae:      form.cae.trim() || undefined,
+        ipi:             form.ipi.trim() || undefined,
+        codigo_ipi:      form.ipi.trim() || undefined,
       }
-      const existing = JSON.parse(localStorage.getItem('sync_titulares') || '[]')
-      localStorage.setItem('sync_titulares', JSON.stringify([...existing, titular]))
-    } catch { /* silencioso */ }
-    setSaving(false)
-    router.push('/master/titulares')
+
+      const res  = await fetch('/api/titulares', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        const msg = data?.error?.message ?? data?.error ?? 'Erro ao salvar titular'
+        setSaveError(msg)
+        setSaving(false)
+        return
+      }
+      router.push('/master/titulares')
+    } catch (e: any) {
+      setSaveError(e.message ?? 'Erro inesperado')
+      setSaving(false)
+    }
   }
 
   // Funcoes disponíveis por tipo de pessoa
@@ -444,18 +425,18 @@ export default function NovoTitularWizardPage() {
             <Field label="Editora vinculada" error={errors.editora_id}>
               <select className={errors.editora_id ? inputErrCls : inputCls} value={form.editora_id} onChange={set('editora_id')}>
                 <option value="">Selecione a editora...</option>
-                {MOCK_EDITORAS.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia}</option>)}
+                {editorasReais.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia}</option>)}
               </select>
             </Field>
-            <Field label="Codigo do Titular" required error={errors.codigo_titular}>
+            <Field label="Codigo do Titular" error={errors.codigo_titular}>
               <input
                 className={errors.codigo_titular ? inputErrCls : inputCls}
-                placeholder="Gerado automaticamente..."
+                placeholder="Deixe vazio para gerar automaticamente (ex: T0001)"
                 value={form.codigo_titular}
                 onChange={setUpper('codigo_titular')}
               />
               <p className="text-xs text-white/20 mt-1">
-                Gerado automaticamente (alfanumerico sequencial). Pode ser editado, mas nao pode repetir um codigo existente.
+                Se preenchido, deve ser único neste tenant. Se em branco, o sistema gera automaticamente.
               </p>
             </Field>
           </div>
@@ -852,7 +833,7 @@ export default function NovoTitularWizardPage() {
       case 'revisao': {
         const nome = form.tipo_pessoa === 'PF' ? form.nome_completo : form.razao_social
         const docNum = form.tipo_pessoa === 'PF' ? form.cpf : form.cnpj
-        const editora = MOCK_EDITORAS.find(e => e.id === form.editora_id)
+        const editora = editorasReais.find(e => e.id === form.editora_id)
         const todosAvisos = duplicidades.length > 0 ? duplicidades : avisos
         return (
           <div className="space-y-5">
@@ -990,5 +971,10 @@ export default function NovoTitularWizardPage() {
         )}
       </div>
     </div>
+    {saveError && (
+      <div className="mx-6 mt-0 mb-4 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+        {saveError}
+      </div>
+    )}
   )
 }

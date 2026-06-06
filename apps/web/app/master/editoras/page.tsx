@@ -33,6 +33,7 @@ interface Editora {
   codigo_interno_cwr: string | null
   pais_registro: string | null
   codigo_ecad: string | null
+  codigo_interno: string | null
   created_at: string
 }
 
@@ -48,6 +49,7 @@ const FORM_INITIAL = {
   codigo_interno_cwr: '',
   pais_registro: 'BR',
   codigo_ecad: '',
+  codigo_interno: '',
 }
 
 function getInitials(name: string): string {
@@ -228,6 +230,17 @@ export default function EditorasPage() {
                   onChange={e => setForm(f => ({ ...f, cnpj: e.target.value }))}
                   className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 font-mono focus:outline-none focus:border-violet-500/50"
                   placeholder="00.000.000/0001-00"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-white/50 mb-1.5">
+                  Código Interno <span className="text-violet-400/70">(Sistema)</span>
+                </label>
+                <input
+                  value={form.codigo_interno}
+                  onChange={e => setForm(f => ({ ...f, codigo_interno: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 font-mono focus:outline-none focus:border-violet-500/50"
+                  placeholder="Ex: TOPSHOW, EDI001, LR001"
                 />
               </div>
               <div>

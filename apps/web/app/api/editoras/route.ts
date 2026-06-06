@@ -48,8 +48,8 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get('status') ?? 'ativo'
   const headers = { apikey: ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 
-  // Tenta query completa (com colunas adicionadas em migrations 012/014)
-  let qs = `select=id,nome_fantasia,razao_social,cnpj,tipo_editora,controlada,status,codigo_publisher_cwr,codigo_cae,codigo_ipi,created_at&order=nome_fantasia.asc`
+  // Tenta query completa (com colunas adicionadas em migrations 012/014/021/024/025)
+  let qs = `select=id,nome_fantasia,razao_social,cnpj,tipo_editora,controlada,status,codigo_publisher_cwr,codigo_cae,codigo_ipi,codigo_interno_cwr,pais_registro,codigo_ecad,codigo_interno,created_at&order=nome_fantasia.asc`
   if (status && status !== 'todos') qs += `&status=eq.${status}`
   let res = await fetch(`${SUPABASE_URL}/rest/v1/editoras?${qs}`, { headers })
   let data = await res.json()
@@ -69,6 +69,10 @@ export async function GET(req: NextRequest) {
       codigo_publisher_cwr: null,
       codigo_cae: null,
       codigo_ipi: null,
+      codigo_interno_cwr: null,
+      pais_registro: null,
+      codigo_ecad: null,
+      codigo_interno: null,
     }))
     return NextResponse.json({ editoras: normalized, _schema_v1: true })
   }
@@ -87,7 +91,7 @@ export async function POST(req: NextRequest) {
   if (!tenant_id) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
 
   const body = await req.json()
-  const { nome_fantasia, razao_social, cnpj, tipo_editora, controlada, codigo_publisher_cwr, codigo_cae, codigo_ipi } = body
+  const { nome_fantasia, razao_social, cnpj, tipo_editora, controlada, codigo_publisher_cwr, codigo_cae, codigo_ipi, codigo_interno_cwr, pais_registro, codigo_ecad, codigo_interno } = body
 
   if (!nome_fantasia?.trim() || !razao_social?.trim()) {
     return NextResponse.json({ error: 'nome_fantasia e razao_social são obrigatórios' }, { status: 400 })
@@ -107,6 +111,10 @@ export async function POST(req: NextRequest) {
     codigo_publisher_cwr: codigo_publisher_cwr?.trim() || null,
     codigo_cae: codigo_cae?.trim() || null,
     codigo_ipi: codigo_ipi?.trim() || null,
+    codigo_interno_cwr: codigo_interno_cwr?.trim() || null,
+    pais_registro: pais_registro?.trim() || null,
+    codigo_ecad: codigo_ecad?.trim() || null,
+    codigo_interno: codigo_interno?.trim() || null,
     status: 'ativo',
   }
   let res = await fetch(`${SUPABASE_URL}/rest/v1/editoras`, { method: 'POST', headers: postHeaders, body: JSON.stringify(payloadFull) })

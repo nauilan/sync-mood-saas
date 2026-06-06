@@ -84,13 +84,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'nome obrigatório' }, { status: 400 })
   }
 
-  // Gera código interno sequencial
-  const { count: total } = await sb
-    .from('titulares')
-    .select('*', { count: 'exact', head: true })
-    .eq('tenant_id', tenant_id)
-  const seq = (total ?? 0) + 1
-  const codigo_titular = `T${String(seq).padStart(4, '0')}`
+  // Código do titular: usa o fornecido (validando unicidade por tenant) ou gera T####
+  let codigo_titular: string
+  const codigoCustom = (body.codigo_titular ?? '').trim()
+  if (codigoCustom) {
+    const { count: dupeCount } = await sb
+      .from('titulares')
+      .select('*', { count: 'exact', head: true })
+      .eq('tenant_id', tenant_id)
+      .eq('codigo_titular', codigoCustom)
+    if ((dupeCount ?? 0) > 0) {
+      return NextResponse.json(
+        { error: `Código "${codigoCustom}" já está em uso por outro titular neste tenant` },
+        { status: 409 }
+      )
+    }
+    codigo_titular = codigoCustom
+  } else {
+    // Auto-gera sequencial T0001, T0002...
+    const { count: total } = await sb
+      .from('titulares')
+      .select('*', { count: 'exact', head: true })
+      .eq('tenant_id', tenant_id)
+    const seq = (total ?? 0) + 1
+    codigo_titular = `T${String(seq).padStart(4, '0')}`
+  }
 
   const payload: Record<string, unknown> = {
     tenant_id,
@@ -104,6 +122,7 @@ export async function POST(req: NextRequest) {
   if (body.cpf_cnpj) payload.cpf_cnpj = body.cpf_cnpj
   if (body.ipi) payload.ipi = body.ipi
   if (body.codigo_ipi) payload.codigo_ipi = body.codigo_ipi
+  if (body.codigo_cae) payload.codigo_cae = body.codigo_cae
 
   const { data, error } = await sb.from('titulares').insert(payload).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
