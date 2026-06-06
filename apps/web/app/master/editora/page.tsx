@@ -118,7 +118,7 @@ function Toast({ msg, onClose }: { msg: string; onClose: () => void }) {
 
 // ── ABAS ──────────────────────────────────────────────────────
 const ABAS = [
-  { id: 'empresa',       label: 'Empresa (AM)',          icon: Building2 },
+  { id: 'empresa',       label: 'Dados da Empresa',      icon: Building2 },
   { id: 'banco',         label: 'Dados Bancarios',       icon: CreditCard },
   { id: 'administradas', label: 'Editoras Administradas',icon: Building2 },
   { id: 'usuarios',      label: 'Usuarios',              icon: Users },
@@ -252,10 +252,10 @@ export default function EditoraPage() {
     } catch { /* silencioso */ } finally { setBuscandoCep(false) }
   }
 
-  // Salvar dados da Editora Master via API PUT
+  // Salvar dados da Organização Gestora via API PUT
   async function salvarEmpresa() {
     if (!masterEditoraId) {
-      setToast('Editora master não identificada. Verifique o cadastro.')
+      setToast('Organização Gestora não identificada. Verifique o cadastro.')
       return
     }
     setSalvando(true)
@@ -299,7 +299,7 @@ export default function EditoraPage() {
         body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error('Erro ao salvar')
-      setToast('Dados da editora master salvos com sucesso.')
+      setToast('Dados da Organização Gestora salvos com sucesso.')
     } catch (e: any) {
       setToast('Erro: ' + (e as Error).message)
     } finally {
@@ -339,8 +339,8 @@ export default function EditoraPage() {
       {/* Header com botao Salvar */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-white">Editoras / Master</h1>
-          <p className="text-sm text-white/40 mt-0.5">Editora administradora do sistema e editoras administradas</p>
+          <h1 className="text-xl font-bold text-white">Organização Gestora</h1>
+          <p className="text-sm text-white/40 mt-0.5">Empresa principal do sistema — pode atuar como administradora de editoras terceiras e como editora original de obras próprias</p>
         </div>
         <Button size="sm" onClick={salvarEmpresa} disabled={salvando} className="flex-shrink-0">
           {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -367,6 +367,19 @@ export default function EditoraPage() {
       {/* ─── ABA EMPRESA ─────────────────────────────── */}
       {aba === 'empresa' && (
         <div className={`${card} p-6 space-y-6`}>
+          {/* Papéis da Organização Gestora */}
+          <div className="bg-violet-500/5 border border-violet-500/15 rounded-xl px-4 py-3 flex flex-wrap gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-violet-400" />
+              <span className="text-[11px] text-violet-300 font-medium">Atua como Administradora</span>
+              <span className="text-[11px] text-white/30">— gerencia catálogos de editoras terceiras via Negócios Editoriais</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span className="text-[11px] text-emerald-300 font-medium">Atua como Editora Original</span>
+              <span className="text-[11px] text-white/30">— pode ser titular direta de obras e contratos com autores</span>
+            </div>
+          </div>
           <Divider label="Identificacao" />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
@@ -620,7 +633,7 @@ export default function EditoraPage() {
                   <p className="text-xs text-white/40 mb-2 flex items-center gap-1.5">
                     <Building2 className="w-3.5 h-3.5" />
                     Acesso a Editoras Administradas
-                    <span className="text-white/20 ml-1">— além da Editora Master (acesso automático pelo perfil)</span>
+                    <span className="text-white/20 ml-1">— além da Organização Gestora (acesso automático pelo perfil)</span>
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {editoras.filter(e => e.nome_fantasia).map(e => {
@@ -672,7 +685,7 @@ export default function EditoraPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-white">Administrador do Sistema</p>
                 <p className="text-[11px] text-white/30">admin@syncmood.com</p>
-                <p className="text-[10px] text-white/20 font-mono mt-0.5">CPF: —&nbsp;&nbsp;·&nbsp;&nbsp;Acesso: Editora Master + todas as editoras administradas</p>
+                <p className="text-[10px] text-white/20 font-mono mt-0.5">CPF: —&nbsp;&nbsp;·&nbsp;&nbsp;Acesso: Organização Gestora + todas as editoras administradas</p>
               </div>
               <Badge variant="violet">Administrador</Badge>
               <Badge variant="emerald">Ativo</Badge>
@@ -723,10 +736,10 @@ export default function EditoraPage() {
                 <div className="flex items-center gap-2 pl-12 flex-wrap">
                   <span className="text-[10px] text-white/20 uppercase tracking-wide">Acesso:</span>
                   <span className="text-[10px] bg-violet-500/10 text-violet-400 border border-violet-500/20 rounded-full px-2 py-0.5">
-                    Editora Master (AM)
+                    Organização Gestora
                   </span>
                   {editorasDoUsuario.length === 0 && (
-                    <span className="text-[10px] text-white/20 italic">somente Editora Master</span>
+                    <span className="text-[10px] text-white/20 italic">somente Organização Gestora</span>
                   )}
                   {editorasDoUsuario.map(e => (
                     <span key={e.id} className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full px-2 py-0.5">
@@ -750,7 +763,7 @@ export default function EditoraPage() {
             </h3>
             <div className="flex flex-col items-center gap-2 py-2">
               <div className="bg-violet-600/20 border-2 border-violet-500/40 rounded-2xl px-6 py-3 text-center">
-                <p className="text-[10px] text-violet-300/60 uppercase tracking-widest mb-0.5">Editora Administradora (AM)</p>
+                <p className="text-[10px] text-violet-300/60 uppercase tracking-widest mb-0.5">Organização Gestora</p>
                 <p className="text-sm font-bold text-violet-200">Top Show Music</p>
                 <div className="flex flex-wrap justify-center gap-1.5 mt-2">
                   {['Catálogo Unificado', 'Autorizações', 'Licenciamentos', 'Financeiro Global'].map(t => (
@@ -779,15 +792,15 @@ export default function EditoraPage() {
                 titulo: 'Catálogo Unificado',
                 icon: Building2,
                 cor: 'violet',
-                descricao: 'Toda obra cadastrada por uma Editora Administrada (E) compõe automaticamente o catálogo da Editora Administradora (AM) por força do contrato de administração.',
-                linkLogica: 'Link: Autor + Editora Original (E) + Editora Administradora (AM)',
+                descricao: 'Toda obra cadastrada por uma Editora Administrada (E) compõe automaticamente o catálogo da Organização Gestora por força do contrato de administração.',
+                linkLogica: 'Link: Autor + Editora Original (E) + Organização Gestora',
               },
               {
                 titulo: 'Autorização e Licenciamento Centralizado',
                 icon: Shield,
                 cor: 'amber',
-                descricao: 'Toda e qualquer autorização ou licenciamento de obras do catálogo de uma Editora Administrada é emitido e autorizado exclusivamente pela Editora Administradora (AM). A E não pode emitir autorizações.',
-                linkLogica: 'REGRA INVIOLÁVEL — AM autoriza, AM licencia',
+                descricao: 'Toda e qualquer autorização ou licenciamento de obras do catálogo de uma Editora Administrada é emitido e autorizado exclusivamente pela Organização Gestora. A E não pode emitir autorizações.',
+                linkLogica: 'REGRA INVIOLÁVEL — Organização Gestora autoriza e licencia',
               },
               {
                 titulo: 'Negócios Editoriais por Tipo de Direito e Território',

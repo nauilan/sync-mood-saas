@@ -70,7 +70,7 @@ function EditoraCard({ editora, idx }: { editora: Editora; idx: number }) {
               <h3 className="text-sm font-bold text-white truncate max-w-[180px]">{editora.nome_fantasia}</h3>
               {isMaster && (
                 <span className="flex items-center gap-1 text-[10px] text-violet-400 bg-violet-600/15 border border-violet-500/25 px-1.5 py-0.5 rounded-full">
-                  <Star className="w-2.5 h-2.5" /> Administradora
+                  <Star className="w-2.5 h-2.5" /> Própria / Gestora
                 </span>
               )}
               {editora.tipo_editora !== 'master' && (
@@ -293,7 +293,7 @@ export default function EditorasPage() {
                   onChange={e => setForm(f => ({ ...f, tipo_editora: e.target.value as TipoEditora }))}
                   className="w-full bg-[#0d1526] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500/50"
                 >
-                  <option value="master">Master (Administradora)</option>
+                  <option value="master">Própria (Gestora)</option>
                   <option value="administrada">Administrada</option>
                   <option value="externa">Externa</option>
                 </select>

@@ -40,33 +40,44 @@ interface Negocio {
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const RECEITAS_OPCOES = [
-  { value: 'digital',          label: 'Fono Digital' },
-  { value: 'sync',             label: 'Sincronização' },
-  { value: 'mecanico',         label: 'Mecânicos' },
   { value: 'execucao_publica', label: 'Execução Pública' },
-  { value: 'internacional',    label: 'Internacional' },
-  { value: 'licenciamento',    label: 'Licenciamento' },
-  { value: 'direitos_futuros', label: 'Direitos Futuros / Novas Receitas' },
+  { value: 'digital',          label: 'Direitos Digitais / Fonomecânicos' },
+  { value: 'sync',             label: 'Sincronização' },
+  { value: 'mecanico',         label: 'Fonomecânicos (Físico)' },
+  { value: 'licenciamento',    label: 'Licenciamento Direto' },
+  { value: 'internacional',    label: 'Direitos Internacionais' },
+  { value: 'direitos_editoriais', label: 'Direitos Editoriais (Letras/Partituras)' },
+  { value: 'direitos_futuros', label: 'Direitos Futuros / Novas Modalidades' },
 ]
 const TERRITORIOS_RAPIDOS = [
   { value: 'mundial', label: 'Mundo' },
   { value: 'brasil',  label: 'Brasil' },
 ]
 const PAISES_ESPECIFICOS = [
-  { value: 'PT', label: 'Portugal' },
-  { value: 'US', label: 'Estados Unidos' },
   { value: 'AR', label: 'Argentina' },
-  { value: 'PY', label: 'Paraguai' },
-  { value: 'UY', label: 'Uruguai' },
-  { value: 'MX', label: 'México' },
-  { value: 'ES', label: 'Espanha' },
-  { value: 'CO', label: 'Colômbia' },
+  { value: 'BO', label: 'Bolívia' },
+  { value: 'CA', label: 'Canadá' },
   { value: 'CL', label: 'Chile' },
-  { value: 'FR', label: 'França' },
-  { value: 'IT', label: 'Itália' },
+  { value: 'CN', label: 'China' },
+  { value: 'CO', label: 'Colômbia' },
   { value: 'DE', label: 'Alemanha' },
-  { value: 'UK', label: 'Reino Unido' },
+  { value: 'EC', label: 'Equador' },
+  { value: 'ES', label: 'Espanha' },
+  { value: 'FR', label: 'França' },
+  { value: 'GB', label: 'Reino Unido' },
+  { value: 'IT', label: 'Itália' },
   { value: 'JP', label: 'Japão' },
+  { value: 'KR', label: 'Coreia do Sul' },
+  { value: 'MX', label: 'México' },
+  { value: 'NL', label: 'Holanda' },
+  { value: 'PE', label: 'Peru' },
+  { value: 'PT', label: 'Portugal' },
+  { value: 'PY', label: 'Paraguai' },
+  { value: 'SE', label: 'Suécia' },
+  { value: 'US', label: 'Estados Unidos' },
+  { value: 'UY', label: 'Uruguai' },
+  { value: 'VE', label: 'Venezuela' },
+  { value: 'ZA', label: 'África do Sul' },
 ]
 const TERRITORIOS_TODOS = [...TERRITORIOS_RAPIDOS, ...PAISES_ESPECIFICOS]
 // Mapeamento de compatibilidade para valores antigos já armazenados no banco
@@ -102,7 +113,7 @@ const FORM_EMPTY = {
   editora_administradora_nome: '',
   percentual_administrada: 60,
   percentual_administradora: 40,
-  receitas_aplicaveis: ['digital','sync','mecanico','internacional','licenciamento'],
+  receitas_aplicaveis: ['execucao_publica', 'digital', 'sync', 'mecanico', 'internacional', 'licenciamento'],
   abrangencia_tipo: 'catalogo_inteiro',
   territorios: ['mundial'],
   data_inicio: new Date().toISOString().slice(0, 10),
@@ -310,9 +321,9 @@ function NegocioForm({
         </p>
       </div>
 
-      {/* Receitas aplicáveis */}
+      {/* Direitos Administrados */}
       <div>
-        <label className={labelCls}>Receitas aplicáveis</label>
+        <label className={labelCls}>Direitos Administrados</label>
         <div className="flex flex-wrap gap-2">
           {RECEITAS_OPCOES.map(r => (
             <button key={r.value} type="button"
@@ -528,7 +539,7 @@ function NegocioCard({
           </div>
 
           <div>
-            <p className="text-[10px] text-white/30 mb-1.5">Receitas aplicáveis</p>
+            <p className="text-[10px] text-white/30 mb-1.5">Direitos Administrados</p>
             <div className="flex flex-wrap gap-1.5">
               {receitas.map(r => (
                 <span key={r} className="text-[10px] font-semibold bg-violet-500/10 text-violet-300 px-2 py-0.5 rounded-full border border-violet-500/20">
