@@ -42,9 +42,10 @@ interface TenantForm {
   cep: string; endereco: string; numero: string; compl: string
   bairro: string; cidade: string; estado: string; pais: string
   telefone: string; email: string; site: string
-  banco: string; agencia: string; conta: string
+  banco: string; agencia: string; conta: string; conta_digito: string
   tipo_conta: string; titular_conta: string; operacao: string
   pix_chave: string; pix_tipo: string
+  codigo_interno: string
 }
 // Editora simples para seletor de acesso de usuários
 interface EditoraOpcao { id: string; nome_fantasia: string; razao_social: string; cnpj?: string | null }
@@ -79,7 +80,8 @@ const EMPTY_TENANT: TenantForm = {
   cep: '', endereco: '', numero: '', compl: '', bairro: '',
   cidade: '', estado: '', pais: 'BRASIL',
   telefone: '', email: '', site: '',
-  banco: '', agencia: '', conta: '', tipo_conta: '', titular_conta: '', operacao: '', pix_chave: '', pix_tipo: '',
+  banco: '', agencia: '', conta: '', conta_digito: '', tipo_conta: '', titular_conta: '', operacao: '', pix_chave: '', pix_tipo: '',
+  codigo_interno: '',
 }
 const EMPTY_USR: Usuario = { id: '', nome: '', cpf: '', email: '', perfil: 'operador', ativo: true, editoras_acesso: [] }
 const EMPTY_CFG: Config = {
@@ -203,12 +205,14 @@ export default function EditoraPage() {
               site: e.site ?? '',
               banco: banco.banco ?? '',
               agencia: banco.agencia ?? '',
-              conta: banco.conta ?? '',
+              conta: (() => { const c = banco.conta ?? ''; const i = c.lastIndexOf('-'); return i > 0 ? c.substring(0, i) : c })(),
+              conta_digito: (() => { const c = banco.conta ?? ''; const i = c.lastIndexOf('-'); return i > 0 ? c.substring(i + 1) : '' })(),
               tipo_conta: banco.tipo_conta ?? '',
               titular_conta: banco.titular_conta ?? '',
               operacao: banco.operacao ?? '',
               pix_chave: banco.pix_chave ?? '',
               pix_tipo: banco.pix_tipo ?? '',
+              codigo_interno: e.codigo_interno ?? '',
             })
           }
         }
@@ -278,10 +282,11 @@ export default function EditoraPage() {
         email: form.email,
         site: form.site,
         codigo_ecad: form.registro_ecad,
+        codigo_interno: form.codigo_interno || undefined,
         dados_bancarios: {
           banco: form.banco,
           agencia: form.agencia,
-          conta: form.conta,
+          conta: form.conta ? (form.conta_digito ? `${form.conta}-${form.conta_digito}` : form.conta) : '',
           tipo_conta: form.tipo_conta,
           titular_conta: form.titular_conta,
           operacao: form.operacao,
@@ -413,6 +418,9 @@ export default function EditoraPage() {
             <Field label="Codigo ECAD">
               <input className={inputCls} placeholder="CODIGO ECAD" value={form.registro_ecad} onChange={setUpper('registro_ecad')} />
             </Field>
+            <Field label="Codigo Interno">
+              <input className={inputCls} placeholder="CODIGO INTERNO" value={form.codigo_interno} onChange={setUpper('codigo_interno')} />
+            </Field>
           </div>
 
           <Divider label="Endereco" />
@@ -495,7 +503,12 @@ export default function EditoraPage() {
               <input className={inputCls} placeholder="0000" value={form.agencia} onChange={setUpper('agencia')} />
             </Field>
             <Field label="Conta">
-              <input className={inputCls} placeholder="00000-0" value={form.conta} onChange={setUpper('conta')} />
+              <div className="flex gap-2">
+                <input className={inputCls + ' flex-1'} placeholder="00000" value={form.conta} onChange={setUpper('conta')} />
+                <div className="w-24">
+                  <input className={inputCls} placeholder="Digito" maxLength={2} value={form.conta_digito} onChange={setUpper('conta_digito')} />
+                </div>
+              </div>
             </Field>
             {isCEF && (
               <Field label="Operacao (Caixa Economica Federal)">
@@ -504,11 +517,33 @@ export default function EditoraPage() {
             )}
             <div className="md:col-span-2">
               <Field label="Titular da Conta">
-                <input className={inputCls} placeholder="NOME COMPLETO / RAZAO SOCIAL" value={form.titular_conta} onChange={setUpper('titular_conta')} />
+                <input
+                  className={inputCls}
+                  placeholder="NOME COMPLETO / RAZAO SOCIAL"
+                  value={form.titular_conta}
+                  onFocus={() => {
+                    if (!form.titular_conta) {
+                      const nome = form.razao_social || form.nome_fantasia
+                      if (nome) setForm(prev => ({ ...prev, titular_conta: nome.toUpperCase() }))
+                    }
+                  }}
+                  onChange={setUpper('titular_conta')}
+                />
               </Field>
             </div>
             <Field label="Tipo de Chave PIX">
-              <select className={inputCls} value={form.pix_tipo} onChange={set('pix_tipo')}>
+              <select
+                className={inputCls}
+                value={form.pix_tipo}
+                onChange={e => {
+                  const tipo = e.target.value
+                  let chave = ''
+                  if (tipo === 'cnpj') chave = form.cnpj
+                  else if (tipo === 'email') chave = form.email
+                  else if (tipo === 'telefone') chave = form.telefone
+                  setForm(prev => ({ ...prev, pix_tipo: tipo, pix_chave: chave }))
+                }}
+              >
                 <option value="">Sem chave PIX</option>
                 <option value="cnpj">CNPJ</option>
                 <option value="email">E-mail</option>

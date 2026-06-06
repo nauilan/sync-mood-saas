@@ -96,6 +96,7 @@ interface FormState {
   banco: string
   agencia: string
   conta: string
+  conta_digito: string
   tipo_conta: 'corrente' | 'poupanca' | 'pagamento' | ''
   titular_conta: string
   pix_chave: string
@@ -115,7 +116,7 @@ const EMPTY: FormState = {
   pseudonimos: [],
   cep: '', endereco: '', numero: '', compl: '', bairro: '', cidade: '', estado: '', pais: 'Brasil',
   contatos: [{ tipo: 'email', valor: '', principal: true }],
-  banco: '', agencia: '', conta: '', tipo_conta: '', titular_conta: '', pix_chave: '', pix_tipo: '', operacao: '',
+  banco: '', agencia: '', conta: '', conta_digito: '', tipo_conta: '', titular_conta: '', pix_chave: '', pix_tipo: '', operacao: '',
   documentos: [],
   observacoes: '',
 }
@@ -357,6 +358,18 @@ export default function NovoTitularWizardPage() {
         codigo_cae:      form.cae.trim() || undefined,
         ipi:             form.ipi.trim() || undefined,
         codigo_ipi:      form.ipi.trim() || undefined,
+        dados_bancarios: (form.banco || form.agencia || form.conta) ? {
+          banco:         form.banco.trim() || undefined,
+          agencia:       form.agencia.trim() || undefined,
+          conta:         form.conta.trim()
+            ? (form.conta_digito.trim() ? `${form.conta}-${form.conta_digito}` : form.conta)
+            : undefined,
+          tipo_conta:    form.tipo_conta || undefined,
+          titular_conta: form.titular_conta.trim() || undefined,
+          operacao:      form.operacao.trim() || undefined,
+          pix_chave:     form.pix_chave.trim() || undefined,
+          pix_tipo:      form.pix_tipo || undefined,
+        } : undefined,
       }
 
       const res  = await fetch('/api/titulares', {
@@ -775,7 +788,12 @@ export default function NovoTitularWizardPage() {
               <input className={inputCls} placeholder="0000" value={form.agencia} onChange={setUpper('agencia')} />
             </Field>
             <Field label="Conta">
-              <input className={inputCls} placeholder="00000-0" value={form.conta} onChange={setUpper('conta')} />
+              <div className="flex gap-2">
+                <input className={inputCls + ' flex-1'} placeholder="00000" value={form.conta} onChange={setUpper('conta')} />
+                <div className="w-24">
+                  <input className={inputCls} placeholder="Digito" maxLength={2} value={form.conta_digito} onChange={setUpper('conta_digito')} />
+                </div>
+              </div>
             </Field>
             {isCEF && (
               <Field label="Operacao (Caixa Economica Federal)">
@@ -783,10 +801,35 @@ export default function NovoTitularWizardPage() {
               </Field>
             )}
             <Field label="Titular da Conta">
-              <input className={inputCls} placeholder="NOME COMPLETO DO TITULAR" value={form.titular_conta} onChange={setUpper('titular_conta')} />
+              <input
+                className={inputCls}
+                placeholder="NOME COMPLETO DO TITULAR"
+                value={form.titular_conta}
+                onFocus={() => {
+                  if (!form.titular_conta) {
+                    const nome = form.tipo_pessoa === 'PF'
+                      ? form.nome_completo
+                      : (form.razao_social || form.nome_fantasia)
+                    if (nome) setForm(prev => ({ ...prev, titular_conta: nome.toUpperCase() }))
+                  }
+                }}
+                onChange={setUpper('titular_conta')}
+              />
             </Field>
             <Field label="Tipo de Chave PIX">
-              <select className={inputCls} value={form.pix_tipo} onChange={set('pix_tipo')}>
+              <select
+                className={inputCls}
+                value={form.pix_tipo}
+                onChange={e => {
+                  const tipo = e.target.value as typeof form.pix_tipo
+                  let chave = ''
+                  if (tipo === 'cpf') chave = form.cpf
+                  else if (tipo === 'cnpj') chave = form.cnpj
+                  else if (tipo === 'email') chave = form.contatos.find(c => c.tipo === 'email')?.valor ?? ''
+                  else if (tipo === 'telefone') chave = form.contatos.find(c => c.tipo === 'telefone' || c.tipo === 'whatsapp')?.valor ?? ''
+                  setForm(prev => ({ ...prev, pix_tipo: tipo, pix_chave: chave }))
+                }}
+              >
                 <option value="">Sem chave PIX</option>
                 <option value="cpf">CPF</option>
                 <option value="cnpj">CNPJ</option>
@@ -866,7 +909,7 @@ export default function NovoTitularWizardPage() {
                 {form.tipo_pessoa === 'PF' && <InfoRowR label="Pseudonimos" value={form.pseudonimos.map(p => p.pseudonimo).filter(Boolean).join(', ') || '—'} />}
                 <InfoRowR label="Contatos" value={form.contatos.filter(c => c.valor).map(c => c.valor).join(', ') || '—'} />
                 <InfoRowR label="Banco" value={form.banco || '—'} />
-                <InfoRowR label="Agencia/Conta" value={form.agencia && form.conta ? `${form.agencia} / ${form.conta}` : '—'} />
+                <InfoRowR label="Agencia/Conta" value={form.agencia && form.conta ? `${form.agencia} / ${form.conta}${form.conta_digito ? '-' + form.conta_digito : ''}` : '—'} />
                 <InfoRowR label="PIX" value={form.pix_chave || '—'} />
               </div>
             </div>
