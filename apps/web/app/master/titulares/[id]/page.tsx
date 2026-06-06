@@ -63,7 +63,7 @@ export default function TitularDetalhePage() {
     setLoading(true)
     setErro(null)
     try {
-      const res = await fetch(`/api/titulares/${id}`, { credentials: 'include' })
+      const res = await authFetch(`/api/titulares/${id}`)
       if (res.status === 404) { setNotFound(true); return }
       if (!res.ok) { setErro('Erro ao carregar titular.'); return }
       const json = await res.json()
@@ -91,7 +91,7 @@ export default function TitularDetalhePage() {
     setDeleting(true)
     setDeleteError(null)
     try {
-      const res = await fetch(`/api/titulares/${id}`, { method: 'DELETE', credentials: 'include' })
+      const res = await authFetch(`/api/titulares/${id}`, { method: 'DELETE' })
       const json = await res.json()
       if (!res.ok) {
         setDeleteError({ msg: json.error, vinculos: json.vinculos })

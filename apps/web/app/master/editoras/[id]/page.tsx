@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import { Badge } from '@/components/ui/badge'
+import { authFetch } from '@/lib/supabase/client'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface Editora {
@@ -56,7 +57,7 @@ export default function EditoraDetalhePage() {
     setLoading(true)
     setError(null)
     try {
-      const res  = await fetch(`/api/editoras/${id}`)
+      const res  = await authFetch(`/api/editoras/${id}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error?.message ?? data?.error ?? 'Erro ao carregar')
       setEditora(data.editora ?? data.data ?? data)
@@ -95,7 +96,7 @@ export default function EditoraDetalhePage() {
     setSaving(true)
     setSaveError(null)
     try {
-      const res  = await fetch(`/api/editoras/${id}`, {
+      const res  = await authFetch(`/api/editoras/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),

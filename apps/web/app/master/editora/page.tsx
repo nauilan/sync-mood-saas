@@ -181,7 +181,7 @@ export default function EditoraPage() {
         if (master) {
           setMasterEditoraId(master.id)
           // Carregar dados completos da editora master
-          const res2 = await fetch(`/api/editoras/${master.id}`)
+          const res2 = await authFetch(`/api/editoras/${master.id}`)
           const data2 = await res2.json()
           const e = data2.editora
           if (e) {
