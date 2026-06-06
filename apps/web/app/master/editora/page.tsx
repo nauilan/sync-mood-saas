@@ -231,7 +231,7 @@ export default function EditoraPage() {
     async function loadNegocios() {
       setLoadingNegocios(true)
       try {
-        const res = await fetch('/api/negocios-editoriais')
+        const res = await authFetch('/api/negocios-editoriais')
         const data = await res.json()
         setNegocios(data.negocios ?? [])
       } catch { /* silencioso */ } finally {

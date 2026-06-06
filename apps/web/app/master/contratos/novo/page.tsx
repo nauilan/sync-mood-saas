@@ -417,8 +417,8 @@ export default function NovoContratoPage() {
     async function carregar() {
       try {
         const [tRes, eRes] = await Promise.all([
-          fetch('/api/titulares?per_page=200&status=ativo'),
-          fetch('/api/editoras'),
+          authFetch('/api/titulares?per_page=200&status=ativo'),
+          authFetch('/api/editoras'),
         ])
         const tJson = await tRes.json()
         const eJson = await eRes.json()

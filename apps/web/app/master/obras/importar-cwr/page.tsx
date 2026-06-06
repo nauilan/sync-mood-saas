@@ -9,6 +9,7 @@ import { parseCwr, labelPapel, detectarOffsetCwr } from '@/lib/cwr-parser'
 import type { CwrParseResult, CwrObra, CwrTitular } from '@/lib/cwr-parser'
 import { cwrToStore } from '@/lib/cwr-to-obra'
 import { upsertStore, registrarImportacao, deleteImportacao, getStore, STORE_KEYS } from '@/lib/store'
+import { authFetch } from '@/lib/supabase/client'
 import type { ImportacaoLog } from '@/lib/store'
 import { saveObrasToSupabase, clearObrasFromSupabase } from '@/lib/save-obras-supabase'
 
@@ -20,7 +21,7 @@ function MigrarEditorasBtn({ tenantId }: { tenantId: string }) {
   const migrar = async () => {
     setStatus('loading')
     try {
-      const res = await fetch('/api/obras/migrar-editoras-cwr', {
+      const res = await authFetch('/api/obras/migrar-editoras-cwr', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tenant_id: tenantId }),

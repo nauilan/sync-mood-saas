@@ -17,3 +17,7 @@ Thumbs.db
 screenshots/
 response*.json
 scripts/run-validation.mjs
+check-user.mjs
+check-vercel-env.mjs
+set-vercel-env.mjs
+test-auth.mjs

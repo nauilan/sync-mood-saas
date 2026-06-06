@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import { Badge } from '@/components/ui/badge'
+import { authFetch } from '@/lib/supabase/client'
 
 const ACCENT_COLORS = [
   { border: 'border-violet-500/20', text: 'text-violet-400', kpi: 'text-violet-300', icon: 'bg-violet-500/10' },
@@ -138,7 +139,7 @@ export default function EditorasPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/editoras?status=todos')
+      const res = await authFetch('/api/editoras?status=todos')
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error?.message ?? data?.error ?? 'Erro ao carregar editoras')
       setEditoras(data.editoras ?? [])
@@ -156,7 +157,7 @@ export default function EditorasPage() {
     setSaving(true)
     setSaveError(null)
     try {
-      const res = await fetch('/api/editoras', {
+      const res = await authFetch('/api/editoras', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),

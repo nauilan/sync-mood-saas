@@ -679,10 +679,10 @@ export default function NegociosEditoriaisPage() {
       setLoading(true)
       try {
         const [resNegocios, resEditoras, resTipos, resMe] = await Promise.all([
-          fetch('/api/negocios-editoriais?limit=200'),
-          fetch('/api/editoras?status=ativo'),
-          fetch('/api/tipos-direito'),
-          fetch('/api/me'),
+          authFetch('/api/negocios-editoriais?limit=200'),
+          authFetch('/api/editoras?status=ativo'),
+          authFetch('/api/tipos-direito'),
+          authFetch('/api/me'),
         ])
 
         const negData = await resNegocios.json()
