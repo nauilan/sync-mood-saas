@@ -41,39 +41,45 @@ Durante a importação de um arquivo CWR, o sistema deve ler e confrontar
 - Subeditoras (Sub-Publisher — SE)
 - Demais titulares identificados no arquivo
 
-### 2.2 Matching por ID Interno
+### 2.2 Matching — Ordem de prioridade (5 passos)
 
-1. **Procurar primeiro pelo `codigo_interno`.**
-   - Nunca por nome apenas.
-   - O ID Interno do arquivo CWR deve ser comparado diretamente com
-     `editoras.codigo_interno` e `titulares.codigo_interno`.
+O sistema deve nunca criar duplicidade. A busca de correspondência segue
+esta ordem, do identificador mais confiável para o menos confiável:
 
-2. **Se o ID Interno já existir no sistema:**
-   - Vincular ao titular/editora existente.
-   - Não criar novo cadastro.
-   - Não duplicar.
+```
+Passo 1 → codigo_interno   (ID Interno: JD01, HR01, 2646326...)
+Passo 2 → codigo_cae       (número CAE CISAC)
+Passo 3 → codigo_ipi       (número IPI SOCINPRO)
+Passo 4 → nome_completo    (nome exato)
+Passo 5 → nome_artistico   (pseudônimo)
+```
 
-3. **Se o ID Interno não existir no sistema:**
-   - Criar **pré-cadastro automático** na tabela `titulares`.
-   - Preencher:
-     - `codigo_interno` (do CWR)
-     - `nome_completo` (do CWR)
-     - `nome_artistico` / pseudônimo (se presente no CWR)
-     - `codigo_cae` / `codigo_ipi` (se disponíveis no CWR)
-     - `origem_importacao = 'cwr'`
-     - `status = 'pre_cadastro'` ou `'pendente_validacao'`
-     - `importacao_id` (FK para o registro de importação)
-   - **Nunca criar cadastro definitivo automaticamente.**
-   - O pré-cadastro deve passar por validação humana antes de
-     tornar-se ativo para contratos, obras, distribuição e prestação de contas.
+**Se encontrar qualquer combinação confiável em qualquer passo: VINCULAR.**
+Não criar novo cadastro.
 
-4. **Mesmo nome com ID Interno diferente:**
-   - Não unificar automaticamente.
-   - Enviar para fila de revisão manual.
+**Regras de decisão:**
 
-5. **Mesmo ID Interno com nome diferente:**
-   - Vincular pelo ID Interno (chave prioritária).
-   - Gerar alerta para revisão do nome.
+| Resultado | Ação |
+|---|---|
+| Correspondência confiável encontrada | Vincular — nunca duplicar |
+| Mesmo nome, IDs diferentes | Fila de revisão manual |
+| Mesmo ID, nome diferente | Vincular pelo ID + alerta de revisão do nome |
+| Nenhuma correspondência em nenhum passo | Criar pré-cadastro (`status = pre_cadastro`) |
+
+**Se ID Interno estiver no CWR:** usar exatamente esse código — o importador
+não gera ID Interno novo quando o arquivo já traz o identificador.
+
+**Se não existir correspondência:**
+- Criar pré-cadastro automático em `titulares`:
+  - `codigo_interno` (do CWR, se presente)
+  - `nome_completo` (do CWR)
+  - `nome_artistico` / pseudônimo (se presente)
+  - `codigo_cae` / `codigo_ipi` (se disponíveis)
+  - `origem_importacao = 'cwr'`
+  - `status = 'pre_cadastro'`
+  - `importacao_id` (FK para o registro de importação)
+- **Nunca criar cadastro definitivo automaticamente.**
+- O pré-cadastro passa por validação humana antes de ficar ativo.
 
 ### 2.3 Editoras cadastradas com ID Real
 
