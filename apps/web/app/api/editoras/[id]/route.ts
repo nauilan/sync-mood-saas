@@ -28,7 +28,7 @@ function getToken(req: NextRequest): string {
   return ''
 }
 
-async function autenticar(sb: ReturnType<typeof createClient>, req: NextRequest): Promise<string | null> {
+async function autenticar(sb: any, req: NextRequest): Promise<string | null> {
   const token = getToken(req)
   if (!token) return null
   const { data: { user }, error } = await sb.auth.getUser(token)
