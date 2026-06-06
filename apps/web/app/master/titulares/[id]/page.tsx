@@ -146,7 +146,7 @@ export default function TitularDetalhePage() {
                   {status === 'ativo' ? 'Ativo' : 'Inativo'}
                 </Badge>
                 {isEditora && <Badge variant="violet">Editora</Badge>}
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" onClick={() => router.push(`/master/titulares/${id}/editar`)}>
                   <Pencil className="w-4 h-4" /> Editar
                 </Button>
                 <Button
