@@ -3,6 +3,10 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 type UserRole = 'master' | 'editora' | 'titular'
 
+// Rotas protegidas — Fase 1: bloquear sem sessão → redirect para login
+// Fase 2 (futuro): redirecionamento por role
+const PROTECTED = ['/master', '/portal', '/editora', '/titular', '/backoffice', '/admin']
+
 // Todas as rotas /api/* fazem sua própria autenticação via Bearer token no handler.
 // O middleware não bloqueia API routes — cada handler é responsável por validar o token.
 const API_PUBLIC = ['/api/']
@@ -39,6 +43,15 @@ export async function proxy(request: NextRequest) {
   // Atualiza sessão (OBRIGATÓRIO — não remover)
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
+
+  // Fase 1: rota protegida sem sessão → redireciona para login
+  const isProtected = PROTECTED.some(p => pathname.startsWith(p))
+  if (isProtected && !user) {
+    const loginUrl = request.nextUrl.clone()
+    loginUrl.pathname = '/auth/login'
+    loginUrl.searchParams.set('redirectTo', pathname)
+    return NextResponse.redirect(loginUrl)
+  }
 
   // Raiz → redireciona conforme estado de autenticação
   if (pathname === '/') {
