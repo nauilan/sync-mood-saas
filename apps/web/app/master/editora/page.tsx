@@ -525,7 +525,7 @@ export default function EditoraPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm text-white/40">
-              {negocios.length} negócio{negocios.length !== 1 ? 's' : ''} editorial{negocios.length !== 1 ? 'is' : ''} ativo{negocios.length !== 1 ? 's' : ''}
+              {negocios.length} negócio{negocios.length !== 1 ? 's' : ''} {negocios.length !== 1 ? 'editoriais' : 'editorial'} ativo{negocios.length !== 1 ? 's' : ''}
             </p>
             <Link href="/master/negocios-editoriais"
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors">
