@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
 
   // Fallback: se colunas extras não existem, usa apenas colunas base
   if (!res.ok && Array.isArray(data) === false && String(data?.message ?? data?.error ?? '').includes('does not exist')) {
-    let qsBasic = `select=id,nome_fantasia,razao_social,cnpj,status,created_at&order=nome_fantasia.asc`
+    let qsBasic = `select=id,nome_fantasia,razao_social,cnpj,tipo_editora,controlada,codigo_publisher_cwr,codigo_cae,codigo_ipi,status,created_at&order=nome_fantasia.asc`
     if (status && status !== 'todos') qsBasic += `&status=eq.${status}`
     res = await fetch(`${SUPABASE_URL}/rest/v1/editoras?${qsBasic}`, { headers })
     data = await res.json()

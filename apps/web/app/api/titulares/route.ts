@@ -14,8 +14,28 @@ function getAdminClient() {
   return createClient(url, key, { auth: { persistSession: false } })
 }
 
+/** Extrai token JWT do header Authorization ou dos cookies Supabase (server-side) */
+function getToken(req: NextRequest): string {
+  const auth = req.headers.get('authorization')
+  if (auth?.startsWith('Bearer ')) return auth.slice(7)
+  // Leitura de cookies (server-side) — suporta formato chunked (.0, .1, ...) e formato simples
+  const chunks: string[] = []
+  for (const c of req.cookies.getAll()) {
+    const m = c.name.match(/auth-token\.(\d+)$/)
+    if (m) { chunks[parseInt(m[1])] = c.value; continue }
+    if (c.name.endsWith('auth-token') && !c.name.match(/\.\d+$/)) { chunks[0] = c.value }
+  }
+  const joined = chunks.filter(Boolean).join('')
+  if (joined) {
+    try { const p = JSON.parse(decodeURIComponent(joined)); if (p?.access_token) return p.access_token } catch { /* */ }
+    try { const p = JSON.parse(joined); if (p?.access_token) return p.access_token } catch { /* */ }
+  }
+  return ''
+}
+
 async function autenticar(sb: any, req: NextRequest) {
-  const token = (req.headers.get('authorization') ?? '').replace('Bearer ', '')
+  const token = getToken(req)
+  if (!token) return null
   const { data: { user }, error } = await sb.auth.getUser(token)
   if (error || !user) return null
   const { data: usuario } = await sb

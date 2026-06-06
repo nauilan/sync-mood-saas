@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { maskCnpj, maskCpf } from '@/lib/masks'
 import { PhoneInput } from '@/components/ui/phone-input'
+import { getAccessToken } from '@/lib/supabase/client'
 
 // ── helpers de estilo ─────────────────────────────────────────
 const card = 'bg-white/[0.03] border border-white/[0.07] rounded-2xl'
@@ -162,7 +163,10 @@ export default function EditoraPage() {
     // Carregar editoras do banco
     async function loadEditoras() {
       try {
-        const res = await fetch('/api/editoras?status=todos')
+        const tok = getAccessToken()
+        const res = await fetch('/api/editoras?status=todos', {
+          headers: tok ? { Authorization: `Bearer ${tok}` } : {},
+        })
         const data = await res.json()
         const all: any[] = data.editoras ?? []
         setEditoras(all.map(e => ({ id: e.id, nome_fantasia: e.nome_fantasia, razao_social: e.razao_social, cnpj: e.cnpj })))
@@ -295,7 +299,10 @@ export default function EditoraPage() {
       }
       const res = await fetch(`/api/editoras/${masterEditoraId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {}),
+        },
         body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error('Erro ao salvar')
