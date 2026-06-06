@@ -14,8 +14,26 @@ function getAdminClient() {
   return createClient(url, key, { auth: { persistSession: false } })
 }
 
+function getToken(req: NextRequest): string {
+  const auth = req.headers.get('authorization')
+  if (auth?.startsWith('Bearer ')) return auth.slice(7)
+  const chunks: string[] = []
+  for (const c of req.cookies.getAll()) {
+    const m = c.name.match(/auth-token\.(\d+)$/)
+    if (m) { chunks[parseInt(m[1])] = c.value; continue }
+    if (c.name.endsWith('auth-token') && !c.name.match(/\.\d+$/)) { chunks[0] = c.value }
+  }
+  const joined = chunks.filter(Boolean).join('')
+  if (joined) {
+    try { const p = JSON.parse(decodeURIComponent(joined)); if (p?.access_token) return p.access_token } catch { /* */ }
+    try { const p = JSON.parse(joined); if (p?.access_token) return p.access_token } catch { /* */ }
+  }
+  return ''
+}
+
 async function autenticar(sb: any, req: NextRequest) {
-  const token = (req.headers.get('authorization') ?? '').replace('Bearer ', '')
+  const token = getToken(req)
+  if (!token) return null
   const { data: { user }, error } = await sb.auth.getUser(token)
   if (error || !user) return null
   const { data: usuario } = await sb
@@ -89,9 +107,38 @@ export async function POST(req: NextRequest) {
   if (!tenant_id) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   const body = await req.json()
+  const {
+    tipo, editora_id, titular_id, percentual_editora, percentual_autor,
+    splits_direitos, data_inicio, data_fim, prazo_indeterminado,
+    territorio, exclusividade, status, numero, observacoes,
+    titulo_obra, descricao, tipo_direito, abrangencia,
+  } = body
+
+  const payload: Record<string, unknown> = {
+    tenant_id,
+    tipo:                tipo ?? 'cessao',
+    status:              status ?? 'assinado',
+    numero:              numero ?? `CTR-${Date.now()}`,
+  }
+  if (editora_id !== undefined)           payload.editora_id           = editora_id
+  if (titular_id !== undefined)           payload.titular_id           = titular_id
+  if (percentual_editora !== undefined)   payload.percentual_editora   = percentual_editora
+  if (percentual_autor !== undefined)     payload.percentual_autor     = percentual_autor
+  if (splits_direitos !== undefined)      payload.splits_direitos      = splits_direitos
+  if (data_inicio !== undefined)          payload.data_inicio          = data_inicio || null
+  if (data_fim !== undefined)             payload.data_fim             = data_fim || null
+  if (prazo_indeterminado !== undefined)  payload.prazo_indeterminado  = prazo_indeterminado
+  if (territorio !== undefined)           payload.territorio           = territorio
+  if (exclusividade !== undefined)        payload.exclusividade        = exclusividade
+  if (observacoes !== undefined)          payload.observacoes          = observacoes
+  if (titulo_obra !== undefined)          payload.titulo_obra          = titulo_obra
+  if (descricao !== undefined)            payload.descricao            = descricao
+  if (tipo_direito !== undefined)         payload.tipo_direito         = tipo_direito
+  if (abrangencia !== undefined)          payload.abrangencia          = abrangencia
+
   const { data, error } = await sb
     .from('contratos')
-    .insert({ ...body, tenant_id })
+    .insert(payload)
     .select()
     .single()
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { PageHeader } from '@/components/ui/page-header'
+import { getAccessToken } from '@/lib/supabase/client'
 import {
   Building2, Plus, Edit3, Trash2, Save, Check, Loader2,
   AlertTriangle, ChevronDown, ChevronUp, FileText, Globe,
@@ -224,7 +225,10 @@ function NegocioForm({
         : '/api/negocios-editoriais'
       const res = await fetch(url, {
         method: (initial as any).id ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {}),
+        },
         body: JSON.stringify(payload),
       })
       const data = await res.json()
@@ -719,7 +723,10 @@ export default function NegociosEditoriaisPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Remover este negócio? O Analítico deixará de calcular divisões baseadas nele.')) return
-    await fetch(`/api/negocios-editoriais/${id}`, { method: 'DELETE' })
+    await fetch(`/api/negocios-editoriais/${id}`, {
+      method: 'DELETE',
+      headers: getAccessToken() ? { Authorization: `Bearer ${getAccessToken()}` } : {},
+    })
     setNegocios(prev => prev.filter(x => x.id !== id))
   }
 
