@@ -12,3 +12,8 @@ __pycache__/
 Thumbs.db
 
 .vercel
+
+# Arquivos de validação/debug locais
+screenshots/
+response*.json
+scripts/run-validation.mjs
