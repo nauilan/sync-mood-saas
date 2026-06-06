@@ -463,6 +463,9 @@ export default function TitularesPage() {
       ipi: t.codigo_ipi ?? t.ipi ?? null,
       cae: t.codigo_cae ?? null,
     } : null),
+    _pseudonimos: t._pseudonimos ?? [],
+    _contatos: t._contatos ?? [],
+    _funcoes: t._funcoes ?? [],
   })), [rawTitulares])
 
   const filtered = useMemo(() => {
@@ -491,7 +494,7 @@ export default function TitularesPage() {
 
       return matchSearch && matchPessoa && matchFuncao && matchEditora && matchStatus
     })
-  }, [search, filterPessoa, filterFuncao, filterEditora, filterStatus])
+  }, [allTitulares, search, filterPessoa, filterFuncao, filterEditora, filterStatus])
 
   const kpis = useMemo(() => ({
     total: apiKpis?.total ?? allTitulares.length,
