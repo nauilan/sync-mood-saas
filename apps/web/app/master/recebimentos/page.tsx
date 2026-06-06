@@ -31,7 +31,7 @@ function formatPeriodo(inicio: string, fim: string) {
   return `${fmt(inicio)} – ${fmt(fim)}`
 }
 
-import { getAccessToken } from '@/lib/supabase/client'
+import { authFetch } from '@/lib/supabase/client'
 
 // ── Tipos locais ──────────────────────────────────────────────────────────────
 
@@ -141,10 +141,7 @@ export default function RecebimentosPage() {
     setLoading(true)
     setError(null)
     try {
-      const token = getAccessToken()
-      const res = await fetch('/api/recebimentos?per_page=100', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      const res = await authFetch('/api/recebimentos?per_page=100')
       if (!res.ok) {
         if (res.status === 401) { router.push('/login'); return }
         throw new Error(`Erro ${res.status}`)
@@ -173,13 +170,8 @@ export default function RecebimentosPage() {
   const processarCC = async (id: string) => {
     setProcessando(id)
     try {
-      const token = getAccessToken()
-      const res = await fetch(`/api/recebimentos/${id}`, {
+      const res = await authFetch(`/api/recebimentos/${id}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Erro ao processar')

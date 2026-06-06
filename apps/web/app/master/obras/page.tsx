@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { MOCK_OBRAS, MOCK_OBRAS_LINKS, MOCK_OBRAS_FONOGRAMAS } from '@/lib/mock-obras'
 import { STORE_KEYS } from '@/lib/store'
-import { getAccessToken } from '@/lib/supabase/client'
+import { authFetch } from '@/lib/supabase/client'
 import { createClient } from '@supabase/supabase-js'
 import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
 import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, normalizarLinksObra } from '@/lib/types-obras'
@@ -127,11 +127,7 @@ function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => 
     if (!obraInicial.id) { setLoadingLinks(false); return }
     setLoadingLinks(true)
     setRealLinks(null)
-    const token = getAccessToken()
-    if (!token) { setLoadingLinks(false); return }
-    fetch(`/api/obras/${obraInicial.id}/links`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    authFetch(`/api/obras/${obraInicial.id}/links`)
       .then(r => r.json())
       .then(json => {
         if (json.data) {
@@ -152,13 +148,8 @@ function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => 
     setAnaliticoError(null)
     setAnaliticoResult(null)
     try {
-      const token = getAccessToken()
-      const res = await fetch(`/api/obras/${obra.id}/analitico`, {
+      const res = await authFetch(`/api/obras/${obra.id}/analitico`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
         body: JSON.stringify({ territorios: ['BR'] }),
       })
       const json = await res.json()
@@ -943,16 +934,7 @@ export default function ObrasPage() {
     async function carregarObras() {
       setObrasLoading(true)
       try {
-        const token = getAccessToken()
-        if (!token) {
-          // Sem sessão → usar mock para não quebrar a UI
-          setObrasData(MOCK_OBRAS)
-          setObrasSource('mock')
-          return
-        }
-        const res = await fetch('/api/obras?per_page=200', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
+        const res = await authFetch('/api/obras?per_page=200')
         if (res.ok) {
           const json = await res.json()
           setObrasData(json.data ?? [])

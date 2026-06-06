@@ -17,7 +17,7 @@ import {
 import {
   MOCK_CONTRATOS_V2, ALERTAS_EXCLUSIVIDADE,
 } from '@/lib/mock-contratos-v2'
-import { getAccessToken } from '@/lib/supabase/client'
+import { authFetch } from '@/lib/supabase/client'
 
 function formatDate(d?: string | null) {
   if (!d) return '—'
@@ -76,9 +76,7 @@ export default function ContratosPage() {
   }, [])
 
   useEffect(() => {
-    const token = getAccessToken()
-    if (!token) { setLoadingApi(false); return }
-    fetch('/api/contratos?per_page=100', { headers: { Authorization: `Bearer ${token}` } })
+    authFetch('/api/contratos?per_page=100')
       .then(r => r.json())
       .then(json => {
         if (json.data) {

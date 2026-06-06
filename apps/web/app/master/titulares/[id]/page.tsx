@@ -10,7 +10,7 @@ import {
 import { PageHeader } from '@/components/ui/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { getAccessToken } from '@/lib/supabase/client'
+import { authFetch } from '@/lib/supabase/client'
 
 type Tab = 'dados' | 'funcoes' | 'pseudonimos' | 'endereco' | 'contatos' | 'bancario' | 'documentos' | 'historico'
 
@@ -81,10 +81,7 @@ export default function TitularDetalhePage() {
   // Carrega editoras quando titular for do tipo editora
   useEffect(() => {
     if (titular?.tipo !== 'editora') return
-    const tok = getAccessToken()
-    fetch('/api/editoras?status=todos', {
-      headers: tok ? { Authorization: `Bearer ${tok}` } : {},
-    })
+    authFetch('/api/editoras?status=todos')
       .then(r => r.json())
       .then(d => setEditoras((d.editoras ?? []).map((e: any) => ({ id: e.id, nome_fantasia: e.nome_fantasia, razao_social: e.razao_social }))))
       .catch(() => { /* silencioso */ })
@@ -112,13 +109,8 @@ export default function TitularDetalhePage() {
     setSalvandoVinculo(true)
     setVinculoMsg(null)
     try {
-      const tok = getAccessToken()
-      const res = await fetch(`/api/titulares/${id}`, {
+      const res = await authFetch(`/api/titulares/${id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
-        },
         body: JSON.stringify({ editora_vinculada_id: vinculandoId || null }),
         credentials: 'include',
       })

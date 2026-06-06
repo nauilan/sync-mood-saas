@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { KpiCard } from '@/components/ui/kpi-card'
 import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
 import { MOCK_CONTRATOS_V2 } from '@/lib/mock-contratos-v2'
-import { getAccessToken } from '@/lib/supabase/client'
+import { authFetch } from '@/lib/supabase/client'
 import { FUNCAO_LABEL, nomeTitular, cpfCnpjTitular, nomeArtistico, emailPrincipal } from '@/lib/types-cadastros'
 import type { FuncaoTitular, TipoPessoa, TitularComDados } from '@/lib/types-cadastros'
 
@@ -430,9 +430,7 @@ export default function TitularesPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const token = getAccessToken()
-    if (!token) { setLoading(false); return }
-    fetch('/api/titulares?per_page=200', { headers: { Authorization: `Bearer ${token}` } })
+    authFetch('/api/titulares?per_page=200')
       .then(r => r.json())
       .then(json => {
         if (json.data) {
@@ -440,7 +438,7 @@ export default function TitularesPage() {
           if (json.kpis) setApiKpis(json.kpis)
         }
       })
-      .catch(() => {})
+      .catch(() => setLoading(false))
       .finally(() => setLoading(false))
   }, [])
 

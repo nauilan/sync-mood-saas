@@ -61,3 +61,21 @@ export function getAccessToken(): string {
 
   return ''
 }
+
+/**
+ * Faz fetch autenticado usando o access_token da sessão Supabase.
+ * Substitui o padrão: const token = getAccessToken(); fetch(..., { headers: { Authorization: `Bearer ${token}` } })
+ */
+export async function authFetch(url: string, opts?: RequestInit): Promise<Response> {
+  const supabase = createClient()
+  const { data } = await supabase.auth.getSession()
+  const token = data?.session?.access_token ?? ''
+  return fetch(url, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(opts?.headers ?? {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  })
+}

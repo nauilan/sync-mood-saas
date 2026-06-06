@@ -9,7 +9,7 @@ import {
   AlertTriangle, ChevronRight, BarChart3, Eye,
 } from 'lucide-react'
 import { KPI_PREVIA, MOCK_PREVIA_OBRA } from '@/lib/mock-distribuicao-previa'
-import { getAccessToken } from '@/lib/supabase/client'
+import { authFetch } from '@/lib/supabase/client'
 
 function fmtBRL(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -47,9 +47,7 @@ export default function CCObraPage() {
   const [fonte, setFonte] = useState<'api' | 'vazio'>('vazio')
 
   useEffect(() => {
-    const token = getAccessToken()
-    if (!token) { setLoading(false); return }
-    fetch('/api/cc-obra?per_page=100', { headers: { Authorization: `Bearer ${token}` } })
+    authFetch('/api/cc-obra?per_page=100')
       .then(r => r.json())
       .then(json => {
         if (json.data) {

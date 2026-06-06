@@ -8,7 +8,7 @@ import {
   AlertTriangle, Info, Plus, X, Search,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
-import { getAccessToken } from '@/lib/supabase/client'
+import { authFetch } from '@/lib/supabase/client'
 import { formatarPercentual } from '@/lib/percentual'
 import type { TipoContratoV2, PapelParte } from '@/lib/types-contratos-v2'
 import {
@@ -1280,13 +1280,8 @@ export default function NovoContratoPage() {
           setSaving(true)
           setSaveError(null)
           try {
-            const token = getAccessToken()
-            const res = await fetch('/api/contratos', {
+            const res = await authFetch('/api/contratos', {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-              },
               body: JSON.stringify(payload),
             })
             if (!res.ok) {
