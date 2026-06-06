@@ -181,7 +181,8 @@ END $$;
 -- Lista editoras que ainda precisam de vínculo manual.
 SELECT
   id,
-  nome,
+  razao_social,
+  COALESCE(nome_fantasia, '—')   AS nome_fantasia,
   COALESCE(tipo_editora, '—')    AS tipo_editora,
   COALESCE(codigo_interno, '—')  AS codigo_interno,
   CASE
@@ -189,7 +190,7 @@ SELECT
     ELSE '✅ Vinculado: ' || titular_id::TEXT
   END AS status_vinculo
 FROM editoras
-ORDER BY nome;
+ORDER BY razao_social;
 
 
 -- ================================================================

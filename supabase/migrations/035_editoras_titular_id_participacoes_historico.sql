@@ -246,14 +246,15 @@ BEGIN
   RAISE NOTICE '======================================================';
 
   FOR rec IN
-    SELECT id, nome, tipo_editora, codigo_interno
+    SELECT id, razao_social, nome_fantasia, tipo_editora, codigo_interno
     FROM   editoras
     WHERE  titular_id IS NULL
-    ORDER  BY nome
+    ORDER  BY razao_social
   LOOP
-    RAISE NOTICE '  - ID: % | Nome: % | tipo: % | cod_interno: %',
+    RAISE NOTICE '  - ID: % | Razão Social: % | Fantasia: % | tipo: % | cod_interno: %',
       rec.id,
-      rec.nome,
+      rec.razao_social,
+      COALESCE(rec.nome_fantasia, '—'),
       COALESCE(rec.tipo_editora, '—'),
       COALESCE(rec.codigo_interno, '—');
     cnt := cnt + 1;
