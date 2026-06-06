@@ -10,6 +10,9 @@
 -- COMO INTERPRETAR:
 --   ✅ OK      → condição atendida, migration funcionou
 --   ❌ FALTA   → condição NÃO atendida, algo não foi criado
+--   ❌ RISCO   → problema de segurança — corrigir imediatamente
+--   ⚠️ aviso   → informativo, verificar manualmente
+--   ℹ️ info    → DIVERGÊNCIA ARQUITETURAL ESPERADA E APROVADA — NÃO É FALHA
 --   (linha)    → detalhe informativo, não é pass/fail
 --
 -- IMPORTANTE — 2 DIVERGÊNCIAS entre o checklist e as migrations:
@@ -348,29 +351,48 @@ LEFT JOIN information_schema.tables t
   ON t.table_name = esperado.nome AND t.table_schema = 'public'
 ORDER BY esperado.nome;
 
--- 4.2  ESCLARECIMENTO: solicitacoes_obras_autores → titulares
+-- 4.2  DIVERGÊNCIA ESPERADA: solicitacoes_obras_autores → renomeada para titulares
+-- Esta linha sempre mostra ℹ️ — não é falha, é decisão arquitetural aprovada.
 SELECT
-  '4.2 NOTA: solicitacoes_obras_autores foi nomeada titulares' AS check_item,
+  '4.2 solicitacoes_obras_autores [checklist original]' AS check_item,
+  'ℹ️ RENOMEADA PARA solicitacoes_obras_titulares — decisão arquitetural, não é falha' AS resultado;
+
+-- Verificação real: solicitacoes_obras_titulares existe?
+SELECT
+  '4.2b → solicitacoes_obras_titulares existe no banco' AS check_item,
   CASE
     WHEN EXISTS (
       SELECT 1 FROM information_schema.tables
       WHERE table_schema = 'public'
         AND table_name = 'solicitacoes_obras_titulares'
-    ) THEN '✅ OK — tabela existe como solicitacoes_obras_titulares (cobre autor/coautor/versionista/adaptador)'
+    ) THEN '✅ OK — cobre autor/coautor/versionista/adaptador'
     ELSE '❌ FALTA — solicitacoes_obras_titulares não foi criada'
   END AS resultado;
 
--- 4.3  ESCLARECIMENTO: solicitacoes_documentos → colunas em contratos
+-- 4.3  DIVERGÊNCIA ESPERADA: solicitacoes_documentos → campos inline em solicitacoes_contratos
+-- Esta linha sempre mostra ℹ️ — não é falha, é decisão arquitetural aprovada.
 SELECT
-  '4.3 NOTA: campos de documento em solicitacoes_contratos (não tabela separada)' AS check_item,
-  column_name,
-  data_type,
-  CASE WHEN column_name IN ('url_documento','nome_documento') THEN '✅ OK' ELSE '(outro)' END AS resultado
-FROM information_schema.columns
-WHERE table_schema = 'public'
-  AND table_name = 'solicitacoes_contratos'
-  AND column_name IN ('url_documento','nome_documento')
-ORDER BY column_name;
+  '4.3 solicitacoes_documentos [checklist original]' AS check_item,
+  'ℹ️ INLINE EM solicitacoes_contratos — campos url_documento+nome_documento, não tabela separada, não é falha' AS resultado;
+
+-- Verificação real: colunas existem em solicitacoes_contratos?
+SELECT
+  '4.3b → url_documento + nome_documento em solicitacoes_contratos' AS check_item,
+  CASE
+    WHEN (
+      SELECT COUNT(*) FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'solicitacoes_contratos'
+        AND column_name IN ('url_documento','nome_documento')
+    ) = 2 THEN '✅ OK — ambas as colunas existem em solicitacoes_contratos'
+    WHEN (
+      SELECT COUNT(*) FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'solicitacoes_contratos'
+        AND column_name IN ('url_documento','nome_documento')
+    ) = 1 THEN '⚠️ Apenas uma coluna encontrada — verificar migration 028'
+    ELSE '❌ FALTA — url_documento e nome_documento ausentes em solicitacoes_contratos'
+  END AS resultado;
 
 
 -- ============================================================
@@ -662,8 +684,20 @@ ORDER BY tabela, policy;
 -- BLOCO 10: Resumo final — contagem de problemas
 -- ============================================================
 
+SELECT '10. RESUMO — Como interpretar os resultados:' AS info,
+       '✅ OK      → condição atendida, migration funcionou corretamente' AS legenda_ok,
+       '❌ FALTA   → algo não foi criado, ação necessária antes de avançar' AS legenda_falta,
+       '❌ RISCO   → problema de segurança, corrigir imediatamente' AS legenda_risco,
+       '⚠️ aviso   → informativo, verificar manualmente' AS legenda_aviso,
+       'ℹ️ info    → DIVERGÊNCIA ESPERADA E APROVADA — NÃO É FALHA' AS legenda_info;
+
+-- Lembrete das 2 divergências aprovadas que aparecem com ℹ️ e NÃO contam como falha:
 SELECT
-  '10. RESUMO: total de checks executados neste script' AS info,
-  '=> Procure por linhas com ❌ para ação necessária' AS instrucao,
-  '=> Linhas com ⚠️ são avisos informativos' AS aviso,
-  '=> Linhas com ✅ estão OK' AS ok;
+  'DIVERGÊNCIAS ESPERADAS (não são falhas)' AS tipo,
+  'solicitacoes_obras_autores' AS checklist_original,
+  'ℹ️ RENOMEADA PARA solicitacoes_obras_titulares' AS status
+UNION ALL
+SELECT
+  'DIVERGÊNCIAS ESPERADAS (não são falhas)',
+  'solicitacoes_documentos',
+  'ℹ️ INLINE EM solicitacoes_contratos (url_documento + nome_documento)';
