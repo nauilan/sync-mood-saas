@@ -1,16 +1,12 @@
-﻿'use client'
+'use client'
 
 import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 
 // CPF: login por CPF + senha
 // Internamente o Supabase Auth usa "{cpf_digits}@syncmood.app" como email
-
-function cpfParaEmail(cpf: string): string {
-  const digits = cpf.replace(/\D/g, '')
-  return `${digits}@syncmood.app`
-}
 
 function formatarCpf(value: string): string {
   const d = value.replace(/\D/g, '').slice(0, 11)
@@ -18,6 +14,21 @@ function formatarCpf(value: string): string {
   if (d.length <= 6) return `${d.slice(0,3)}.${d.slice(3)}`
   if (d.length <= 9) return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6)}`
   return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`
+}
+
+const ROLE_HOME: Record<string, string> = {
+  master:               '/master/dashboard',
+  admin:                '/master/dashboard',
+  super_admin:          '/master/dashboard',
+  editora_administrada: '/master/dashboard',
+  financeiro:           '/master/dashboard',
+  juridico:             '/master/dashboard',
+  cadastro:             '/master/dashboard',
+  consulta:             '/master/dashboard',
+  atendimento:          '/master/dashboard',
+  autor:                '/portal/dashboard',
+  titular:              '/titular/dashboard',
+  editora:              '/editora/dashboard',
 }
 
 export function LoginForm() {
@@ -40,23 +51,32 @@ export function LoginForm() {
         return
       }
 
-      // Chama API route do próprio Next.js (servidor → Supabase, sem CORS)
-      const resp = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cpf: cpfDigits, password }),
+      const supabase = createClient()
+      const email = `${cpfDigits}@syncmood.app`
+
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       })
 
-      const data = await resp.json()
-
-      if (!resp.ok || !data.access_token) {
-        setError(data.error ?? 'CPF ou senha incorretos.')
+      if (authError || !data.session) {
+        setError('CPF ou senha incorretos.')
         return
       }
 
-      // Cookies já foram setados pelo servidor (route.ts usa createServerClient)
-      // Redireciona direto para o dashboard correto
-      const redirectTo = params.get('redirectTo') ?? data.redirectTo ?? '/master/dashboard'
+      // Busca role na tabela usuarios
+      let role = 'master'
+      try {
+        const { data: rows } = await supabase
+          .from('usuarios')
+          .select('role')
+          .eq('auth_user_id', data.user.id)
+          .limit(1)
+        const r = rows as Array<{ role: string }> | null
+        if (Array.isArray(r) && r[0]?.role) role = r[0].role
+      } catch { /* usa master como padrão */ }
+
+      const redirectTo = params.get('redirectTo') ?? ROLE_HOME[role] ?? '/master/dashboard'
       window.location.href = redirectTo
 
     } catch (err) {
