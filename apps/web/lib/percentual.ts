@@ -26,7 +26,13 @@
  */
 export function normalizarPercentual(n: number): number {
   if (!isFinite(n)) return 0
-  return Math.floor(n * 100 + 0.005) / 100
+  // Usar representação string para evitar imprecisão de ponto flutuante.
+  // Regra: 3ª casa 0–5 → arredonda para baixo; 6–9 → arredonda para cima.
+  const fixed3 = n.toFixed(3)                // ex: "10.006", "50.000"
+  const thirdDigit = parseInt(fixed3.slice(-1)) // dígito da 3ª casa decimal
+  const base = parseFloat(fixed3.slice(0, -1))  // valor truncado em 2 casas
+  const result = thirdDigit >= 6 ? base + 0.01 : base
+  return parseFloat(result.toFixed(2))
 }
 
 /**
@@ -55,10 +61,9 @@ export function validarSoma100(
   percentuais: number[],
   tolerancia = 0.01
 ): { ok: boolean; soma: number; diferenca: number; residuo: number } {
-  const soma = percentuais.reduce((acc, p) => {
-    const pNorm = normalizarPercentual(p ?? 0)
-    return normalizarPercentual(acc + pNorm)
-  }, 0)
+  // Soma bruta para evitar acumulação de erros de arredondamento
+  const somaBruta = percentuais.reduce((acc, p) => acc + (p ?? 0), 0)
+  const soma = normalizarPercentual(somaBruta)
 
   const diferenca = normalizarPercentual(Math.abs(soma - 100))
   const residuo = normalizarPercentual(100 - soma)
