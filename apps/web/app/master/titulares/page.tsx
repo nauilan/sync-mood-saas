@@ -386,7 +386,6 @@ function TitularDrawer({ t, onClose }: { t: TitularComDados; onClose: () => void
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-white/80">{FUNCAO_LABEL[f.funcao as FuncaoTitular] ?? f.funcao}</p>
-                    {f.editora_vinculada && <p className="text-xs text-white/35 mt-0.5">Editora: {f.editora_vinculada}</p>}
                   </div>
                   <Badge variant="violet" className="text-[10px] px-2">{f.funcao}</Badge>
                 </div>

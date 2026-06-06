@@ -106,8 +106,6 @@ interface FormState {
   documentos: { tipo: string; numero: string }[]
   // Observacoes
   observacoes: string
-  // Editora vinculada (para titular do tipo editora)
-  editora_vinculada_id: string
 }
 
 const EMPTY: FormState = {
@@ -121,7 +119,6 @@ const EMPTY: FormState = {
   banco: '', agencia: '', conta: '', conta_digito: '', tipo_conta: '', titular_conta: '', pix_chave: '', pix_tipo: '', operacao: '',
   documentos: [],
   observacoes: '',
-  editora_vinculada_id: '',
 }
 
 const inputCls = 'w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-violet-500/50 transition-colors'
@@ -358,7 +355,6 @@ export default function NovoTitularWizardPage() {
         codigo_cae:           form.cae.trim() || undefined,
         ipi:                  form.ipi.trim() || undefined,
         codigo_ipi:           form.ipi.trim() || undefined,
-        editora_vinculada_id: form.editora_vinculada_id || undefined,
         dados_bancarios: (form.banco || form.agencia || form.conta) ? {
           banco:         form.banco.trim() || undefined,
           agencia:       form.agencia.trim() || undefined,
@@ -561,23 +557,6 @@ export default function NovoTitularWizardPage() {
             <Field label="Codigo IPI">
               <input className={inputCls} placeholder="00000000" value={form.ipi} onChange={setUpper('ipi')} />
             </Field>
-            <div className="md:col-span-2">
-              <Field label="Editora Vinculada (opcional)">
-                <select
-                  className={inputCls}
-                  value={form.editora_vinculada_id}
-                  onChange={e => setForm(prev => ({ ...prev, editora_vinculada_id: e.target.value }))}
-                >
-                  <option value="">— Selecione se esta empresa já existe como editora no sistema —</option>
-                  {editorasReais.map(e => (
-                    <option key={e.id} value={e.id}>{e.nome_fantasia}</option>
-                  ))}
-                </select>
-                <p className="text-xs text-white/25 mt-1">
-                  Vincule apenas se este titular for a mesma entidade de um cadastro oficial de editora. Permite ao sistema unificar dados CWR/CAE/IPI.
-                </p>
-              </Field>
-            </div>
             <div className="md:col-span-2">
               <Field label="Observacoes">
                 <textarea className={inputCls + ' h-20 resize-none'} placeholder="NOTAS INTERNAS..." value={form.observacoes} onChange={setUpper('observacoes')} />
