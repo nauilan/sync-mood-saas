@@ -12,7 +12,7 @@ export async function GET(_req: NextRequest) {
   }
   // tipos_direito é global (sem tenant_id), usa service_role para garantir acesso
   const key = SERVICE_KEY || ANON_KEY
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/tipos_direito?select=id,nome,codigo,descricao&order=nome.asc`, {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/tipos_direito?select=id,codigo,nome,nome_curto,nome_juridico,descricao,ordem,ativo,codigo_legado&ativo=eq.true&codigo_legado=eq.false&order=ordem.asc`, {
     headers: {
       apikey: key,
       Authorization: `Bearer ${key}`,

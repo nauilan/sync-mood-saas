@@ -46,32 +46,73 @@ interface Negocio {
 }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
-// Catálogo mestre de direitos — usado em todo o sistema (Obras, Contratos, CWR, Distribuição).
-// REGRA: "Direitos Internacionais" NÃO existe aqui. Internacional é território, não direito.
+// Catálogo mestre de direitos — 8 códigos jurídicos canônicos (Migration 039+).
+// FONTE OFICIAL: contratos de cessão, administração, coedição e subedição.
+// REGRA MÁXIMA: nome_juridico é o texto exato do contrato.
+// nome_curto (label) é apenas para interface — o vínculo jurídico é sempre com nome_juridico.
 const DIREITOS_MASTER = [
-  { value: 'execucao_publica',    label: 'Execução Pública' },
-  { value: 'fonodigital',         label: 'Fonomecânico Digital (DSP)' },
-  { value: 'fonofisico',          label: 'Fonomecânico Físico' },
-  { value: 'sync',                label: 'Sincronização' },
-  { value: 'licenciamento_direto',label: 'Licenciamento Direto' },
-  { value: 'audiovisual',         label: 'Audiovisual' },
-  { value: 'publicidade',         label: 'Publicidade' },
-  { value: 'base_dados',          label: 'Base de Dados' },
-  { value: 'dir_editoriais',      label: 'Direitos Editoriais (Letras e Partituras)' },
-  { value: 'dir_futuros',         label: 'Direitos Futuros / Novas Modalidades' },
-  { value: 'outros',              label: 'Outros' },
+  {
+    value:        'repr_grafica',
+    label:        'Reprodução Gráfica',
+    nome_juridico:'DIREITOS DE REPRODUÇÃO GRÁFICA (EDIÇÃO)',
+  },
+  {
+    value:        'repr_fonomecanica',
+    label:        'Reprodução Fonomecânica',
+    nome_juridico:'DIREITOS DE REPRODUÇÃO FONOMECÂNICOS (VENDA E LOCAÇÃO DE GRAVAÇÕES SONORAS)',
+  },
+  {
+    value:        'inclusao_audiovisual',
+    label:        'Inclusão Audiovisual',
+    nome_juridico:'DIREITOS DE INCLUSÃO E ADAPTAÇÃO EM PRODUÇÕES AUDIOVISUAIS',
+  },
+  {
+    value:        'inclusao_publicitaria',
+    label:        'Inclusão Publicitária',
+    nome_juridico:'DIREITOS DE INCLUSÃO E ADAPTAÇÃO EM PRODUÇÕES PUBLICITÁRIAS, GRÁFICAS, SONORAS OU AUDIOVISUAIS',
+  },
+  {
+    value:        'distribuicao_meios',
+    label:        'Distribuição por Meios',
+    nome_juridico:'DIREITOS DE DISTRIBUIÇÃO MEDIANTE MEIOS ÓTICOS, CABO, SATÉLITES, REDES DE INFORMAÇÃO E DE COMPUTADORES, QUE PERMITAM AO USUÁRIO A SELEÇÃO DA OBRA OU QUE IMPORTE EM PAGAMENTO PELO USUÁRIO',
+  },
+  {
+    value:        'inclusao_base_dados',
+    label:        'Inclusão em Base de Dados',
+    nome_juridico:'DIREITOS DE INCLUSÃO EM BASE DE DADOS OU QUALQUER FORMA DE ARMAZENAMENTO',
+  },
+  {
+    value:        'comunicacao_publico',
+    label:        'Comunicação ao Público',
+    nome_juridico:'DIREITOS DE COMUNICAÇÃO AO PÚBLICO',
+  },
+  {
+    value:        'autorizacoes_onus',
+    label:        'Autorizações com Ônus',
+    nome_juridico:'AUTORIZAÇÕES COM ÔNUS',
+  },
 ]
 
 // Mapeamento label — inclui valores legados para exibição correta de dados antigos
 const DIREITO_LABEL: Record<string, string> = {
   ...Object.fromEntries(DIREITOS_MASTER.map(d => [d.value, d.label])),
-  // legado (receitas_aplicaveis anteriores)
-  digital:            'Direitos Digitais / Fonomecânicos',
-  mecanico:           'Fonomecânicos (Físico)',
-  licenciamento:      'Licenciamento Direto',
-  internacional:      'Direitos Internacionais',
-  direitos_editoriais:'Direitos Editoriais (Letras/Partituras)',
-  direitos_futuros:   'Direitos Futuros / Novas Modalidades',
+  // códigos legados (pré-Migration 039) — exibição apenas, não usar em novos cadastros
+  execucao_publica:    'Execução Pública (legado → Comunicação ao Público)',
+  fonodigital:         'Fonomecânico Digital (legado → Distribuição por Meios)',
+  fonofisico:          'Fonomecânico Físico (legado → Reprodução Fonomecânica)',
+  sync:                'Sincronização (legado → Inclusão Audiovisual/Publicitária)',
+  licenciamento_direto:'Licenciamento Direto (legado → Autorizações com Ônus)',
+  audiovisual:         'Audiovisual (legado → Inclusão Audiovisual)',
+  publicidade:         'Publicidade (legado → Inclusão Publicitária)',
+  base_dados:          'Base de Dados (legado → Inclusão em Base de Dados)',
+  dir_editoriais:      'Dir. Editoriais (legado → Reprodução Gráfica)',
+  dir_futuros:         'Dir. Futuros (legado → Autorizações com Ônus)',
+  outros:              'Outros (legado → Autorizações com Ônus)',
+  // ainda mais antigos
+  digital:             'Direitos Digitais / Fonomecânicos (legado)',
+  mecanico:            'Fonomecânicos (Físico) (legado)',
+  licenciamento:       'Licenciamento Direto (legado)',
+  internacional:       'Internacional (legado — era território, não direito)',
 }
 
 const TERRITORIOS_RAPIDOS = [
@@ -463,6 +504,7 @@ function NegocioForm({
               return (
                 <button key={d.value} type="button"
                   onClick={() => toggleDireitoBrasil(d.value)}
+                  title={d.nome_juridico}
                   className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-colors text-left ${
                     sel ? 'bg-sky-600/15 text-sky-300' : 'hover:bg-white/[0.04] text-white/50'
                   }`}>
@@ -537,6 +579,7 @@ function NegocioForm({
               return (
                 <button key={d.value} type="button"
                   onClick={() => toggleDireitoExterior(d.value)}
+                  title={d.nome_juridico}
                   className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-colors text-left ${
                     sel ? 'bg-violet-600/15 text-violet-300' : 'hover:bg-white/[0.04] text-white/50'
                   }`}>

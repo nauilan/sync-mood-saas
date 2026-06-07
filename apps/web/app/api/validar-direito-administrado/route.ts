@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
   }
 
-  const { editora_original_id, administradora_id, direito_codigo, territorio, data_referencia } = body
+  const { editora_original_id, administradora_id, direito_codigo, territorio, data_referencia, obra_id } = body
 
   if (!editora_original_id) return NextResponse.json({ error: 'editora_original_id obrigatório' }, { status: 400 })
   if (!administradora_id)   return NextResponse.json({ error: 'administradora_id obrigatório' }, { status: 400 })
@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
     p_territorio:          territorio,
     p_data_referencia:     data_referencia ?? new Date().toISOString().slice(0, 10),
     p_tenant_id:           tenant_id,   // obrigatório: service_role bypassa RLS
+    p_obra_id:             obra_id ?? null,  // opcional: validação por obra específica
   })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
