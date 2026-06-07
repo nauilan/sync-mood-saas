@@ -87,9 +87,9 @@ export async function POST(req: NextRequest) {
     nome_fantasia:        t.nome_completo.trim(),
     status:               'ativo',
     codigo_ipi:           t.codigo_ipi ?? t.ipi ?? null,
-    codigo_publisher_cwr: t.codigo_interno_legado ?? t.codigo_sequence_cwr ?? null,
+    codigo_interno:       t.codigo_interno_legado ?? t.codigo_sequence_cwr ?? null,
     tipo_editora:         'administrada',
-    controlada:           false,
+    controlada:           true,
     origem_importacao:    'cwr',
   }))
 

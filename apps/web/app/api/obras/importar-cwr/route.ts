@@ -128,11 +128,11 @@ export async function POST(req: NextRequest) {
       if (codigosEd.length > 0) {
         const { data: existentesEd } = await sb
           .from('editoras')
-          .select('codigo_publisher_cwr')
+          .select('codigo_interno')
           .eq('tenant_id', tenantId)
-          .in('codigo_publisher_cwr', codigosEd)
+          .in('codigo_interno', codigosEd)
         jaExistemEd = new Set(
-          (existentesEd ?? []).map((e: any) => e.codigo_publisher_cwr?.trim()).filter(Boolean)
+          (existentesEd ?? []).map((e: any) => e.codigo_interno?.trim()).filter(Boolean)
         )
       }
 
@@ -158,20 +158,17 @@ export async function POST(req: NextRequest) {
       result.editoras_ja_existiam = editolasCwr.length - novasEditoras.length
 
       if (novasEditoras.length > 0) {
-        const edPayload = novasEditoras.map((t: Record<string, unknown>) => {
-          const papel = String(t.papel ?? '').trim().toUpperCase()
-          return {
+        const edPayload = novasEditoras.map((t: Record<string, unknown>) => ({
             tenant_id:            tenantId,
             razao_social:         String(t.nome ?? '').trim(),
             nome_fantasia:        String(t.nome ?? '').trim(),
             status:               'ativo',
             codigo_ipi:           t.ipi ?? null,
-            codigo_publisher_cwr: String(t.codigo_interno_legado ?? '').trim() || null,
-            tipo_editora:         papel === 'AM' ? 'master' : 'administrada',
-            controlada:           papel === 'AM',
+            codigo_interno:       String(t.codigo_interno_legado ?? '').trim() || null,
+            tipo_editora:         'administrada',
+            controlada:           true,
             origem_importacao:    'cwr',
-          }
-        })
+        }))
 
         const { error: eErr } = await sb
           .from('editoras')

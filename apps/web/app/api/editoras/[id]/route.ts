@@ -66,11 +66,12 @@ export async function PUT(
   const body = await req.json()
   const {
     nome_fantasia, razao_social, cnpj, tipo_editora, controlada,
-    codigo_publisher_cwr, codigo_cae, codigo_ipi,
-    codigo_interno_cwr, pais_registro, codigo_ecad, codigo_interno,
+    codigo_cae, codigo_ipi,
+    pais_registro, codigo_ecad, codigo_interno,
     endereco, bairro, cep, cidade, estado, pais,
     telefone, email, site, sociedade_autoral_vinculada,
     dados_bancarios, status,
+    sender_code, sender_name, sender_type,
   } = body
 
   const key = SERVICE_KEY || ANON_KEY
@@ -85,10 +86,8 @@ export async function PUT(
   if (cnpj !== undefined)                     payload.cnpj                     = cnpj?.trim() || null
   if (tipo_editora !== undefined)             payload.tipo_editora             = tipo_editora || null
   if (controlada !== undefined)               payload.controlada               = controlada
-  if (codigo_publisher_cwr !== undefined)     payload.codigo_publisher_cwr     = codigo_publisher_cwr?.trim() || null
   if (codigo_cae !== undefined)               payload.codigo_cae               = codigo_cae?.trim() || null
   if (codigo_ipi !== undefined)               payload.codigo_ipi               = codigo_ipi?.trim() || null
-  if (codigo_interno_cwr !== undefined)       payload.codigo_interno_cwr       = codigo_interno_cwr?.trim() || null
   if (pais_registro !== undefined)            payload.pais_registro            = pais_registro?.trim() || null
   if (codigo_ecad !== undefined)              payload.codigo_ecad              = codigo_ecad?.trim() || null
   if (codigo_interno !== undefined)           payload.codigo_interno           = codigo_interno?.trim() || null
@@ -104,6 +103,9 @@ export async function PUT(
   if (sociedade_autoral_vinculada !== undefined) payload.sociedade_autoral_vinculada = sociedade_autoral_vinculada?.trim() || null
   if (dados_bancarios !== undefined)          payload.dados_bancarios          = dados_bancarios
   if (status !== undefined)                   payload.status                   = status
+  if (sender_code !== undefined)              payload.sender_code              = sender_code?.trim() || null
+  if (sender_name !== undefined)              payload.sender_name              = sender_name?.trim() || null
+  if (sender_type !== undefined)              payload.sender_type              = sender_type?.trim() || null
 
   if (Object.keys(payload).length === 0) {
     return NextResponse.json({ error: 'Nenhum campo para atualizar' }, { status: 400 })

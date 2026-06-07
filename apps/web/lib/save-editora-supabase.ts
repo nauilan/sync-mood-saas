@@ -16,7 +16,6 @@ export interface EditoraPayload {
   cnpj?: string | null
   cae?: string | null
   ipi?: string | null
-  codigo_publisher_cwr?: string | null
   codigo_interno_legado?: string | null
   backoffice_publisher_id?: string | null
   tipo_editora: TipoEditora
@@ -39,7 +38,6 @@ function rowToEditora(row: any): EditoraAdministrada {
     controlada:             row.controlada ?? false,
     tipo_editora:           (row.tipo_editora as TipoEditora) ?? 'administrada',
     codigo_interno_legado:  row.codigo_interno_legado ?? null,
-    codigo_publisher_cwr:   row.codigo_publisher_cwr ?? null,
     backoffice_publisher_id:row.backoffice_publisher_id ?? null,
   }
 }
@@ -86,7 +84,6 @@ export async function salvarEditora(payload: EditoraPayload): Promise<{ ok: bool
         cnpj:                    payload.cnpj ?? null,
         cae:                     payload.cae ?? null,
         ipi:                     payload.ipi ?? null,
-        codigo_publisher_cwr:    payload.codigo_publisher_cwr ?? null,
         codigo_interno_legado:   payload.codigo_interno_legado ?? null,
         backoffice_publisher_id: payload.backoffice_publisher_id ?? null,
         tipo_editora:            payload.tipo_editora,
@@ -133,7 +130,6 @@ export async function salvarEditora(payload: EditoraPayload): Promise<{ ok: bool
     controlada:             payload.controlada ?? false,
     tipo_editora:           payload.tipo_editora,
     codigo_interno_legado:  payload.codigo_interno_legado ?? null,
-    codigo_publisher_cwr:   payload.codigo_publisher_cwr ?? null,
     backoffice_publisher_id:payload.backoffice_publisher_id ?? null,
   }
   _atualizarStoreEditora(local, isUpdate)

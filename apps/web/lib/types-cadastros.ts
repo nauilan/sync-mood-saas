@@ -96,9 +96,7 @@ export interface EditoraAdministrada {
   // Rastreabilidade CWR / BackOffice
   /** Código interno da editora no sistema antigo */
   codigo_interno_legado?: string | null
-  /** Código do publisher conforme aparece no CWR (SPU submitter_code) */
-  codigo_publisher_cwr?: string | null
-  /** Código sequencial usado dentro da obra no CWR */
+  /** Código sequencial usado dentro da obra no CWR (mantido para compatibilidade) */
   codigo_sequence_cwr?: string | null
   /** ID da editora retornado pela BackOffice */
   backoffice_publisher_id?: string | null

@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
 
   let query = sb
     .from('editoras')
-    .select('id,nome_fantasia,razao_social,cnpj,tipo_editora,controlada,status,codigo_publisher_cwr,codigo_cae,codigo_ipi,codigo_interno_cwr,pais_registro,codigo_ecad,codigo_interno,created_at')
+    .select('id,nome_fantasia,razao_social,cnpj,tipo_editora,controlada,status,codigo_cae,codigo_ipi,pais_registro,codigo_ecad,codigo_interno,sender_code,created_at')
     .eq('tenant_id', tenant_id)
     .order('nome_fantasia')
 
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
   if (!tenant_id) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
 
   const body = await req.json()
-  const { nome_fantasia, razao_social, cnpj, tipo_editora, controlada, codigo_publisher_cwr, codigo_cae, codigo_ipi, codigo_interno_cwr, pais_registro, codigo_ecad, codigo_interno } = body
+  const { nome_fantasia, razao_social, cnpj, tipo_editora, controlada, codigo_cae, codigo_ipi, pais_registro, codigo_ecad, codigo_interno } = body
 
   if (!nome_fantasia?.trim() || !razao_social?.trim()) {
     return NextResponse.json({ error: 'nome_fantasia e razao_social são obrigatórios' }, { status: 400 })
@@ -83,10 +83,8 @@ export async function POST(req: NextRequest) {
     cnpj: cnpj?.trim() || null,
     tipo_editora: tipo_editora ?? 'administrada',
     controlada: controlada ?? false,
-    codigo_publisher_cwr: codigo_publisher_cwr?.trim() || null,
     codigo_cae: codigo_cae?.trim() || null,
     codigo_ipi: codigo_ipi?.trim() || null,
-    codigo_interno_cwr: codigo_interno_cwr?.trim() || null,
     pais_registro: pais_registro?.trim() || null,
     codigo_ecad: codigo_ecad?.trim() || null,
     codigo_interno: codigo_interno?.trim() || null,
