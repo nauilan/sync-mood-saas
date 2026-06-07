@@ -165,6 +165,13 @@ export async function POST(req: NextRequest) {
             status:               'ativo',
             codigo_ipi:           t.ipi ?? null,
             codigo_interno:       String(t.codigo_interno_legado ?? '').trim() || null,
+            // ATENÇÃO — compatibilidade temporária:
+            // tipo_editora não representa papel editorial (E, AM, SE).
+            // O papel é definido em obras_participantes, não no cadastro da editora.
+            // Qualquer editora criada via CWR é classificada como 'administrada'
+            // apenas para compatibilidade com o campo atual.
+            // TODO: migrar tipo_editora → categoria_cadastro ou perfil_operacional
+            //       antes de habilitar regras de negócio baseadas neste campo.
             tipo_editora:         'administrada',
             controlada:           true,
             origem_importacao:    'cwr',
