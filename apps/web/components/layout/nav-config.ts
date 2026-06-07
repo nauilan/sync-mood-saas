@@ -9,7 +9,7 @@ export interface NavSection {
   items: NavItem[]
 }
 
-// Sync Mood Gestão Inteligente — Master nav
+// Sync Mood Gestao Inteligente — Master nav
 export const MASTER_NAV: NavSection[] = [
   { title: 'Principal', items: [
     { label: 'Visao Geral', href: '/master/dashboard', iconName: 'LayoutDashboard' },
@@ -17,7 +17,7 @@ export const MASTER_NAV: NavSection[] = [
   { title: 'M1 Cadastros', items: [
     { label: 'Titulares', href: '/master/titulares', iconName: 'Users' },
     { label: 'Editoras', href: '/master/editoras', iconName: 'Building2' },
-    { label: 'Organização Gestora', href: '/master/editora', iconName: 'Settings' },
+    { label: 'Organizacao Gestora', href: '/master/editora', iconName: 'Settings' },
   ]},
   { title: 'M2 Contratos', items: [
     { label: 'Contratos', href: '/master/contratos', iconName: 'FileText' },
@@ -48,19 +48,36 @@ export const MASTER_NAV: NavSection[] = [
     { label: 'Exportacoes CWR', href: '/master/backoffice/exportacoes', iconName: 'Upload' },
     { label: 'Nova Exportacao CWR', href: '/master/backoffice/exportacoes/nova', iconName: 'FilePlus' },
   ]},
-  { title: 'M5 BackOffice', items: [
-    { label: 'BackOffice', href: '/master/backoffice', iconName: 'Database' },
-    { label: 'Matching de Obras', href: '/master/backoffice/matching', iconName: 'Shuffle' },
-    { label: 'Match Lista ONI', href: '/master/backoffice/match-lista-oni', iconName: 'Target' },
-    { label: 'Relatorios BackOffice', href: '/master/backoffice/relatorios', iconName: 'BarChart3' },
-    { label: 'Config BackOffice', href: '/master/backoffice/configuracoes', iconName: 'Settings' },
+
+  // -----------------------------------------------------------------------
+  // BACKOFFICE — INFORMACAO
+  // Responsavel por: identificacao, matching, Song Codes, ONI, logs, juridico
+  // -----------------------------------------------------------------------
+  { title: 'BackOffice — Informacao', items: [
+    { label: 'Dashboard', href: '/master/backoffice', iconName: 'Database' },
+    { label: 'Catalogo BackOffice', href: '/master/backoffice/catalogo', iconName: 'BookOpen' },
+    { label: 'Importacao de Arquivos', href: '/master/backoffice/importacao', iconName: 'FileInput' },
+    { label: 'Analise de Lancamentos', href: '/master/backoffice/matching', iconName: 'Shuffle' },
+    { label: 'ONI — Obras Nao Identificadas', href: '/master/backoffice/match-lista-oni', iconName: 'Target' },
+    { label: 'Logs de Processamento', href: '/master/backoffice/logs', iconName: 'ScrollText' },
+    { label: 'Pendencias Juridicas', href: '/master/backoffice/pendencias-juridicas', iconName: 'AlertTriangle' },
   ]},
-  { title: 'M6 Recebimentos', items: [
+
+  // -----------------------------------------------------------------------
+  // FINANCEIRO — DINHEIRO
+  // Responsavel por: recebimentos, distribuicao, conta corrente, prestacao
+  // -----------------------------------------------------------------------
+  { title: 'Financeiro — Dinheiro', items: [
+    { label: 'Periodos de Pagamento', href: '/master/financeiro/periodos', iconName: 'Calendar' },
     { label: 'Recebimentos', href: '/master/recebimentos', iconName: 'DollarSign' },
-    { label: 'SOCINPRO / ECAD', href: '/master/recebimentos/socinpro', iconName: 'Radio' },
-    { label: 'Divergencias', href: '/master/recebimentos/divergencias', iconName: 'AlertTriangle' },
-    { label: 'Fontes', href: '/master/recebimentos/fontes', iconName: 'Settings' },
+    { label: 'Conferencia', href: '/master/recebimentos/divergencias', iconName: 'CheckCircle2' },
+    { label: 'Distribuicoes', href: '/master/distribuicao', iconName: 'PieChart' },
+    { label: 'Conta Corrente', href: '/master/cc-obra', iconName: 'CreditCard' },
+    { label: 'Prestacao de Contas', href: '/master/prestacao-contas', iconName: 'FileText' },
+    { label: 'Adiantamentos', href: '/master/financeiro-m11/contas-pagar', iconName: 'Wallet' },
+    { label: 'Comissoes', href: '/master/financeiro-m11/contas-receber', iconName: 'TrendingUp' },
   ]},
+
   { title: 'M6 TV Audiovisual', items: [
     { label: 'TV Dashboard', href: '/master/tv/dashboard', iconName: 'BarChart3' },
     { label: 'Execucoes TV', href: '/master/tv/execucoes', iconName: 'Tv' },
@@ -73,34 +90,6 @@ export const MASTER_NAV: NavSection[] = [
   { title: 'M7 Conciliacao', items: [
     { label: 'Conciliacoes', href: '/master/conciliacao', iconName: 'Activity' },
     { label: 'Divergencias Conc.', href: '/master/conciliacao/divergencias', iconName: 'AlertTriangle' },
-  ]},
-  { title: 'M8 Distribuicao', items: [
-    { label: 'Distribuicoes',     href: '/master/distribuicao',              iconName: 'PieChart' },
-    { label: 'Periodos',          href: '/master/distribuicao/periodos',     iconName: 'Calendar' },
-    { label: 'Nova Distribuicao', href: '/master/distribuicao/nova',         iconName: 'FilePlus' },
-    { label: 'Previa',            href: '/master/distribuicao/previa',       iconName: 'Eye' },
-    { label: 'Encerramento',      href: '/master/distribuicao/encerramento', iconName: 'Lock' },
-    { label: 'Recoupment',        href: '/master/distribuicao/recoupment',   iconName: 'TrendingUp' },
-  ]},
-  { title: 'M9 Conta Corrente', items: [
-    { label: 'CC Obras', href: '/master/cc-obra', iconName: 'Music' },
-    { label: 'CC Titulares', href: '/master/cc-titular', iconName: 'Users' },
-    { label: 'Dashboard Obras', href: '/master/cc-obra/dashboard', iconName: 'BarChart3' },
-    { label: 'Dashboard Titulares', href: '/master/cc-titular/dashboard', iconName: 'BarChart3' },
-  ]},
-  { title: 'M10 Prestacao de Contas', items: [
-    { label: 'Prestacoes', href: '/master/prestacao-contas', iconName: 'FileText' },
-    { label: 'Nova Prestacao', href: '/master/prestacao-contas/nova', iconName: 'Plus' },
-    { label: 'Contestacoes', href: '/master/prestacao-contas/contestacoes', iconName: 'AlertTriangle' },
-    { label: 'Automacao', href: '/master/prestacao-contas/automacao', iconName: 'Settings' },
-  ]},
-  { title: 'M11 Financeiro', items: [
-    { label: 'Dashboard Financeiro', href: '/master/financeiro-m11', iconName: 'DollarSign' },
-    { label: 'Contas a Pagar', href: '/master/financeiro-m11/contas-pagar', iconName: 'TrendingDown' },
-    { label: 'Contas a Receber', href: '/master/financeiro-m11/contas-receber', iconName: 'TrendingUp' },
-    { label: 'Fluxo de Caixa', href: '/master/financeiro-m11/fluxo-caixa', iconName: 'Activity' },
-    { label: 'Conciliacao Bancaria', href: '/master/financeiro-m11/conciliacao-bancaria', iconName: 'CreditCard' },
-    { label: 'Contas Bancarias', href: '/master/financeiro-m11/contas-bancarias', iconName: 'Banknote' },
   ]},
   { title: 'M12-13 Relatorios & BI', items: [
     { label: 'Relatorios', href: '/master/relatorios', iconName: 'BarChart3' },
@@ -115,9 +104,14 @@ export const MASTER_NAV: NavSection[] = [
     { label: 'Financeiros', href: '/master/relatorios/financeiros', iconName: 'DollarSign' },
     { label: 'Royalties Futuros', href: '/master/relatorios/royalties-futuros', iconName: 'TrendingUp' },
     { label: 'BI Estrategico', href: '/master/relatorios/bi-estrategico', iconName: 'Sparkles' },
-    { label: 'Auditoria', href: '/master/relatorios/auditoria', iconName: 'ShieldAlert' },
+    { label: 'Auditoria Relatorios', href: '/master/relatorios/auditoria', iconName: 'ShieldAlert' },
   ]},
-  { title: 'M14 Configuracoes', items: [
+
+  // -----------------------------------------------------------------------
+  // ADMINISTRACAO — inclui Auditoria Global (Migration 044)
+  // -----------------------------------------------------------------------
+  { title: 'Administracao', items: [
+    { label: 'Auditoria', href: '/master/admin/auditoria', iconName: 'ShieldAlert' },
     { label: 'Configuracoes', href: '/master/configuracoes', iconName: 'Settings' },
     { label: 'Usuarios', href: '/master/configuracoes/usuarios', iconName: 'Users' },
     { label: 'Perfis', href: '/master/configuracoes/perfis', iconName: 'Shield' },
@@ -126,7 +120,6 @@ export const MASTER_NAV: NavSection[] = [
     { label: 'Parametros', href: '/master/configuracoes/parametros', iconName: 'Settings' },
     { label: 'Tipos Direitos', href: '/master/configuracoes/tipos-direitos', iconName: 'Tags' },
     { label: 'Integracoes', href: '/master/configuracoes/integracoes', iconName: 'Puzzle' },
-    { label: 'Auditoria Config', href: '/master/configuracoes/auditoria', iconName: 'Activity' },
   ]},
 ]
 

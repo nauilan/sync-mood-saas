@@ -6,6 +6,8 @@ import { PageHeader } from '@/components/ui/page-header'
 import {
   Target, FileDown, Globe, Database, Globe2, Upload,
   ChevronRight, Plus, Package, CheckCircle2, RefreshCw, AlertCircle,
+  BookOpen, ScrollText, AlertTriangle, Shuffle, Hash, Music2,
+  FileInput, ShieldAlert,
 } from 'lucide-react'
 import { MOCK_EXPORTACOES, KPI_EXPORTACOES } from '@/lib/mock-exportacao'
 import {
@@ -61,6 +63,30 @@ const DESTINO_CARDS: Array<{
   },
 ]
 
+// 11 KPIs do Dashboard BackOffice
+const BACKOFFICE_KPIS = [
+  { label: 'Obras Cadastradas',      value: '1.284', icon: Music2,       color: 'text-white/80'    },
+  { label: 'Obras Enviadas',         value: '1.102', icon: Upload,        color: 'text-sky-400'     },
+  { label: 'Obras Identificadas',    value: '1.089', icon: CheckCircle2,  color: 'text-emerald-400' },
+  { label: 'Sem Identificacao',      value: '13',    icon: AlertCircle,   color: 'text-amber-400'   },
+  { label: 'Song Codes Vinculados',  value: '1.089', icon: Hash,          color: 'text-sky-400'     },
+  { label: 'ISRCs Vinculados',       value: '876',   icon: Music2,        color: 'text-violet-400'  },
+  { label: 'ONIs Pendentes',         value: String(KPI_ONI.listas_pendentes), icon: Target, color: 'text-amber-400' },
+  { label: 'ONIs Resolvidas',        value: String(KPI_ONI.matches_confirmados), icon: CheckCircle2, color: 'text-emerald-400' },
+  { label: 'Arquivos Processados',   value: '38',    icon: FileInput,     color: 'text-sky-400'     },
+  { label: 'Arquivos Pendentes',     value: '2',     icon: RefreshCw,     color: 'text-amber-400'   },
+  { label: 'Pendencias Juridicas',   value: '16',    icon: ShieldAlert,   color: 'text-red-400'     },
+]
+
+const MODULE_SHORTCUTS = [
+  { href: '/master/backoffice/catalogo',            label: 'Catalogo BackOffice',       icon: BookOpen,      accent: 'text-sky-300',    border: 'border-sky-500/20',    bg: 'bg-sky-500/15'    },
+  { href: '/master/backoffice/match-lista-oni',     label: 'ONI',                       icon: Target,        accent: 'text-violet-300', border: 'border-violet-500/20', bg: 'bg-violet-500/15' },
+  { href: '/master/backoffice/matching',            label: 'Analise de Lancamentos',    icon: Shuffle,       accent: 'text-amber-300',  border: 'border-amber-500/20',  bg: 'bg-amber-500/15'  },
+  { href: '/master/backoffice/logs',                label: 'Logs de Processamento',     icon: ScrollText,    accent: 'text-white/60',   border: 'border-white/10',      bg: 'bg-white/[0.06]'  },
+  { href: '/master/backoffice/pendencias-juridicas',label: 'Pendencias Juridicas',      icon: AlertTriangle, accent: 'text-red-300',    border: 'border-red-500/20',    bg: 'bg-red-500/15'    },
+  { href: '/master/backoffice/exportacoes',         label: 'Exportacoes CWR',           icon: FileDown,      accent: 'text-emerald-300',border: 'border-emerald-500/20',bg: 'bg-emerald-500/15'},
+]
+
 export default function BackOfficePage() {
   const latestByDestino = useMemo(() => {
     const map: Partial<Record<DestinoExportacao, (typeof MOCK_EXPORTACOES)[0]>> = {}
@@ -76,81 +102,62 @@ export default function BackOfficePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="BACKOFFICE"
-        description="Central BackOffice Music Services — identificacao de ONIs e exportacoes CWR/SWI para sociedades."
+        title="BackOffice — Dashboard"
+        description="Central de Informacao: identificacao de obras, Song Codes, ONIs, matching e logs. Nao e modulo financeiro."
       />
 
-      {/* 2 main module cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Link
-          href="/master/backoffice/match-lista-oni"
-          className="group bg-[#0d1526] border border-violet-500/20 rounded-xl p-5 flex flex-col gap-4 hover:border-violet-500/40 hover:bg-white/[0.02] transition-all"
-        >
-          <div className="flex items-start gap-3">
-            <div className="bg-violet-500/15 rounded-xl p-3 shrink-0">
-              <Target className="w-6 h-6 text-violet-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h2 className="text-sm font-bold text-violet-300 leading-tight">Match Lista ONI</h2>
-              <p className="text-[11px] text-white/35 mt-1 leading-relaxed">
-                Cruzamento automatico das listas semanais de Obras Nao Identificadas com o catalogo da editora.
-                Libere royalties retidos em ate 48h.
-              </p>
-            </div>
-            <ChevronRight className="w-4 h-4 text-violet-400 opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all shrink-0 mt-0.5" />
-          </div>
-          <div className="grid grid-cols-3 gap-2 mt-auto">
-            {[
-              { label: 'Listas', value: KPI_ONI.total_listas },
-              { label: 'Confirmados', value: KPI_ONI.matches_confirmados },
-              { label: 'Pendentes', value: KPI_ONI.listas_pendentes },
-            ].map(stat => (
-              <div key={stat.label} className="bg-violet-500/[0.07] rounded-lg p-2 text-center">
-                <p className="text-base font-bold text-violet-300">{stat.value}</p>
-                <p className="text-[9px] text-white/30">{stat.label}</p>
+      {/* 11 KPIs */}
+      <div>
+        <p className="text-[10px] text-white/30 uppercase tracking-wider font-semibold mb-3">
+          Indicadores Operacionais
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+          {BACKOFFICE_KPIS.map(kpi => (
+            <div key={kpi.label} className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-3 flex flex-col gap-1">
+              <div className="flex items-center gap-1.5">
+                <kpi.icon className={`w-3 h-3 ${kpi.color}`} />
+                <p className="text-[9px] text-white/35 leading-tight">{kpi.label}</p>
               </div>
-            ))}
-          </div>
-        </Link>
-
-        <Link
-          href="/master/backoffice/exportacoes"
-          className="group bg-[#0d1526] border border-sky-500/20 rounded-xl p-5 flex flex-col gap-4 hover:border-sky-500/40 hover:bg-white/[0.02] transition-all"
-        >
-          <div className="flex items-start gap-3">
-            <div className="bg-sky-500/15 rounded-xl p-3 shrink-0">
-              <FileDown className="w-6 h-6 text-sky-400" />
+              <p className={`text-xl font-bold ${kpi.color} leading-tight`}>{kpi.value}</p>
             </div>
-            <div className="flex-1 min-w-0">
-              <h2 className="text-sm font-bold text-sky-300 leading-tight">Exportacoes CWR</h2>
-              <p className="text-[11px] text-white/35 mt-1 leading-relaxed">
-                Gere e envie arquivos CWR 2.1-5, SWI e XML para SOCINPRO, BackOffice MS e parceiros internacionais.
-              </p>
-            </div>
-            <ChevronRight className="w-4 h-4 text-sky-400 opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all shrink-0 mt-0.5" />
-          </div>
-          <div className="grid grid-cols-3 gap-2 mt-auto">
-            {[
-              { label: 'Total', value: KPI_EXPORTACOES.total },
-              { label: 'Enviadas', value: KPI_EXPORTACOES.enviadas },
-              { label: 'Erros', value: KPI_EXPORTACOES.erros },
-            ].map(stat => (
-              <div key={stat.label} className="bg-sky-500/[0.07] rounded-lg p-2 text-center">
-                <p className="text-base font-bold text-sky-300">{stat.value}</p>
-                <p className="text-[9px] text-white/30">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-        </Link>
+          ))}
+        </div>
       </div>
 
-      {/* Exportacoes CWR section */}
+      {/* Module shortcuts */}
+      <div>
+        <p className="text-[10px] text-white/30 uppercase tracking-wider font-semibold mb-3">
+          Modulos BackOffice
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {MODULE_SHORTCUTS.map(mod => {
+            const Icon = mod.icon
+            return (
+              <Link
+                key={mod.href}
+                href={mod.href}
+                className={`group bg-[#0d1526] border ${mod.border} rounded-xl p-4 flex flex-col gap-3 hover:bg-white/[0.02] transition-all`}
+              >
+                <div className={`${mod.bg} rounded-lg p-2.5 w-fit`}>
+                  <Icon className={`w-4 h-4 ${mod.accent}`} />
+                </div>
+                <div className="flex items-center justify-between gap-1">
+                  <p className={`text-xs font-semibold ${mod.accent} leading-tight`}>{mod.label}</p>
+                  <ChevronRight className="w-3 h-3 text-white/20 group-hover:text-white/50 group-hover:translate-x-0.5 transition-all shrink-0" />
+                </div>
+              </Link>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* CWR exports section */}
       <div>
         <p className="text-[10px] text-white/30 uppercase tracking-wider font-semibold mb-3">
           Exportacoes CWR — Destinos
         </p>
 
-        {/* Quick Stats */}
+        {/* Quick stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           {[
             { label: 'Total Exportacoes', value: KPI_EXPORTACOES.total,      icon: Package,     color: 'text-white/80'    },
@@ -168,7 +175,7 @@ export default function BackOfficePage() {
           ))}
         </div>
 
-        {/* Destination Cards */}
+        {/* Destination cards */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {DESTINO_CARDS.map(card => {
             const latest = latestByDestino[card.destino]
@@ -184,7 +191,6 @@ export default function BackOfficePage() {
                     <p className="text-xs text-white/40 mt-1 leading-relaxed">{card.description}</p>
                   </div>
                 </div>
-
                 <div className="bg-white/[0.03] border border-white/[0.05] rounded-lg p-3 space-y-2">
                   <p className="text-[10px] text-white/30 uppercase tracking-wider font-semibold">Ultima Exportacao</p>
                   {latest ? (
@@ -207,7 +213,6 @@ export default function BackOfficePage() {
                     <p className="text-xs text-white/25 italic">Nenhuma exportacao ainda</p>
                   )}
                 </div>
-
                 <div className="flex gap-2 mt-auto">
                   <Link
                     href={`/master/backoffice/exportacoes?destino=${card.destino}`}
