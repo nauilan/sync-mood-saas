@@ -1156,6 +1156,12 @@ export default function NegociosEditoriaisPage() {
     setNegocios(prev => prev.filter(x => x.id !== id))
   }
 
+  const handleEdit = (n: Negocio) => {
+    setEditing(n)
+    setShowForm(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const filtered = useMemo(() =>
     filterStatus ? negocios.filter(n => n.status === filterStatus) : negocios,
   [negocios, filterStatus])
@@ -1267,8 +1273,8 @@ export default function NegociosEditoriaisPage() {
         </div>
       )}
 
-      {/* Lista */}
-      {loading ? (
+      {/* Lista — oculta quando formulário está aberto */}
+      {!showForm && !editing && (loading ? (
         <div className="flex items-center justify-center py-16 text-white/30 gap-2">
           <Loader2 className="w-5 h-5 animate-spin" />
           <span className="text-sm">Carregando negócios...</span>
@@ -1294,12 +1300,12 @@ export default function NegociosEditoriaisPage() {
             <NegocioCard
               key={n.id}
               negocio={n}
-              onEdit={() => { setEditing(n); setShowForm(false) }}
+              onEdit={() => handleEdit(n)}
               onDelete={() => handleDelete(n.id)}
             />
           ))}
         </div>
-      )}
+      ))}
     </div>
   )
 }
