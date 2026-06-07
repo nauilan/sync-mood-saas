@@ -232,23 +232,31 @@ function NegocioForm({
   const setPctBrasilField = (key: string, field: 'administrada' | 'administradora', val: number) => {
     const safe = Math.min(100, Math.max(0, val))
     const complement = parseFloat((100 - safe).toFixed(4))
-    setPctBrasil(prev => ({
-      ...prev,
-      [key]: field === 'administrada'
-        ? { administrada: safe, administradora: complement }
-        : { administradora: safe, administrada: complement },
-    }))
+    const entry = field === 'administrada'
+      ? { administrada: safe, administradora: complement }
+      : { administradora: safe, administrada: complement }
+    if ((form.direitos_brasil as string[]).length === DIREITOS_MASTER.length) {
+      const next: PctMap = {}
+      DIREITOS_MASTER.forEach(d => { next[d.value] = entry })
+      setPctBrasil(next)
+    } else {
+      setPctBrasil(prev => ({ ...prev, [key]: entry }))
+    }
   }
 
   const setPctExteriorField = (key: string, field: 'administrada' | 'administradora', val: number) => {
     const safe = Math.min(100, Math.max(0, val))
     const complement = parseFloat((100 - safe).toFixed(4))
-    setPctExterior(prev => ({
-      ...prev,
-      [key]: field === 'administrada'
-        ? { administrada: safe, administradora: complement }
-        : { administradora: safe, administrada: complement },
-    }))
+    const entry = field === 'administrada'
+      ? { administrada: safe, administradora: complement }
+      : { administradora: safe, administrada: complement }
+    if ((form.direitos_exterior as string[]).length === DIREITOS_MASTER.length) {
+      const next: PctMap = {}
+      DIREITOS_MASTER.forEach(d => { next[d.value] = entry })
+      setPctExterior(next)
+    } else {
+      setPctExterior(prev => ({ ...prev, [key]: entry }))
+    }
   }
 
   const toggleDireitoBrasil = (v: string) => {
@@ -263,6 +271,20 @@ function NegocioForm({
     }
   }
 
+  const toggleTodosBrasil = () => {
+    const todos = DIREITOS_MASTER.map(d => d.value)
+    if ((form.direitos_brasil as string[]).length === DIREITOS_MASTER.length) {
+      set('direitos_brasil', [])
+    } else {
+      set('direitos_brasil', todos)
+      const next: PctMap = {}
+      todos.forEach(v => {
+        next[v] = pctBrasil[v] ?? { administrada: Number(form.percentual_administrada), administradora: Number(form.percentual_administradora) }
+      })
+      setPctBrasil(next)
+    }
+  }
+
   const toggleDireitoExterior = (v: string) => {
     const arr = form.direitos_exterior as string[]
     const next = arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v]
@@ -272,6 +294,20 @@ function NegocioForm({
         ...prev,
         [v]: { administrada: Number(form.percentual_administrada), administradora: Number(form.percentual_administradora) },
       }))
+    }
+  }
+
+  const toggleTodosExterior = () => {
+    const todos = DIREITOS_MASTER.map(d => d.value)
+    if ((form.direitos_exterior as string[]).length === DIREITOS_MASTER.length) {
+      set('direitos_exterior', [])
+    } else {
+      set('direitos_exterior', todos)
+      const next: PctMap = {}
+      todos.forEach(v => {
+        next[v] = pctExterior[v] ?? { administrada: Number(form.percentual_administrada), administradora: Number(form.percentual_administradora) }
+      })
+      setPctExterior(next)
     }
   }
 
@@ -499,6 +535,24 @@ function NegocioForm({
           </div>
 
           <div className="max-h-52 overflow-y-auto space-y-0.5 pr-1">
+            {/* Selecionar Todos */}
+            {(() => {
+              const todos = (form.direitos_brasil as string[]).length === DIREITOS_MASTER.length
+              const algum = (form.direitos_brasil as string[]).length > 0 && !todos
+              return (
+                <button type="button" onClick={toggleTodosBrasil}
+                  className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-colors text-left border-b border-white/[0.06] mb-1 pb-2 ${
+                    todos ? 'text-sky-300' : 'hover:bg-white/[0.04] text-white/60'
+                  }`}>
+                  <div className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border transition-colors ${
+                    todos ? 'bg-sky-500 border-sky-500' : algum ? 'border-sky-400/50 bg-sky-500/15' : 'border-white/20'
+                  }`}>
+                    {todos ? <Check className="w-2.5 h-2.5 text-white" /> : algum ? <span className="w-1.5 h-0.5 bg-sky-400 rounded-full" /> : null}
+                  </div>
+                  <span className="text-[12px] font-semibold">Todos os direitos</span>
+                </button>
+              )
+            })()}
             {DIREITOS_MASTER.map(d => {
               const sel = (form.direitos_brasil as string[]).includes(d.value)
               return (
@@ -574,6 +628,24 @@ function NegocioForm({
           </div>
 
           <div className="max-h-52 overflow-y-auto space-y-0.5 pr-1">
+            {/* Selecionar Todos */}
+            {(() => {
+              const todos = (form.direitos_exterior as string[]).length === DIREITOS_MASTER.length
+              const algum = (form.direitos_exterior as string[]).length > 0 && !todos
+              return (
+                <button type="button" onClick={toggleTodosExterior}
+                  className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-colors text-left border-b border-white/[0.06] mb-1 pb-2 ${
+                    todos ? 'text-violet-300' : 'hover:bg-white/[0.04] text-white/60'
+                  }`}>
+                  <div className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border transition-colors ${
+                    todos ? 'bg-violet-500 border-violet-500' : algum ? 'border-violet-400/50 bg-violet-500/15' : 'border-white/20'
+                  }`}>
+                    {todos ? <Check className="w-2.5 h-2.5 text-white" /> : algum ? <span className="w-1.5 h-0.5 bg-violet-400 rounded-full" /> : null}
+                  </div>
+                  <span className="text-[12px] font-semibold">Todos os direitos</span>
+                </button>
+              )
+            })()}
             {DIREITOS_MASTER.map(d => {
               const sel = (form.direitos_exterior as string[]).includes(d.value)
               return (
