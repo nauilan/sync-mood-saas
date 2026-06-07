@@ -173,8 +173,9 @@ COMMENT ON COLUMN negocios_editoriais.receitas_aplicaveis IS
 CREATE INDEX IF NOT EXISTS idx_recebimentos_origem
   ON recebimentos (origem_receita_id);
 
-CREATE INDEX IF NOT EXISTS idx_recebimentos_direito_juridico
-  ON recebimentos (tipo_direito_id);
+-- idx_recebimentos_direito_juridico: omitido nesta migration
+-- tipo_direito_id não é adicionado a recebimentos aqui (somente contratos e autorizacoes)
+-- criar este índice em migration futura quando a coluna for adicionada
 
 CREATE INDEX IF NOT EXISTS idx_ccom_origem
   ON cc_obras_movimentos (origem_receita_id);
