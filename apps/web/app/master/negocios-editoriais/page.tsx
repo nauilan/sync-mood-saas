@@ -35,6 +35,7 @@ interface Negocio {
   contrato_url?: string
   contrato_nome_arquivo?: string
   tipo_direito_id?: string | null
+  percentuais_por_receita?: Record<string, { administradora: number; administrada: number }> | null
   observacoes?: string
   created_at: string
   updated_at: string
@@ -98,6 +99,14 @@ const ABRANGENCIA_OPCOES = [
   { value: 'autor_especifico', label: 'Autor específico' },
   { value: 'grupo_autores',    label: 'Grupo de autores' },
 ]
+const PPR_TIPOS = [
+  { key: 'streaming',        label: 'Streaming / Digital' },
+  { key: 'mecanico',         label: 'Fonomecânico' },
+  { key: 'execucao_publica', label: 'Execução Pública' },
+  { key: 'sync',             label: 'Sync / Publicidade / TV' },
+  { key: 'internacional',    label: 'Internacional' },
+  { key: 'outros',           label: 'Outros' },
+]
 const STATUS_COLOR: Record<string, string> = {
   ativo:      'text-emerald-400 bg-emerald-500/10',
   inativo:    'text-amber-400 bg-amber-500/10',
@@ -124,6 +133,7 @@ const FORM_EMPTY = {
   contrato_url: '',
   contrato_nome_arquivo: '',
   observacoes: '',
+  percentuais_por_receita: null as Record<string, { administradora: number; administrada: number }> | null,
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -154,6 +164,30 @@ function NegocioForm({
   const [err, setErr] = useState<string | null>(null)
   const [mostrarPaises, setMostrarPaises] = useState(false)
   const [buscaPais, setBuscaPais] = useState('')
+
+  // PPR = Percentuais Por Receita
+  const [usarPPR, setUsarPPR] = useState(() => !!(initial as any).percentuais_por_receita)
+  const [pprValues, setPprValues] = useState<Record<string, { administradora: number; administrada: number }>>(() => {
+    const existing = (initial as any).percentuais_por_receita
+    if (existing) return existing
+    const a = Number(initial.percentual_administrada ?? 60)
+    const r = Number(initial.percentual_administradora ?? 40)
+    return Object.fromEntries(PPR_TIPOS.map(t => [t.key, { administrada: a, administradora: r }]))
+  })
+  const setPPRField = (key: string, field: 'administrada' | 'administradora', val: number) => {
+    const safe = Math.min(100, Math.max(0, val))
+    const complement = parseFloat((100 - safe).toFixed(4))
+    setPprValues(prev => ({
+      ...prev,
+      [key]: field === 'administrada'
+        ? { administrada: safe, administradora: complement }
+        : { administradora: safe, administrada: complement },
+    }))
+  }
+  const pprAllOk = PPR_TIPOS.every(t => {
+    const e = pprValues[t.key]
+    return e && Math.round((e.administrada + e.administradora) * 10000) === 1000000
+  })
 
   const set = (k: string, v: unknown) => setForm(p => ({ ...p, [k]: v }))
 
@@ -207,6 +241,7 @@ function NegocioForm({
     if (!somaOk)                         return setErr('Percentuais devem somar exatamente 100%')
     if (!form.data_inicio)               return setErr('Data de início obrigatória')
     if (!form.nome.trim())               return setErr('Nome do negócio obrigatório')
+    if (usarPPR && !pprAllOk)            return setErr('Percentuais por receita: cada tipo deve somar 100%')
 
     setSaving(true)
     try {
@@ -219,6 +254,7 @@ function NegocioForm({
         tipo_direito_id: (form as any).tipo_direito_id || null,
         contrato_url: (form as any).contrato_url || null,
         contrato_nome_arquivo: (form as any).contrato_nome_arquivo || null,
+        percentuais_por_receita: usarPPR ? pprValues : null,
       }
       const url = (initial as any).id
         ? `/api/negocios-editoriais/${(initial as any).id}`
@@ -329,6 +365,70 @@ function NegocioForm({
           Estes percentuais incidem <strong>somente sobre a parcela editorial da Editora Titular</strong>, nunca sobre a obra inteira.
           Ex.: autor 50% da obra, editora 25% → parte editorial = 12,5%. Se regra for 60/40, Titular fica 7,5% e Gestora 5%.
         </p>
+      </div>
+
+      {/* Percentuais por Tipo de Receita */}
+      <div className="bg-white/[0.03] rounded-xl p-4 space-y-3">
+        <button type="button"
+          onClick={() => {
+            const next = !usarPPR
+            setUsarPPR(next)
+            if (next) {
+              const a = Number(form.percentual_administrada)
+              const r = Number(form.percentual_administradora)
+              setPprValues(Object.fromEntries(PPR_TIPOS.map(t => [t.key, { administrada: a, administradora: r }])))
+            }
+          }}
+          className={`flex items-center justify-between w-full text-xs font-semibold transition-colors ${
+            usarPPR ? 'text-violet-300' : 'text-white/40 hover:text-white/60'
+          }`}>
+          <span className="flex items-center gap-2">
+            <Percent className="w-3.5 h-3.5" />
+            Percentuais diferentes por tipo de receita
+          </span>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+            usarPPR
+              ? 'bg-violet-600/20 border-violet-500/30 text-violet-300'
+              : 'bg-white/[0.04] border-white/[0.06] text-white/30'
+          }`}>{usarPPR ? 'Ativo' : 'Inativo'}</span>
+        </button>
+
+        {usarPPR && (
+          <div className="space-y-2 pt-1 border-t border-white/[0.06]">
+            <div className="flex items-center justify-between text-[10px] text-white/30 pb-1">
+              <span>Tipo de Receita</span>
+              <div className="flex gap-6 pr-1">
+                <span className="text-sky-400 w-16 text-center">Administrada</span>
+                <span className="text-violet-400 w-16 text-center">Administradora</span>
+                <span className="w-4" />
+              </div>
+            </div>
+            {PPR_TIPOS.map(t => {
+              const v = pprValues[t.key] ?? { administrada: 0, administradora: 0 }
+              const ok = Math.round((v.administrada + v.administradora) * 10000) === 1000000
+              return (
+                <div key={t.key} className="flex items-center gap-2">
+                  <span className="text-[11px] text-white/50 flex-1">{t.label}</span>
+                  <input type="number" min={0} max={100} step={0.0001}
+                    value={v.administrada}
+                    onChange={e => setPPRField(t.key, 'administrada', parseFloat(e.target.value) || 0)}
+                    className="w-16 bg-white/5 border border-white/[0.08] rounded-lg px-2 py-1.5 text-xs text-sky-300 text-center focus:outline-none focus:border-sky-500/50 transition-colors" />
+                  <span className="text-[10px] text-white/20">/</span>
+                  <input type="number" min={0} max={100} step={0.0001}
+                    value={v.administradora}
+                    onChange={e => setPPRField(t.key, 'administradora', parseFloat(e.target.value) || 0)}
+                    className="w-16 bg-white/5 border border-white/[0.08] rounded-lg px-2 py-1.5 text-xs text-violet-300 text-center focus:outline-none focus:border-violet-500/50 transition-colors" />
+                  <span className={`text-[10px] w-4 text-center ${ok ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {ok ? '✓' : '!'}
+                  </span>
+                </div>
+              )
+            })}
+            <p className="text-[10px] text-white/25 pt-1">
+              Cada linha deve somar 100%. Quando ativo, sobrepõe o percentual padrão por tipo de receita no Analítico.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Direitos Administrados */}
@@ -581,6 +681,29 @@ function NegocioCard({
               <span className="text-violet-400 font-semibold">{negocio.editora_administradora_nome} — {formatarPercentual(negocio.percentual_administradora)}</span>
             </div>
           </div>
+
+          {/* Percentuais por tipo de receita */}
+          {negocio.percentuais_por_receita && (
+            <div className="bg-white/[0.03] rounded-xl p-3">
+              <p className="text-[10px] text-white/30 mb-2 flex items-center gap-1.5">
+                <Percent className="w-3 h-3" /> Percentuais por Tipo de Receita
+              </p>
+              <div className="space-y-1.5">
+                {PPR_TIPOS.map(t => {
+                  const v = negocio.percentuais_por_receita![t.key]
+                  if (!v) return null
+                  return (
+                    <div key={t.key} className="flex items-center gap-2 text-[11px]">
+                      <span className="text-white/40 flex-1">{t.label}</span>
+                      <span className="text-sky-300 font-semibold tabular-nums w-14 text-right">{formatarPercentual(v.administrada)}</span>
+                      <span className="text-white/20 text-xs">/</span>
+                      <span className="text-violet-300 font-semibold tabular-nums w-14 text-right">{formatarPercentual(v.administradora)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
             <div>

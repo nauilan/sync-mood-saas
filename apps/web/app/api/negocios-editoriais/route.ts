@@ -58,6 +58,7 @@ function buildPayload(body: Record<string, unknown>, tenantId?: string) {
     contrato_nome_arquivo:       body.contrato_nome_arquivo ?? null,
     tipo_direito_id:             body.tipo_direito_id || null,
     observacoes:                 body.observacoes ?? null,
+    percentuais_por_receita:     body.percentuais_por_receita ?? null,
   }
 }
 

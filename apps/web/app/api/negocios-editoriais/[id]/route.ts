@@ -100,6 +100,7 @@ export async function PUT(
     contrato_nome_arquivo:       body.contrato_nome_arquivo ?? null,
     tipo_direito_id:             body.tipo_direito_id || null,
     observacoes:                 body.observacoes ?? null,
+    percentuais_por_receita:     body.percentuais_por_receita ?? null,
   }
 
   const { data, error } = await sb
