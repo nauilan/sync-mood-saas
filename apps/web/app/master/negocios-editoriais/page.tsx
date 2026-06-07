@@ -27,6 +27,10 @@ interface Negocio {
   percentual_administrada: number
   percentual_administradora: number
   receitas_aplicaveis: string[]
+  direitos_brasil: string[]
+  direitos_exterior: string[]
+  percentuais_brasil?: Record<string, { administrada: number; administradora: number }> | null
+  percentuais_exterior?: Record<string, { administrada: number; administradora: number }> | null
   abrangencia_tipo: string
   abrangencia_ids: string[]
   territorios: string[]
@@ -42,16 +46,34 @@ interface Negocio {
 }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
-const RECEITAS_OPCOES = [
-  { value: 'execucao_publica', label: 'Execução Pública' },
-  { value: 'digital',          label: 'Direitos Digitais / Fonomecânicos' },
-  { value: 'sync',             label: 'Sincronização' },
-  { value: 'mecanico',         label: 'Fonomecânicos (Físico)' },
-  { value: 'licenciamento',    label: 'Licenciamento Direto' },
-  { value: 'internacional',    label: 'Direitos Internacionais' },
-  { value: 'direitos_editoriais', label: 'Direitos Editoriais (Letras/Partituras)' },
-  { value: 'direitos_futuros', label: 'Direitos Futuros / Novas Modalidades' },
+// Catálogo mestre de direitos — usado em todo o sistema (Obras, Contratos, CWR, Distribuição).
+// REGRA: "Direitos Internacionais" NÃO existe aqui. Internacional é território, não direito.
+const DIREITOS_MASTER = [
+  { value: 'execucao_publica',    label: 'Execução Pública' },
+  { value: 'fonodigital',         label: 'Fonomecânico Digital (DSP)' },
+  { value: 'fonofisico',          label: 'Fonomecânico Físico' },
+  { value: 'sync',                label: 'Sincronização' },
+  { value: 'licenciamento_direto',label: 'Licenciamento Direto' },
+  { value: 'audiovisual',         label: 'Audiovisual' },
+  { value: 'publicidade',         label: 'Publicidade' },
+  { value: 'base_dados',          label: 'Base de Dados' },
+  { value: 'dir_editoriais',      label: 'Direitos Editoriais (Letras e Partituras)' },
+  { value: 'dir_futuros',         label: 'Direitos Futuros / Novas Modalidades' },
+  { value: 'outros',              label: 'Outros' },
 ]
+
+// Mapeamento label — inclui valores legados para exibição correta de dados antigos
+const DIREITO_LABEL: Record<string, string> = {
+  ...Object.fromEntries(DIREITOS_MASTER.map(d => [d.value, d.label])),
+  // legado (receitas_aplicaveis anteriores)
+  digital:            'Direitos Digitais / Fonomecânicos',
+  mecanico:           'Fonomecânicos (Físico)',
+  licenciamento:      'Licenciamento Direto',
+  internacional:      'Direitos Internacionais',
+  direitos_editoriais:'Direitos Editoriais (Letras/Partituras)',
+  direitos_futuros:   'Direitos Futuros / Novas Modalidades',
+}
+
 const TERRITORIOS_RAPIDOS = [
   { value: 'mundial', label: 'Mundo' },
   { value: 'brasil',  label: 'Brasil' },
@@ -83,7 +105,6 @@ const PAISES_ESPECIFICOS = [
   { value: 'ZA', label: 'África do Sul' },
 ]
 const TERRITORIOS_TODOS = [...TERRITORIOS_RAPIDOS, ...PAISES_ESPECIFICOS]
-// Mapeamento de compatibilidade para valores antigos já armazenados no banco
 const LEGACY_TERRITORIO_LABELS: Record<string, string> = {
   america_latina: 'América Latina',
   europa: 'Europa',
@@ -91,26 +112,16 @@ const LEGACY_TERRITORIO_LABELS: Record<string, string> = {
   asia: 'Ásia',
   outros: 'Outros',
 }
-// Mantido para compatibilidade com NegocioCard e outros pontos que usavam TERRITORIOS_OPCOES
-const TERRITORIOS_OPCOES = TERRITORIOS_TODOS
 const ABRANGENCIA_OPCOES = [
-  { value: 'catalogo_inteiro', label: 'Catálogo inteiro' },
+  { value: 'catalogo_inteiro',  label: 'Catálogo inteiro' },
   { value: 'obras_especificas', label: 'Obras específicas' },
-  { value: 'autor_especifico', label: 'Autor específico' },
-  { value: 'grupo_autores',    label: 'Grupo de autores' },
-]
-const PPR_TIPOS = [
-  { key: 'streaming',        label: 'Streaming / Digital' },
-  { key: 'mecanico',         label: 'Fonomecânico' },
-  { key: 'execucao_publica', label: 'Execução Pública' },
-  { key: 'sync',             label: 'Sync / Publicidade / TV' },
-  { key: 'internacional',    label: 'Internacional' },
-  { key: 'outros',           label: 'Outros' },
+  { value: 'autor_especifico',  label: 'Autor específico' },
+  { value: 'grupo_autores',     label: 'Grupo de autores' },
 ]
 const STATUS_COLOR: Record<string, string> = {
-  ativo:      'text-emerald-400 bg-emerald-500/10',
-  inativo:    'text-amber-400 bg-amber-500/10',
-  encerrado:  'text-rose-400 bg-rose-500/10',
+  ativo:     'text-emerald-400 bg-emerald-500/10',
+  inativo:   'text-amber-400 bg-amber-500/10',
+  encerrado: 'text-rose-400 bg-rose-500/10',
 }
 
 // ─── Formulário vazio ─────────────────────────────────────────────────────────
@@ -124,7 +135,11 @@ const FORM_EMPTY = {
   editora_administradora_nome: '',
   percentual_administrada: 60,
   percentual_administradora: 40,
-  receitas_aplicaveis: ['execucao_publica', 'digital', 'sync', 'mecanico', 'internacional', 'licenciamento'],
+  receitas_aplicaveis: [] as string[], // preenchido automaticamente no save como union de direitos_brasil + direitos_exterior
+  direitos_brasil: [] as string[],
+  direitos_exterior: [] as string[],
+  percentuais_brasil: null as Record<string, { administrada: number; administradora: number }> | null,
+  percentuais_exterior: null as Record<string, { administrada: number; administradora: number }> | null,
   abrangencia_tipo: 'catalogo_inteiro',
   territorios: ['mundial'],
   data_inicio: new Date().toISOString().slice(0, 10),
@@ -141,7 +156,6 @@ function fmtDate(d?: string | null) {
   if (!d) return 'Indeterminado'
   return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR')
 }
-function fmtPct(n: number) { return formatarPercentual(n) }
 function getTerritoryLabel(v: string): string {
   return TERRITORIOS_TODOS.find(t => t.value === v)?.label
     ?? LEGACY_TERRITORIO_LABELS[v]
@@ -165,33 +179,79 @@ function NegocioForm({
   const [mostrarPaises, setMostrarPaises] = useState(false)
   const [buscaPais, setBuscaPais] = useState('')
 
-  // PPR = Percentuais Por Receita
-  const [usarPPR, setUsarPPR] = useState(() => !!(initial as any).percentuais_por_receita)
-  const [pprValues, setPprValues] = useState<Record<string, { administradora: number; administrada: number }>>(() => {
-    const existing = (initial as any).percentuais_por_receita
-    if (existing) return existing
-    const a = Number(initial.percentual_administrada ?? 60)
-    const r = Number(initial.percentual_administradora ?? 40)
-    return Object.fromEntries(PPR_TIPOS.map(t => [t.key, { administrada: a, administradora: r }]))
-  })
-  const setPPRField = (key: string, field: 'administrada' | 'administradora', val: number) => {
+  type PctMap = Record<string, { administrada: number; administradora: number }>
+
+  const [pctBrasil, setPctBrasil] = useState<PctMap>(
+    () => (initial as any).percentuais_brasil ?? {}
+  )
+  const [pctExterior, setPctExterior] = useState<PctMap>(
+    () => (initial as any).percentuais_exterior ?? {}
+  )
+
+  const setPctBrasilField = (key: string, field: 'administrada' | 'administradora', val: number) => {
     const safe = Math.min(100, Math.max(0, val))
     const complement = parseFloat((100 - safe).toFixed(4))
-    setPprValues(prev => ({
+    setPctBrasil(prev => ({
       ...prev,
       [key]: field === 'administrada'
         ? { administrada: safe, administradora: complement }
         : { administradora: safe, administrada: complement },
     }))
   }
-  const pprAllOk = PPR_TIPOS.every(t => {
-    const e = pprValues[t.key]
-    return e && Math.round((e.administrada + e.administradora) * 10000) === 1000000
-  })
+
+  const setPctExteriorField = (key: string, field: 'administrada' | 'administradora', val: number) => {
+    const safe = Math.min(100, Math.max(0, val))
+    const complement = parseFloat((100 - safe).toFixed(4))
+    setPctExterior(prev => ({
+      ...prev,
+      [key]: field === 'administrada'
+        ? { administrada: safe, administradora: complement }
+        : { administradora: safe, administrada: complement },
+    }))
+  }
+
+  const toggleDireitoBrasil = (v: string) => {
+    const arr = form.direitos_brasil as string[]
+    const next = arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v]
+    set('direitos_brasil', next)
+    if (!arr.includes(v) && !pctBrasil[v]) {
+      setPctBrasil(prev => ({
+        ...prev,
+        [v]: { administrada: Number(form.percentual_administrada), administradora: Number(form.percentual_administradora) },
+      }))
+    }
+  }
+
+  const toggleDireitoExterior = (v: string) => {
+    const arr = form.direitos_exterior as string[]
+    const next = arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v]
+    set('direitos_exterior', next)
+    if (!arr.includes(v) && !pctExterior[v]) {
+      setPctExterior(prev => ({
+        ...prev,
+        [v]: { administrada: Number(form.percentual_administrada), administradora: Number(form.percentual_administradora) },
+      }))
+    }
+  }
+
+  const aplicarPadraoTodosBrasil = () => {
+    const a = Number(form.percentual_administrada)
+    const r = Number(form.percentual_administradora)
+    const next: PctMap = {}
+    ;(form.direitos_brasil as string[]).forEach(k => { next[k] = { administrada: a, administradora: r } })
+    setPctBrasil(prev => ({ ...prev, ...next }))
+  }
+
+  const aplicarPadraoTodosExterior = () => {
+    const a = Number(form.percentual_administrada)
+    const r = Number(form.percentual_administradora)
+    const next: PctMap = {}
+    ;(form.direitos_exterior as string[]).forEach(k => { next[k] = { administrada: a, administradora: r } })
+    setPctExterior(prev => ({ ...prev, ...next }))
+  }
 
   const set = (k: string, v: unknown) => setForm(p => ({ ...p, [k]: v }))
 
-  // Quando muda a administrada, preenche o nome
   const pickAdministrada = (id: string) => {
     const e = editoras.find(x => x.id === id)
     set('editora_administrada_id', id)
@@ -203,16 +263,11 @@ function NegocioForm({
     set('editora_administradora_nome', e?.nome_fantasia ?? '')
   }
 
-  const toggleReceita = (v: string) => {
-    const arr = form.receitas_aplicaveis as string[]
-    set('receitas_aplicaveis', arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v])
-  }
   const toggleTerritorio = (v: string) => {
     const arr = form.territorios as string[]
     set('territorios', arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v])
   }
 
-  // Sincroniza complementar automaticamente
   const handlePctAdm = (v: number) => {
     const safe = Math.min(100, Math.max(0, v))
     set('percentual_administrada', safe)
@@ -241,10 +296,18 @@ function NegocioForm({
     if (!somaOk)                         return setErr('Percentuais devem somar exatamente 100%')
     if (!form.data_inicio)               return setErr('Data de início obrigatória')
     if (!form.nome.trim())               return setErr('Nome do negócio obrigatório')
-    if (usarPPR && !pprAllOk)            return setErr('Percentuais por receita: cada tipo deve somar 100%')
 
     setSaving(true)
     try {
+      const dirBrasil   = form.direitos_brasil as string[]
+      const dirExterior = form.direitos_exterior as string[]
+      const pBrasil = dirBrasil.length > 0
+        ? Object.fromEntries(dirBrasil.map(k => [k, pctBrasil[k] ?? { administrada: Number(form.percentual_administrada), administradora: Number(form.percentual_administradora) }]))
+        : null
+      const pExterior = dirExterior.length > 0
+        ? Object.fromEntries(dirExterior.map(k => [k, pctExterior[k] ?? { administrada: Number(form.percentual_administrada), administradora: Number(form.percentual_administradora) }]))
+        : null
+
       const payload = {
         ...form,
         tenant_id: tenantId,
@@ -254,7 +317,13 @@ function NegocioForm({
         tipo_direito_id: (form as any).tipo_direito_id || null,
         contrato_url: (form as any).contrato_url || null,
         contrato_nome_arquivo: (form as any).contrato_nome_arquivo || null,
-        percentuais_por_receita: usarPPR ? pprValues : null,
+        direitos_brasil:   dirBrasil,
+        direitos_exterior: dirExterior,
+        percentuais_brasil:   pBrasil,
+        percentuais_exterior: pExterior,
+        // backward compat: Analítico usa receitas_aplicaveis como fallback
+        receitas_aplicaveis: [...new Set([...dirBrasil, ...dirExterior])],
+        percentuais_por_receita: null, // deprecated — mantido por compatibilidade de schema
       }
       const url = (initial as any).id
         ? `/api/negocios-editoriais/${(initial as any).id}`
@@ -327,11 +396,11 @@ function NegocioForm({
         </div>
       </div>
 
-      {/* Percentuais */}
+      {/* Percentuais padrão */}
       <div className="bg-white/[0.03] rounded-xl p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Percent className="w-4 h-4 text-violet-400" />
-          <p className="text-xs font-semibold text-white/70">Divisão Contratual</p>
+          <p className="text-xs font-semibold text-white/70">Divisão Contratual (Padrão)</p>
           <span className={`ml-auto text-xs font-bold ${somaOk ? 'text-emerald-400' : 'text-rose-400'}`}>
             {formatarPercentual(soma)} {somaOk ? '✓' : '≠ 100%'}
           </span>
@@ -367,92 +436,167 @@ function NegocioForm({
         </p>
       </div>
 
-      {/* Percentuais por Tipo de Receita */}
-      <div className="bg-white/[0.03] rounded-xl p-4 space-y-3">
-        <button type="button"
-          onClick={() => {
-            const next = !usarPPR
-            setUsarPPR(next)
-            if (next) {
-              const a = Number(form.percentual_administrada)
-              const r = Number(form.percentual_administradora)
-              setPprValues(Object.fromEntries(PPR_TIPOS.map(t => [t.key, { administrada: a, administradora: r }])))
-            }
-          }}
-          className={`flex items-center justify-between w-full text-xs font-semibold transition-colors ${
-            usarPPR ? 'text-violet-300' : 'text-white/40 hover:text-white/60'
-          }`}>
-          <span className="flex items-center gap-2">
-            <Percent className="w-3.5 h-3.5" />
-            Percentuais diferentes por tipo de receita
-          </span>
-          <span className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
-            usarPPR
-              ? 'bg-violet-600/20 border-violet-500/30 text-violet-300'
-              : 'bg-white/[0.04] border-white/[0.06] text-white/30'
-          }`}>{usarPPR ? 'Ativo' : 'Inativo'}</span>
-        </button>
+      {/* Direitos Administrados por Território */}
+      <div className="space-y-3">
+        <div>
+          <label className={labelCls}>Direitos Administrados por Território</label>
+          <p className="text-[10px] text-white/30">
+            Selecione quais direitos a administradora representa em cada território. Percentuais individuais substituem o padrão acima.
+          </p>
+        </div>
 
-        {usarPPR && (
-          <div className="space-y-2 pt-1 border-t border-white/[0.06]">
-            <div className="flex items-center justify-between text-[10px] text-white/30 pb-1">
-              <span>Tipo de Receita</span>
-              <div className="flex gap-6 pr-1">
-                <span className="text-sky-400 w-16 text-center">Administrada</span>
-                <span className="text-violet-400 w-16 text-center">Administradora</span>
-                <span className="w-4" />
-              </div>
-            </div>
-            {PPR_TIPOS.map(t => {
-              const v = pprValues[t.key] ?? { administrada: 0, administradora: 0 }
-              const ok = Math.round((v.administrada + v.administradora) * 10000) === 1000000
+        {/* BRASIL */}
+        <div className="bg-white/[0.03] rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-sky-400" />
+            <p className="text-xs font-semibold text-sky-300">Brasil</p>
+            {(form.direitos_brasil as string[]).length > 0 && (
+              <span className="ml-auto text-[10px] text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-full">
+                {(form.direitos_brasil as string[]).length} selecionado{(form.direitos_brasil as string[]).length > 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+
+          <div className="max-h-52 overflow-y-auto space-y-0.5 pr-1">
+            {DIREITOS_MASTER.map(d => {
+              const sel = (form.direitos_brasil as string[]).includes(d.value)
               return (
-                <div key={t.key} className="flex items-center gap-2">
-                  <span className="text-[11px] text-white/50 flex-1">{t.label}</span>
-                  <input type="number" min={0} max={100} step={0.0001}
-                    value={v.administrada}
-                    onChange={e => setPPRField(t.key, 'administrada', parseFloat(e.target.value) || 0)}
-                    className="w-16 bg-white/5 border border-white/[0.08] rounded-lg px-2 py-1.5 text-xs text-sky-300 text-center focus:outline-none focus:border-sky-500/50 transition-colors" />
-                  <span className="text-[10px] text-white/20">/</span>
-                  <input type="number" min={0} max={100} step={0.0001}
-                    value={v.administradora}
-                    onChange={e => setPPRField(t.key, 'administradora', parseFloat(e.target.value) || 0)}
-                    className="w-16 bg-white/5 border border-white/[0.08] rounded-lg px-2 py-1.5 text-xs text-violet-300 text-center focus:outline-none focus:border-violet-500/50 transition-colors" />
-                  <span className={`text-[10px] w-4 text-center ${ok ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {ok ? '✓' : '!'}
-                  </span>
-                </div>
+                <button key={d.value} type="button"
+                  onClick={() => toggleDireitoBrasil(d.value)}
+                  className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-colors text-left ${
+                    sel ? 'bg-sky-600/15 text-sky-300' : 'hover:bg-white/[0.04] text-white/50'
+                  }`}>
+                  <div className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border transition-colors ${
+                    sel ? 'bg-sky-500 border-sky-500' : 'border-white/20'
+                  }`}>
+                    {sel && <Check className="w-2.5 h-2.5 text-white" />}
+                  </div>
+                  <span className="text-[12px]">{d.label}</span>
+                </button>
               )
             })}
-            <p className="text-[10px] text-white/25 pt-1">
-              Cada linha deve somar 100%. Quando ativo, sobrepõe o percentual padrão por tipo de receita no Analítico.
-            </p>
           </div>
-        )}
-      </div>
 
-      {/* Direitos Administrados */}
-      <div>
-        <label className={labelCls}>Direitos Administrados</label>
-        <div className="flex flex-wrap gap-2">
-          {RECEITAS_OPCOES.map(r => (
-            <button key={r.value} type="button"
-              onClick={() => toggleReceita(r.value)}
-              className={`h-7 px-3 rounded-lg text-xs font-semibold transition-colors border ${
-                (form.receitas_aplicaveis as string[]).includes(r.value)
-                  ? 'bg-violet-600/25 border-violet-500/40 text-violet-300'
-                  : 'bg-white/[0.03] border-white/[0.06] text-white/35 hover:text-white/60'
-              }`}>
-              {r.label}
-            </button>
-          ))}
+          {(form.direitos_brasil as string[]).length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] text-white/30">% por direito (Brasil)</p>
+                <button type="button" onClick={aplicarPadraoTodosBrasil}
+                  className="text-[10px] text-violet-400 hover:text-violet-300 transition-colors underline underline-offset-2">
+                  Aplicar padrão para todos
+                </button>
+              </div>
+              <div className="flex items-center text-[10px] text-white/25 pb-0.5 px-1">
+                <span className="flex-1">Direito</span>
+                <span className="text-sky-400 w-16 text-center">Adm.</span>
+                <span className="w-4 text-center" />
+                <span className="text-violet-400 w-16 text-center">Admra.</span>
+                <span className="w-4" />
+              </div>
+              {(form.direitos_brasil as string[]).map(key => {
+                const d = DIREITOS_MASTER.find(x => x.value === key)
+                const v = pctBrasil[key] ?? { administrada: Number(form.percentual_administrada), administradora: Number(form.percentual_administradora) }
+                const ok = Math.round((v.administrada + v.administradora) * 10000) === 1000000
+                return (
+                  <div key={key} className="flex items-center gap-1">
+                    <span className="text-[11px] text-white/50 flex-1 truncate pr-1">{d?.label ?? key}</span>
+                    <input type="number" min={0} max={100} step={0.0001}
+                      value={v.administrada}
+                      onChange={e => setPctBrasilField(key, 'administrada', parseFloat(e.target.value) || 0)}
+                      className="w-16 bg-white/5 border border-white/[0.08] rounded-lg px-2 py-1 text-xs text-sky-300 text-center focus:outline-none focus:border-sky-500/50 transition-colors" />
+                    <span className="text-[10px] text-white/20 w-4 text-center">/</span>
+                    <input type="number" min={0} max={100} step={0.0001}
+                      value={v.administradora}
+                      onChange={e => setPctBrasilField(key, 'administradora', parseFloat(e.target.value) || 0)}
+                      className="w-16 bg-white/5 border border-white/[0.08] rounded-lg px-2 py-1 text-xs text-violet-300 text-center focus:outline-none focus:border-violet-500/50 transition-colors" />
+                    <span className={`text-[10px] w-4 text-center ${ok ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {ok ? '✓' : '!'}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* EXTERIOR */}
+        <div className="bg-white/[0.03] rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Globe className="w-4 h-4 text-violet-400" />
+            <p className="text-xs font-semibold text-violet-300">Exterior</p>
+            {(form.direitos_exterior as string[]).length > 0 && (
+              <span className="ml-auto text-[10px] text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded-full">
+                {(form.direitos_exterior as string[]).length} selecionado{(form.direitos_exterior as string[]).length > 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+
+          <div className="max-h-52 overflow-y-auto space-y-0.5 pr-1">
+            {DIREITOS_MASTER.map(d => {
+              const sel = (form.direitos_exterior as string[]).includes(d.value)
+              return (
+                <button key={d.value} type="button"
+                  onClick={() => toggleDireitoExterior(d.value)}
+                  className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-colors text-left ${
+                    sel ? 'bg-violet-600/15 text-violet-300' : 'hover:bg-white/[0.04] text-white/50'
+                  }`}>
+                  <div className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border transition-colors ${
+                    sel ? 'bg-violet-500 border-violet-500' : 'border-white/20'
+                  }`}>
+                    {sel && <Check className="w-2.5 h-2.5 text-white" />}
+                  </div>
+                  <span className="text-[12px]">{d.label}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {(form.direitos_exterior as string[]).length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] text-white/30">% por direito (Exterior)</p>
+                <button type="button" onClick={aplicarPadraoTodosExterior}
+                  className="text-[10px] text-violet-400 hover:text-violet-300 transition-colors underline underline-offset-2">
+                  Aplicar padrão para todos
+                </button>
+              </div>
+              <div className="flex items-center text-[10px] text-white/25 pb-0.5 px-1">
+                <span className="flex-1">Direito</span>
+                <span className="text-sky-400 w-16 text-center">Adm.</span>
+                <span className="w-4 text-center" />
+                <span className="text-violet-400 w-16 text-center">Admra.</span>
+                <span className="w-4" />
+              </div>
+              {(form.direitos_exterior as string[]).map(key => {
+                const d = DIREITOS_MASTER.find(x => x.value === key)
+                const v = pctExterior[key] ?? { administrada: Number(form.percentual_administrada), administradora: Number(form.percentual_administradora) }
+                const ok = Math.round((v.administrada + v.administradora) * 10000) === 1000000
+                return (
+                  <div key={key} className="flex items-center gap-1">
+                    <span className="text-[11px] text-white/50 flex-1 truncate pr-1">{d?.label ?? key}</span>
+                    <input type="number" min={0} max={100} step={0.0001}
+                      value={v.administrada}
+                      onChange={e => setPctExteriorField(key, 'administrada', parseFloat(e.target.value) || 0)}
+                      className="w-16 bg-white/5 border border-white/[0.08] rounded-lg px-2 py-1 text-xs text-sky-300 text-center focus:outline-none focus:border-sky-500/50 transition-colors" />
+                    <span className="text-[10px] text-white/20 w-4 text-center">/</span>
+                    <input type="number" min={0} max={100} step={0.0001}
+                      value={v.administradora}
+                      onChange={e => setPctExteriorField(key, 'administradora', parseFloat(e.target.value) || 0)}
+                      className="w-16 bg-white/5 border border-white/[0.08] rounded-lg px-2 py-1 text-xs text-violet-300 text-center focus:outline-none focus:border-violet-500/50 transition-colors" />
+                    <span className={`text-[10px] w-4 text-center ${ok ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {ok ? '✓' : '!'}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Territórios */}
       <div>
         <label className={labelCls}>Territórios</label>
-        {/* Atalhos rápidos + botão "Territórios Específicos" */}
         <div className="flex flex-wrap gap-2 mb-2">
           {TERRITORIOS_RAPIDOS.map(t => (
             <button key={t.value} type="button"
@@ -476,7 +620,6 @@ function NegocioForm({
           </button>
         </div>
 
-        {/* Chips dos países selecionados */}
         {specificSelected.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2">
             {specificSelected.map(v => {
@@ -494,7 +637,6 @@ function NegocioForm({
           </div>
         )}
 
-        {/* Painel expansível com busca */}
         {mostrarPaises && (
           <div className="bg-white/[0.02] border border-white/[0.07] rounded-xl p-3">
             <input
@@ -530,7 +672,7 @@ function NegocioForm({
         )}
       </div>
 
-      {/* Abrangência */}
+      {/* Abrangência + Status */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={labelCls}>Abrangência</label>
@@ -612,9 +754,14 @@ function NegocioCard({
 }: { negocio: Negocio; onEdit: () => void; onDelete: () => void }) {
   const [expanded, setExpanded] = useState(false)
   const vigente = !negocio.data_fim || new Date(negocio.data_fim) >= new Date()
-  const receitas = (negocio.receitas_aplicaveis ?? []).map(r =>
-    RECEITAS_OPCOES.find(x => x.value === r)?.label ?? r
-  )
+
+  const dirBrasil   = (negocio.direitos_brasil  ?? []).map(k => DIREITO_LABEL[k] ?? k)
+  const dirExterior = (negocio.direitos_exterior ?? []).map(k => DIREITO_LABEL[k] ?? k)
+  // Fallback para dados gravados antes da migration 037
+  const dirLegado = dirBrasil.length === 0 && dirExterior.length === 0
+    ? (negocio.receitas_aplicaveis ?? []).map(r => DIREITO_LABEL[r] ?? r)
+    : []
+
   const territorios = (negocio.territorios ?? []).map(t => getTerritoryLabel(t))
 
   return (
@@ -682,25 +829,40 @@ function NegocioCard({
             </div>
           </div>
 
-          {/* Percentuais por tipo de receita */}
-          {negocio.percentuais_por_receita && (
+          {/* Percentuais por direito — Brasil */}
+          {negocio.percentuais_brasil && Object.keys(negocio.percentuais_brasil).length > 0 && (
             <div className="bg-white/[0.03] rounded-xl p-3">
-              <p className="text-[10px] text-white/30 mb-2 flex items-center gap-1.5">
-                <Percent className="w-3 h-3" /> Percentuais por Tipo de Receita
+              <p className="text-[10px] text-sky-400/70 mb-2 flex items-center gap-1.5">
+                <ShieldCheck className="w-3 h-3" /> Percentuais por Direito — Brasil
               </p>
               <div className="space-y-1.5">
-                {PPR_TIPOS.map(t => {
-                  const v = negocio.percentuais_por_receita![t.key]
-                  if (!v) return null
-                  return (
-                    <div key={t.key} className="flex items-center gap-2 text-[11px]">
-                      <span className="text-white/40 flex-1">{t.label}</span>
-                      <span className="text-sky-300 font-semibold tabular-nums w-14 text-right">{formatarPercentual(v.administrada)}</span>
-                      <span className="text-white/20 text-xs">/</span>
-                      <span className="text-violet-300 font-semibold tabular-nums w-14 text-right">{formatarPercentual(v.administradora)}</span>
-                    </div>
-                  )
-                })}
+                {Object.entries(negocio.percentuais_brasil).map(([k, v]) => (
+                  <div key={k} className="flex items-center gap-2 text-[11px]">
+                    <span className="text-white/40 flex-1">{DIREITO_LABEL[k] ?? k}</span>
+                    <span className="text-sky-300 font-semibold tabular-nums w-14 text-right">{formatarPercentual(v.administrada)}</span>
+                    <span className="text-white/20 text-xs">/</span>
+                    <span className="text-violet-300 font-semibold tabular-nums w-14 text-right">{formatarPercentual(v.administradora)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Percentuais por direito — Exterior */}
+          {negocio.percentuais_exterior && Object.keys(negocio.percentuais_exterior).length > 0 && (
+            <div className="bg-white/[0.03] rounded-xl p-3">
+              <p className="text-[10px] text-violet-400/70 mb-2 flex items-center gap-1.5">
+                <Globe className="w-3 h-3" /> Percentuais por Direito — Exterior
+              </p>
+              <div className="space-y-1.5">
+                {Object.entries(negocio.percentuais_exterior).map(([k, v]) => (
+                  <div key={k} className="flex items-center gap-2 text-[11px]">
+                    <span className="text-white/40 flex-1">{DIREITO_LABEL[k] ?? k}</span>
+                    <span className="text-sky-300 font-semibold tabular-nums w-14 text-right">{formatarPercentual(v.administrada)}</span>
+                    <span className="text-white/20 text-xs">/</span>
+                    <span className="text-violet-300 font-semibold tabular-nums w-14 text-right">{formatarPercentual(v.administradora)}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -720,16 +882,51 @@ function NegocioCard({
             </div>
           </div>
 
-          <div>
-            <p className="text-[10px] text-white/30 mb-1.5">Direitos Administrados</p>
-            <div className="flex flex-wrap gap-1.5">
-              {receitas.map(r => (
-                <span key={r} className="text-[10px] font-semibold bg-violet-500/10 text-violet-300 px-2 py-0.5 rounded-full border border-violet-500/20">
-                  {r}
-                </span>
-              ))}
+          {/* Direitos Administrados */}
+          {(dirBrasil.length > 0 || dirExterior.length > 0 || dirLegado.length > 0) && (
+            <div className="space-y-2">
+              {dirBrasil.length > 0 && (
+                <div>
+                  <p className="text-[10px] text-sky-400/60 mb-1 flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3" /> Brasil
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {dirBrasil.map(r => (
+                      <span key={r} className="text-[10px] font-semibold bg-sky-500/10 text-sky-300 px-2 py-0.5 rounded-full border border-sky-500/20">
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {dirExterior.length > 0 && (
+                <div>
+                  <p className="text-[10px] text-violet-400/60 mb-1 flex items-center gap-1">
+                    <Globe className="w-3 h-3" /> Exterior
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {dirExterior.map(r => (
+                      <span key={r} className="text-[10px] font-semibold bg-violet-500/10 text-violet-300 px-2 py-0.5 rounded-full border border-violet-500/20">
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {dirLegado.length > 0 && (
+                <div>
+                  <p className="text-[10px] text-white/30 mb-1">Direitos Administrados</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {dirLegado.map(r => (
+                      <span key={r} className="text-[10px] font-semibold bg-violet-500/10 text-violet-300 px-2 py-0.5 rounded-full border border-violet-500/20">
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          )}
 
           {negocio.observacoes && (
             <div className="bg-white/[0.03] rounded-xl px-4 py-3">
@@ -796,7 +993,6 @@ export default function NegociosEditoriaisPage() {
   const [tenantId, setTenantId] = useState<string>('')
   const [filterStatus, setFilterStatus] = useState<string>('')
 
-  // Carrega dados via API routes (server-side, com token de sessão)
   useEffect(() => {
     const load = async () => {
       setLoading(true)
@@ -820,7 +1016,6 @@ export default function NegociosEditoriaisPage() {
         const meData = await resMe.json()
         if (meData?.tenant_id) setTenantId(meData.tenant_id)
         else {
-          // Fallback: tenant do primeiro negócio
           const primeiro = (negData.negocios ?? [])[0]
           if (primeiro?.tenant_id) setTenantId(primeiro.tenant_id)
         }
@@ -842,9 +1037,7 @@ export default function NegociosEditoriaisPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Remover este negócio? O Analítico deixará de calcular divisões baseadas nele.')) return
-    await authFetch(`/api/negocios-editoriais/${id}`, {
-      method: 'DELETE',
-    })
+    await authFetch(`/api/negocios-editoriais/${id}`, { method: 'DELETE' })
     setNegocios(prev => prev.filter(x => x.id !== id))
   }
 
@@ -852,7 +1045,6 @@ export default function NegociosEditoriaisPage() {
     filterStatus ? negocios.filter(n => n.status === filterStatus) : negocios,
   [negocios, filterStatus])
 
-  // KPIs
   const kpis = useMemo(() => ({
     total:    negocios.length,
     ativos:   negocios.filter(n => n.status === 'ativo').length,
@@ -883,8 +1075,8 @@ export default function NegociosEditoriaisPage() {
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total', value: kpis.total,    color: 'text-white/80' },
-          { label: 'Ativos', value: kpis.ativos,   color: 'text-emerald-400' },
+          { label: 'Total',    value: kpis.total,    color: 'text-white/80' },
+          { label: 'Ativos',   value: kpis.ativos,   color: 'text-emerald-400' },
           { label: 'Inativos', value: kpis.inativos, color: 'text-amber-400' },
           { label: 'Vencidos', value: kpis.vencidos, color: 'text-rose-400' },
         ].map(k => (
