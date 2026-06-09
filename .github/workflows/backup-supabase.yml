@@ -42,22 +42,33 @@ jobs:
           DB_USER="postgres.${PROJECT_REF}"
           DB_NAME="${{ secrets.SUPABASE_DB_NAME }}"
 
+          FIRST_ATTEMPT=true
           for REGION in ${POOLER_REGIONS}; do
             CANDIDATE="aws-0-${REGION}.pooler.supabase.com"
             echo "Testando pooler ${REGION}..."
-            # Testa autenticação real (SELECT 1), não só TCP
-            if psql \
+            if [ "${FIRST_ATTEMPT}" = "true" ]; then
+              # Primeira tentativa com erro visível para diagnóstico
+              PSQL_OUT=$(psql \
                 --host="${CANDIDATE}" \
                 --port=5432 \
                 --username="${DB_USER}" \
                 --dbname="${DB_NAME}" \
                 --connect-timeout=8 \
-                -c "SELECT 1;" 2>/dev/null; then
-              DB_HOST="${CANDIDATE}"
-              echo "Pooler autenticado: ${DB_HOST} (${REGION})"
-              break
+                -c "SELECT 1;" 2>&1) && DB_HOST="${CANDIDATE}" && break || echo "  Erro: ${PSQL_OUT}"
+              FIRST_ATTEMPT=false
             else
-              echo "  -> falhou (tenant não encontrado ou erro de auth)"
+              if psql \
+                  --host="${CANDIDATE}" \
+                  --port=5432 \
+                  --username="${DB_USER}" \
+                  --dbname="${DB_NAME}" \
+                  --connect-timeout=8 \
+                  -c "SELECT 1;" 2>/dev/null; then
+                DB_HOST="${CANDIDATE}"
+                break
+              else
+                echo "  -> falhou"
+              fi
             fi
           done
 
