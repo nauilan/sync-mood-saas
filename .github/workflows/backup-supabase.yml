@@ -48,21 +48,19 @@ jobs:
             echo "Testando pooler ${REGION}..."
             if [ "${FIRST_ATTEMPT}" = "true" ]; then
               # Primeira tentativa com erro visível para diagnóstico
-              PSQL_OUT=$(psql \
+              PSQL_OUT=$(PGCONNECT_TIMEOUT=8 psql \
                 --host="${CANDIDATE}" \
                 --port=5432 \
                 --username="${DB_USER}" \
                 --dbname="${DB_NAME}" \
-                --connect-timeout=8 \
                 -c "SELECT 1;" 2>&1) && DB_HOST="${CANDIDATE}" && break || echo "  Erro: ${PSQL_OUT}"
               FIRST_ATTEMPT=false
             else
-              if psql \
+              if PGCONNECT_TIMEOUT=8 psql \
                   --host="${CANDIDATE}" \
                   --port=5432 \
                   --username="${DB_USER}" \
                   --dbname="${DB_NAME}" \
-                  --connect-timeout=8 \
                   -c "SELECT 1;" 2>/dev/null; then
                 DB_HOST="${CANDIDATE}"
                 break
