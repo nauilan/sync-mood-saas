@@ -11,6 +11,8 @@ jobs:
     name: export → artifact
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       # ── 1. Checkout (para ter node e scripts) ──────────────────────
