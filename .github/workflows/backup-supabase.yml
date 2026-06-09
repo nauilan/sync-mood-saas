@@ -36,18 +36,28 @@ jobs:
           PROJECT_REF="tigubwxotanaznqqxogf"
 
           # Tentar cada região do pooler Supabase até encontrar uma acessível
-          POOLER_REGIONS="us-east-1 sa-east-1 us-east-2 us-west-1 eu-west-1 ap-southeast-1"
+          # IPv6 2600:1f1e:: indica us-east-2; testar nessa ordem
+          POOLER_REGIONS="us-east-2 us-east-1 sa-east-1 eu-west-1 us-west-1 ap-southeast-1"
           DB_HOST=""
           DB_USER="postgres.${PROJECT_REF}"
           DB_NAME="${{ secrets.SUPABASE_DB_NAME }}"
 
           for REGION in ${POOLER_REGIONS}; do
             CANDIDATE="aws-0-${REGION}.pooler.supabase.com"
-            echo "Testando pooler: ${CANDIDATE}"
-            if timeout 5 bash -c ">/dev/tcp/${CANDIDATE}/5432" 2>/dev/null; then
+            echo "Testando pooler ${REGION}..."
+            # Testa autenticação real (SELECT 1), não só TCP
+            if psql \
+                --host="${CANDIDATE}" \
+                --port=5432 \
+                --username="${DB_USER}" \
+                --dbname="${DB_NAME}" \
+                --connect-timeout=8 \
+                -c "SELECT 1;" 2>/dev/null; then
               DB_HOST="${CANDIDATE}"
-              echo "Pooler acessível: ${DB_HOST}"
+              echo "Pooler autenticado: ${DB_HOST} (${REGION})"
               break
+            else
+              echo "  -> falhou (tenant não encontrado ou erro de auth)"
             fi
           done
 
