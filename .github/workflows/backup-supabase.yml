@@ -24,26 +24,39 @@ jobs:
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           PGSSLMODE: require
-          PGCONNECT_TIMEOUT: "15"
+          PGCONNECT_TIMEOUT: "20"
         run: |
           TIMESTAMP=$(date +%Y%m%d_%H%M%S)
           FILENAME="sync-mood-backup-${TIMESTAMP}.sql.gz"
           echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
 
-          DB_HOST="${{ secrets.SUPABASE_DB_HOST }}"
-          DB_USER="${{ secrets.SUPABASE_DB_USER }}"
+          # O host direto (db.*.supabase.co) resolve apenas IPv6
+          # GitHub Actions não tem rota IPv6 → usar session pooler (IPv4)
+          # Username muda para postgres.PROJECT_REF no pooler
+          PROJECT_REF="tigubwxotanaznqqxogf"
+
+          # Tentar cada região do pooler Supabase até encontrar uma acessível
+          POOLER_REGIONS="us-east-1 sa-east-1 us-east-2 us-west-1 eu-west-1 ap-southeast-1"
+          DB_HOST=""
+          DB_USER="postgres.${PROJECT_REF}"
           DB_NAME="${{ secrets.SUPABASE_DB_NAME }}"
 
-          echo "=== Resolvendo IPv4 do host ==="
-          IPV4=$(getent ahostsv4 "${DB_HOST}" 2>/dev/null | awk 'NR==1{print $1}')
-          if [ -z "${IPV4}" ]; then
-            echo "Falha getent, tentando dig..."
-            IPV4=$(dig +short -4 "${DB_HOST}" A 2>/dev/null | tail -1)
-          fi
-          echo "IPv4 resolvido: ${IPV4}"
-          export PGHOSTADDR="${IPV4}"
+          for REGION in ${POOLER_REGIONS}; do
+            CANDIDATE="aws-0-${REGION}.pooler.supabase.com"
+            echo "Testando pooler: ${CANDIDATE}"
+            if timeout 5 bash -c ">/dev/tcp/${CANDIDATE}/5432" 2>/dev/null; then
+              DB_HOST="${CANDIDATE}"
+              echo "Pooler acessível: ${DB_HOST}"
+              break
+            fi
+          done
 
-          echo "=== Testando conexão IPv4 ==="
+          if [ -z "${DB_HOST}" ]; then
+            echo "ERRO: nenhum pooler Supabase acessível. Verifique a região do projeto."
+            exit 1
+          fi
+
+          echo "=== Testando autenticação ==="
           psql \
             --host="${DB_HOST}" \
             --port=5432 \
