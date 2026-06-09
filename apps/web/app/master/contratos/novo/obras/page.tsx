@@ -129,6 +129,7 @@ type FormState = {
   titular_id: string
   titular_nome: string
   titular_email: string
+  titular_cpf: string
   direitos: DireitoForm[]
   obras: ObraForm[]
   editoras_coeditoras: EditoraCoeditora[]
@@ -177,6 +178,7 @@ const INITIAL: FormState = {
   titular_id: '',
   titular_nome: '',
   titular_email: '',
+  titular_cpf: '',
   direitos: buildDireitos(),
   obras: [novaObra()],
   editoras_coeditoras: [],
@@ -459,6 +461,7 @@ export default function NovoContratoObrasPage() {
             titular_id:              c.titular_id ?? '',
             titular_nome:            c.titular_principal ?? '',
             titular_email:           d4sign.find(a => a.papel === 'cedente')?.email ?? '',
+            titular_cpf:             d4sign.find(a => a.papel === 'cedente')?.cpf ?? '',
             direitos:                Array.isArray(c.splits_direitos) && c.splits_direitos.length ? c.splits_direitos : buildDireitos(),
             obras:                   Array.isArray(c.obras_json) && c.obras_json.length ? c.obras_json : [novaObra()],
             editoras_coeditoras:     [],
@@ -474,7 +477,7 @@ export default function NovoContratoObrasPage() {
         .catch(() => {
           // Falha ao carregar: wizard limpo
           setEditContratoId(null)
-          setForm({ tipo: '', titular_id: '', titular_email: '', titular_nome: '', direitos: buildDireitos(), obras: [novaObra()], editoras_coeditoras: [], data_emissao: new Date().toISOString().slice(0, 10), provedor_assinatura: 'd4sign', responsavel_editora: { ...INITIAL_SIGNATARIO }, testemunha1: { ...INITIAL_SIGNATARIO }, testemunha2: { ...INITIAL_SIGNATARIO }, observacoes: '' })
+          setForm({ tipo: '', titular_id: '', titular_email: '', titular_cpf: '', titular_nome: '', direitos: buildDireitos(), obras: [novaObra()], editoras_coeditoras: [], data_emissao: new Date().toISOString().slice(0, 10), provedor_assinatura: 'd4sign', responsavel_editora: { ...INITIAL_SIGNATARIO }, testemunha1: { ...INITIAL_SIGNATARIO }, testemunha2: { ...INITIAL_SIGNATARIO }, observacoes: '' })
         })
     } else {
       // Modo criação: wizard limpo
@@ -485,6 +488,7 @@ export default function NovoContratoObrasPage() {
         titular_id: '',
         titular_nome: '',
         titular_email: '',
+        titular_cpf: '',
         direitos: buildDireitos(),
         obras: [novaObra()],
         editoras_coeditoras: [],
@@ -533,7 +537,7 @@ export default function NovoContratoObrasPage() {
       .then(d => {
         const eds = (d.editoras ?? []) as { id: string; nome_fantasia: string; cnpj?: string; tipo_editora?: string }[]
         setEditoras(eds)
-        const master = eds.find(e => e.tipo_editora === 'master' || e.tipo_editora === 'propria')
+        const master = eds.find(e => e.tipo_editora === 'master' || e.tipo_editora === 'propria') ?? eds[0]
         if (master) setEditoraMasterId(master.id)
       })
       .catch(() => {})
@@ -713,6 +717,7 @@ export default function NovoContratoObrasPage() {
             papel:      'cedente',
             nome:       form.titular_nome,
             titular_id: form.titular_id,
+            cpf:        form.titular_cpf || '',
             email:      form.titular_email,
           },
           {
@@ -840,7 +845,7 @@ export default function NovoContratoObrasPage() {
             onClick={() => {
               const emailTitular = t.email
                 ?? (Array.isArray(t.contatos) ? t.contatos.find(c => c.tipo === 'email')?.valor ?? '' : '')
-              upd({ titular_id: t.id, titular_nome: t.nome_completo, titular_email: emailTitular })
+              upd({ titular_id: t.id, titular_nome: t.nome_completo, titular_email: emailTitular, titular_cpf: t.cpf ?? '' })
               setTimeout(() => btnProximoRef.current?.focus(), 50)
             }}
             className={[

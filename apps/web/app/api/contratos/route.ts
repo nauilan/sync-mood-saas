@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
     numero:              numero ?? `CTO-${Date.now()}`,
     editora_id:          resolvedEditoraId,
   }
-  if (editora_id !== undefined)           payload.editora_id           = editora_id
+  if (editora_id != null)                 payload.editora_id           = editora_id
   if (titular_id !== undefined)           payload.titular_id           = titular_id
   if (percentual_editora !== undefined)   payload.percentual_editora   = percentual_editora
   if (percentual_autor !== undefined)     payload.percentual_autor     = percentual_autor
