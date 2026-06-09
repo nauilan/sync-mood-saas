@@ -22,21 +22,18 @@ function getToken(req: NextRequest): string {
   return ANON_KEY
 }
 
-// GET /api/me — retorna tenant_id e info básica do usuário logado
 export async function GET(req: NextRequest) {
   if (!SUPABASE_URL || !ANON_KEY) {
     return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
   }
   const token = getToken(req)
 
-  // Obtém auth user
   const authRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     headers: { apikey: ANON_KEY, Authorization: `Bearer ${token}` },
   })
   if (!authRes.ok) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
   const authUser = await authRes.json()
 
-  // Busca tenant_id via service_role
   const key = SERVICE_KEY || ANON_KEY
   const usrRes = await fetch(
     `${SUPABASE_URL}/rest/v1/usuarios?select=tenant_id,nome,role,editora_id&auth_user_id=eq.${authUser.id}&limit=1`,
@@ -45,11 +42,23 @@ export async function GET(req: NextRequest) {
   const usrData = await usrRes.json()
   const usuario = Array.isArray(usrData) ? usrData[0] : null
 
+  let tenantNome: string | null = null
+  if (usuario?.tenant_id) {
+    const tenantRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/tenants?select=nome&id=eq.${usuario.tenant_id}&limit=1`,
+      { headers: { apikey: key, Authorization: `Bearer ${key}` } }
+    )
+    const tenantData = await tenantRes.json()
+    tenantNome = Array.isArray(tenantData) && tenantData[0]?.nome ? tenantData[0].nome : null
+  }
+
   return NextResponse.json({
-    auth_user_id: authUser.id,
-    email: authUser.email,
-    tenant_id: usuario?.tenant_id ?? null,
-    nome: usuario?.nome ?? null,
-    role: usuario?.role ?? null,
+    auth_user_id:  authUser.id,
+    email:         authUser.email,
+    tenant_id:     usuario?.tenant_id   ?? null,
+    tenant_nome:   tenantNome,
+    nome:          usuario?.nome        ?? null,
+    role:          usuario?.role        ?? null,
+    editora_id:    usuario?.editora_id  ?? null,
   })
 }

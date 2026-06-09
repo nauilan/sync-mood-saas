@@ -1,17 +1,31 @@
 ﻿'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect } from 'react'
 import {
   Upload, FileText, CheckCircle, AlertCircle, ChevronDown, ChevronUp,
   Music, Users, Shield, X, Download, Info, Database, Mic2, Building2, Loader2,
 } from 'lucide-react'
-import { parseCwr, labelPapel, detectarOffsetCwr } from '@/lib/cwr-parser'
+import { parseCwr, detectarOffsetCwr } from '@/lib/cwr-parser'
 import type { CwrParseResult, CwrObra, CwrTitular } from '@/lib/cwr-parser'
 import { cwrToStore } from '@/lib/cwr-to-obra'
-import { upsertStore, registrarImportacao, deleteImportacao, getStore, STORE_KEYS } from '@/lib/store'
 import { authFetch } from '@/lib/supabase/client'
-import type { ImportacaoLog } from '@/lib/store'
 import { saveObrasToSupabase, clearObrasFromSupabase } from '@/lib/save-obras-supabase'
+
+// Tipo local para histórico de importações (espelha importacoes_log)
+interface ImportacaoLog {
+  id: string
+  arquivo: string
+  tipo: string
+  status: 'sucesso' | 'parcial' | 'erro'
+  obras_importadas: number
+  titulares_importados: number
+  detalhes?: string | null
+  created_at: string
+  /** Alias de created_at — mantido por compatibilidade com o componente HistoricoCwr */
+  data?: string
+  /** Opcional — preservado para compatibilidade de tipo */
+  codigos_obras?: string[]
+}
 
 // ── Botão: migrar editoras do CWR já importado ────────────────────────────────
 function MigrarEditorasBtn({ tenantId }: { tenantId: string }) {
@@ -779,14 +793,14 @@ function HistoricoCwr({ historico, onDelete }: { historico: ImportacaoLog[]; onD
 
   const handleDelete = async (log: ImportacaoLog) => {
     if (!confirm(
-      `Apagar importação "${log.arquivo}"?\n\nIsso vai remover ${log.obras_importadas} obra(s) e todos os titulares/gravações associados do localStorage.\n\nNOTA: dados no Supabase precisam ser apagados manualmente pelo momento.`
+      `Apagar registro de importação "${log.arquivo}"?\n\nIsso remove apenas o log. Os dados (obras, titulares) permanecem no banco.`
     )) return
     setDeletando(log.id)
     try {
-      const { obras_removidas } = deleteImportacao(log.id)
-      window.dispatchEvent(new Event('storage'))
-      alert(`Importação removida. ${obras_removidas} obra(s) apagada(s) do localStorage.`)
+      await authFetch(`/api/importacoes?id=${log.id}`, { method: 'DELETE' })
       onDelete()
+    } catch (e) {
+      alert('Erro ao apagar: ' + String(e))
     } finally {
       setDeletando(null)
     }
@@ -825,7 +839,7 @@ function HistoricoCwr({ historico, onDelete }: { historico: ImportacaoLog[]; onD
               </div>
               <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
                 <span className="text-[10px] text-white/35">
-                  {new Date(log.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  {new Date(log.data ?? log.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </span>
                 <span className="text-[10px] font-semibold text-violet-300/60">{log.obras_importadas} obras</span>
                 <span className="text-[10px] text-white/30">{log.titulares_importados} titulares</span>
@@ -895,32 +909,62 @@ export default function ImportarCwrPage() {
     com_codigo_legado: number; com_iswc: number; total_pwr: number
   } | null>(null)
   const [importing, setImporting] = useState(false)
-  const [historico, setHistorico] = useState<ImportacaoLog[]>(() =>
-    typeof window !== 'undefined' ? getStore<ImportacaoLog>(STORE_KEYS.importacoes).filter(l => l.tipo === 'CWR') : []
-  )
-  const reloadHistorico = () =>
-    setHistorico(getStore<ImportacaoLog>(STORE_KEYS.importacoes).filter(l => l.tipo === 'CWR'))
+  const [historico, setHistorico] = useState<ImportacaoLog[]>([])
+  const reloadHistorico = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/importacoes')
+      if (res.ok) {
+        const json = await res.json()
+        setHistorico(
+          (json.importacoes ?? []).map((l: ImportacaoLog) => ({ ...l, data: l.created_at }))
+        )
+      }
+    } catch { /* histórico é UI — não bloqueia */ }
+  }, [])
+
+  // Carrega histórico ao montar
+  useEffect(() => { reloadHistorico() }, [reloadHistorico])
 
   const processarImport = useCallback(async () => {
     if (!result || importing) return
     setImporting(true)
+
     const converted = cwrToStore(result.obras)
-    const r1 = upsertStore(STORE_KEYS.obras, converted.obras, 'codigo' as never)
-    const r2 = upsertStore(STORE_KEYS.titulares, converted.titulares, 'id' as never)
-    const r3 = upsertStore(STORE_KEYS.gravacoes, converted.gravacoes, 'id' as never)
-    registrarImportacao({
-      arquivo: fileName,
-      tipo: 'CWR',
-      obras_importadas: converted.stats.obras_total,
-      titulares_importados: converted.stats.titulares_novos + converted.stats.titulares_nao_controlados,
-      status: result.erros.length === 0 ? 'sucesso' : 'parcial',
-      detalhes: `${result.stats.linhas} linhas · ${result.erros.length} avisos`,
-      codigos_obras: converted.obras.map(o => o.codigo).filter(Boolean),
-    })
-    let sbRes = { obras_saved: 0, titulares_saved: 0, links_saved: 0, errors: [] as string[] }
+
+    // ── Supabase: fluxo principal ───────────────────────────────────────────
+    let sbRes = {
+      obras_saved: 0, titulares_saved: 0, links_saved: 0, participantes_saved: 0,
+      fonogramas_saved: 0, errors: [] as string[],
+    }
     try {
-      sbRes = await saveObrasToSupabase(converted.obras, converted.titulares)
-    } catch { /* silencioso */ }
+      sbRes = await saveObrasToSupabase(converted.obras, converted.titulares, converted.gravacoes)
+      if (sbRes.errors.length > 0) {
+        console.warn('[CWR import] avisos Supabase:', sbRes.errors)
+      }
+    } catch (err) {
+      sbRes.errors.push(`Falha na persistência: ${String(err)}`)
+    }
+
+    // ── Registrar histórico no banco (importacoes_log) ──────────────────────
+    const statusImport: 'sucesso' | 'parcial' | 'erro' =
+      sbRes.errors.length > 0
+        ? (sbRes.obras_saved > 0 ? 'parcial' : 'erro')
+        : (result.erros.length > 0 ? 'parcial' : 'sucesso')
+
+    try {
+      await authFetch('/api/importacoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          arquivo:              fileName,
+          tipo:                 'CWR',
+          obras_importadas:     converted.stats.obras_total,
+          titulares_importados: converted.stats.titulares_novos + converted.stats.titulares_nao_controlados,
+          status:               statusImport,
+          detalhes:             `${result.stats.linhas} linhas · ${result.erros.length} avisos${sbRes.errors.length > 0 ? ' · ' + sbRes.errors[0] : ''}`,
+        }),
+      })
+    } catch { /* log é UI — não bloqueia importação */ }
 
     const com_codigo_legado = converted.obras.filter(o =>
       o.codigo_interno_legado && o.codigo_interno_legado !== o.codigo
@@ -929,9 +973,9 @@ export default function ImportarCwrPage() {
     const total_pwr = result.obras.reduce((sum, o) => sum + o.pwr_links.length, 0)
 
     setImportResult({
-      obras: r1.inserted + r1.updated,
-      titulares: r2.inserted + r2.updated,
-      gravacoes: r3.inserted + r3.updated,
+      obras: sbRes.obras_saved,
+      titulares: sbRes.titulares_saved,
+      gravacoes: converted.stats.gravacoes,
       obras_ctrl: converted.stats.obras_controladas,
       tit_ctrl: converted.stats.titulares_novos,
       tit_nctrl: converted.stats.titulares_nao_controlados,
@@ -944,7 +988,7 @@ export default function ImportarCwrPage() {
     })
     setImporting(false)
     reloadHistorico()
-  }, [result, fileName, importing])
+  }, [result, fileName, importing, reloadHistorico])
 
   const processar = useCallback((file: File, offOverride?: number) => {
     setFileName(file.name)
@@ -993,15 +1037,12 @@ export default function ImportarCwrPage() {
 
   const [limpandoCwr, setLimpandoCwr] = useState(false)
   const clearCwrData = async () => {
-    if (!confirm('Isso vai APAGAR TODAS as obras e titulares do sistema. Confirma?')) return
+    if (!confirm('Isso vai APAGAR TODAS as obras e titulares do banco. Confirma?')) return
     setLimpandoCwr(true)
     try {
-      localStorage.removeItem(STORE_KEYS.obras)
-      localStorage.removeItem(STORE_KEYS.titulares)
-      window.dispatchEvent(new Event('storage'))
       const res = await clearObrasFromSupabase()
       if (!res.ok) {
-        alert(`localStorage limpo. Supabase: ${res.error ?? 'erro desconhecido'}`)
+        alert(`Erro ao apagar: ${res.error ?? 'erro desconhecido'}`)
       } else {
         alert('Dados apagados com sucesso!\nAgora re-importe o arquivo CWR.')
       }
@@ -1036,7 +1077,7 @@ export default function ImportarCwrPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
           {/* Botão: gerar pré-cadastros de editoras dos titulares já existentes */}
-          <MigrarEditorasBtn tenantId={typeof window !== 'undefined' ? (localStorage.getItem('sm_tenant_id') ?? '') : ''} />
+          <MigrarEditorasBtn tenantId="" />
           <button
             onClick={clearCwrData}
             disabled={limpandoCwr}
@@ -1248,8 +1289,8 @@ export default function ImportarCwrPage() {
               {importResult.supabase_ok
                 ? <div className="flex items-center gap-2 text-xs text-emerald-400"><Shield className="w-3.5 h-3.5" /><span>{importResult.supabase_obras} obras gravadas no banco Supabase</span></div>
                 : importResult.supabase_errs.length > 0
-                  ? <p className="text-[11px] text-amber-400/80 flex items-center gap-1.5"><Download className="w-3.5 h-3.5" /> localStorage salvo · Supabase: {importResult.supabase_errs[0]}</p>
-                  : <p className="text-[11px] text-white/30">Dados salvos em localStorage. Sincronização Supabase em andamento…</p>}
+                  ? <p className="text-[11px] text-amber-400/80 flex items-center gap-1.5"><Download className="w-3.5 h-3.5" /> Aviso na importação · Supabase: {importResult.supabase_errs[0]}</p>
+                  : <p className="text-[11px] text-white/30">Nenhuma obra gravada. Verifique o arquivo CWR e tente novamente.</p>}
             </div>
           )}
 

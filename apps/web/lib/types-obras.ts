@@ -218,11 +218,20 @@ export interface Fonograma {
   isrc?: string | null
   titulo_fonograma: string
   interprete: string
-  gravadora_id?: string | null
-  produtor?: string | null
+  versao?: 'original' | 'ao_vivo' | 'remix' | 'acustico' | 'outro' | null
+  duracao_segundos?: number | null
+  ano_gravacao?: number | null
+  gravadora?: string | null
+  produtor_fonografico?: string | null
   data_lancamento?: string | null
-  plataformas_json?: string[]
-  duracao?: number | null
+  pais?: string | null
+  plataformas?: string[] | null
+  url_preview?: string | null
+  status?: string
+  created_at?: string | null
+  updated_at?: string | null
+  deleted_at?: string | null
+  deleted_by?: string | null
 }
 
 export interface ObraExportacaoLog {

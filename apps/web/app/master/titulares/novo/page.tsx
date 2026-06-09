@@ -64,6 +64,7 @@ interface FormState {
   nacionalidade: string
   estado_civil: string
   profissao: string
+  sexo: string
   nome_artistico_principal: string
   sociedade_autoral: string
   cae: string
@@ -111,12 +112,15 @@ interface FormState {
 
 const EMPTY: FormState = {
   tipo_pessoa: 'PF', editora_id: '', codigo_titular: '',
-  nome_completo: '', cpf: '', rg: '', data_nasc: '', nacionalidade: 'Brasileira', estado_civil: '', profissao: '', nome_artistico_principal: '', sociedade_autoral: '', cae: '', ipi: '', codigo_interno: '',
+  nome_completo: '', cpf: '', rg: '', data_nasc: '', nacionalidade: 'Brasileira', estado_civil: '', profissao: '', sexo: '', nome_artistico_principal: '', sociedade_autoral: '', cae: '', ipi: '', codigo_interno: '',
   razao_social: '', nome_fantasia: '', cnpj: '', ie: '', im: '', responsavel_legal: '', site: '', socios: [],
   funcoes: [],
   pseudonimos: [],
   cep: '', endereco: '', numero: '', compl: '', bairro: '', cidade: '', estado: '', pais: 'Brasil',
-  contatos: [{ tipo: 'email', valor: '', principal: true }],
+  contatos: [
+    { tipo: 'email',    valor: '', principal: true  },
+    { tipo: 'whatsapp', valor: '', principal: false },
+  ],
   banco: '', agencia: '', conta: '', conta_digito: '', tipo_conta: '', titular_conta: '', pix_chave: '', pix_tipo: '', operacao: '',
   documentos: [],
   observacoes: '',
@@ -357,6 +361,7 @@ export default function NovoTitularWizardPage() {
         ipi:                  form.ipi.trim() || undefined,
         codigo_ipi:           form.ipi.trim() || undefined,
         codigo_interno:       form.codigo_interno.trim() || undefined,
+        sexo:                 form.sexo || undefined,
         dados_bancarios: (form.banco || form.agencia || form.conta) ? {
           banco:         form.banco.trim() || undefined,
           agencia:       form.agencia.trim() || undefined,
@@ -491,8 +496,14 @@ export default function NovoTitularWizardPage() {
                 <option value="Uniao estavel">Uniao estavel</option>
               </select>
             </Field>
-            <Field label="Profissao">
-              <input className={inputCls} placeholder="MUSICO, COMPOSITOR, ETC." value={form.profissao} onChange={setUpper('profissao')} />
+            <Field label="Sexo">
+              <select className={inputCls} value={form.sexo} onChange={set('sexo')}>
+                <option value="">Selecione...</option>
+                <option value="masculino">Masculino</option>
+                <option value="feminino">Feminino</option>
+                <option value="outro">Outro</option>
+                <option value="nao_informado">Prefiro não informar</option>
+              </select>
             </Field>
             <Field label="Nome Artistico Principal">
               <input className={inputCls} placeholder="NOME ARTISTICO" value={form.nome_artistico_principal} onChange={setUpper('nome_artistico_principal')} />
@@ -510,7 +521,8 @@ export default function NovoTitularWizardPage() {
               <input className={inputCls} placeholder="00000000" value={form.ipi} onChange={setUpper('ipi')} />
             </Field>
             <Field label="ID Interno">
-              <input className={inputCls} placeholder="Ex: JD01, HR01" value={form.codigo_interno} onChange={setUpper('codigo_interno')} />
+              <input className={inputCls} placeholder="Ex: JD01, HR01 — ou deixe vazio para gerar automaticamente" value={form.codigo_interno} onChange={setUpper('codigo_interno')} />
+              <p className="text-xs text-white/20 mt-1">Se em branco, o sistema gera um código alfanumérico sequencial (ex: ID0001).</p>
             </Field>
             <div className="md:col-span-2">
               <Field label="Observacoes">
@@ -563,7 +575,8 @@ export default function NovoTitularWizardPage() {
               <input className={inputCls} placeholder="00000000" value={form.ipi} onChange={setUpper('ipi')} />
             </Field>
             <Field label="ID Interno">
-              <input className={inputCls} placeholder="Ex: 2646326, 8961236" value={form.codigo_interno} onChange={setUpper('codigo_interno')} />
+              <input className={inputCls} placeholder="Ex: 2646326, 8961236 — ou deixe vazio para gerar automaticamente" value={form.codigo_interno} onChange={setUpper('codigo_interno')} />
+              <p className="text-xs text-white/20 mt-1">Se em branco, o sistema gera um código alfanumérico sequencial (ex: ID0001).</p>
             </Field>
             <div className="md:col-span-2">
               <Field label="Observacoes">

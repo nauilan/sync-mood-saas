@@ -1,18 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { PageHeader } from '@/components/ui/page-header'
 import {
   Edit, AlignLeft, Mic2, FileText, Link2, Activity, AlertTriangle,
   CheckCircle2, ChevronRight, ExternalLink, Music, Users2, Globe2, DollarSign, Users,
 } from 'lucide-react'
-import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, PAPEL_TITULAR_LABELS, PAPEL_TITULAR_COLORS, normalizarLinksObra } from '@/lib/types-obras'
+import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, PAPEL_TITULAR_LABELS, PAPEL_TITULAR_COLORS, normalizarLinksObra, type StatusObra } from '@/lib/types-obras'
 import { formatarPercentual } from '@/lib/percentual'
-import { getObraById, getLinksById, getFonogramasById } from '@/lib/mock-obras'
-import { getAutorizacoesByObra } from '@/lib/mock-autorizacoes'
-import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
-import { MOCK_CC_OBRAS, fmtBRL, fmtDate } from '@/lib/mock-cc'
+import { authFetch } from '@/lib/supabase/client'
+import { fmtBRL, fmtDate } from '@/lib/mock-cc'
 
 const TABS = [
   { id: 'resumo',         label: 'Resumo',              icon: Music },
@@ -83,11 +81,49 @@ function ControleBadge({ pct, label, color }: { pct: number; label: string; colo
 }
 
 export default function ObraDetailPage({ params }: { params: { id: string } }) {
-  const obra = getObraById(params.id)
-  const links = normalizarLinksObra(getLinksById(params.id))
-  const fonogramas = getFonogramasById(params.id)
-  const autorizacoes = getAutorizacoesByObra(params.id)
+  const [obra, setObra] = useState<any>(null)
+  const [links, setLinks] = useState<any[]>([])
+  const [fonogramas, setFonogramas] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('resumo')
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      try {
+        const [obraRes, linksRes, fonoRes] = await Promise.all([
+          authFetch(`/api/obras/${params.id}`),
+          authFetch(`/api/obras/${params.id}/links`),
+          authFetch(`/api/obras/${params.id}/fonogramas`),
+        ])
+        if (obraRes.ok) {
+          const d = await obraRes.json()
+          setObra(d.data ?? null)
+        }
+        if (linksRes.ok) {
+          const d = await linksRes.json()
+          setLinks(normalizarLinksObra(d.data ?? []))
+        }
+        if (fonoRes.ok) {
+          const d = await fonoRes.json()
+          setFonogramas(d.data ?? [])
+        }
+      } catch (e) {
+        console.error('[obra/detail]', e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [params.id])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-white/30 text-sm">
+        Carregando...
+      </div>
+    )
+  }
 
   if (!obra) {
     return (
@@ -101,14 +137,37 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
     )
   }
 
-  const editora = MOCK_EDITORAS.find(e => e.id === obra.editora_id)
-  const pcControlado = obra._percentual_controlado ?? 0
+  // Resolve editora a partir dos integrantes (editora_original ou administradora)
+  const editoraNome = links
+    .flatMap((l: any) => l.titulares ?? [])
+    .find((t: any) => ['editora_original', 'administradora'].includes(t.papel))
+    ?.nome ?? null
+
+  const PAPEIS_AUTOR_SET = ['autor', 'compositor', 'versionista', 'adaptador']
+  const PAPEIS_EDITORA_SET = ['editora_original', 'administradora', 'subeditora']
+  const isOwrLink = (titulares: any[]): boolean => {
+    const autores = titulares.filter(t => PAPEIS_AUTOR_SET.includes(t.papel ?? ''))
+    if (autores.length === 0) return false
+    const hasEditora = titulares.some(t =>
+      PAPEIS_EDITORA_SET.includes(t.papel ?? '') ||
+      ['E', 'AM', 'SE', 'AQ'].includes((t.papel ?? '').toUpperCase())
+    )
+    return !hasEditora
+  }
+  const pcControlado = parseFloat(
+    links.reduce((total: number, link: any) => {
+      const lt = link.titulares ?? []
+      if (isOwrLink(lt)) return total
+      return total + lt.reduce((s: number, t: any) =>
+        s + (t.percentual_exec_publica ?? t.percentual ?? 0), 0)
+    }, 0).toFixed(2)
+  )
 
   return (
     <div className="space-y-5">
       <PageHeader
         title={obra.titulo}
-        description={`Codigo: ${obra.codigo}${obra.iswc ? '  |  ISWC: ' + obra.iswc : '  |  ISWC: Pendente'}`}
+        description={`Codigo: ${obra.codigo ?? obra.codigo_obra}${obra.iswc ? '  |  ISWC: ' + obra.iswc : '  |  ISWC: Pendente'}`}
         actions={
           <div className="flex items-center gap-2">
             <Link href="/master/obras" className="h-8 px-3 rounded-lg bg-white/5 border border-white/[0.06] text-xs text-white/60 hover:text-white/80 transition-colors flex items-center">
@@ -124,8 +183,8 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
       {/* Status bar */}
       <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-2.5">
-          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_OBRA_COLORS[obra.status]}`}>
-            {STATUS_OBRA_LABELS[obra.status]}
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_OBRA_COLORS[obra.status as StatusObra] ?? 'bg-white/10 text-white/50'}`}>
+            {STATUS_OBRA_LABELS[obra.status as StatusObra] ?? obra.status}
           </span>
           {obra.genero && <span className="text-xs px-2 py-1 rounded-full bg-white/5 text-white/50">{obra.genero}</span>}
           <span className="text-xs text-white/30">|</span>
@@ -135,19 +194,17 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
           <span className={`text-xs font-semibold ${obra.iswc ? 'text-emerald-400' : 'text-amber-400'}`}>
             ISWC: {obra.iswc ?? 'Pendente'}
           </span>
-          {editora && (
+          {editoraNome && (
             <><span className="text-xs text-white/30">|</span>
-            <span className="text-xs text-white/40">Editora: <span className="text-white/60">{editora.nome_fantasia}</span></span></>
+            <span className="text-xs text-white/40">Editora: <span className="text-white/60">{editoraNome}</span></span></>
           )}
-          {/* Código legado */}
-          {obra.codigo_interno_legado && obra.codigo_interno_legado !== obra.codigo && (
+          {obra.codigo_interno_legado && obra.codigo_interno_legado !== (obra.codigo ?? obra.codigo_obra) && (
             <><span className="text-xs text-white/30">|</span>
             <span className="text-[10px] font-mono bg-violet-500/10 text-violet-300 rounded px-1.5 py-0.5"
               title="Código interno legado (CWR/sistema antigo)">
               {obra.codigo_interno_legado}
             </span></>
           )}
-          {/* Status BackOffice */}
           {obra.backoffice_status && obra.backoffice_status !== 'nao_enviada' && (
             <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
               obra.backoffice_status === 'work_ativa' ? 'bg-emerald-500/10 text-emerald-300' :
@@ -162,7 +219,7 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
         <div className="flex flex-wrap gap-2">
           <ControleBadge pct={pcControlado} label="Percentual Controlado" color="bg-violet-500/10 border-violet-500/20 text-violet-300" />
           <ControleBadge pct={fonogramas.length > 0 ? 100 : 0} label={`Fonogramas (${fonogramas.length})`} color="bg-sky-500/10 border-sky-500/20 text-sky-300" />
-          <ControleBadge pct={autorizacoes.length * 12.5} label={`Autorizacoes (${autorizacoes.length})`} color="bg-emerald-500/10 border-emerald-500/20 text-emerald-300" />
+          <ControleBadge pct={0} label="Autorizacoes (0)" color="bg-emerald-500/10 border-emerald-500/20 text-emerald-300" />
         </div>
       </div>
 
@@ -191,11 +248,11 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
             {[
               { label: 'Titulo',           value: obra.titulo },
               { label: 'Titulo Original',  value: obra.titulo_original ?? '—' },
-              { label: 'Codigo Sync Mood', value: obra.codigo },
+              { label: 'Codigo Sync Mood', value: obra.codigo ?? obra.codigo_obra ?? '—' },
               { label: 'Codigo Legado',    value: obra.codigo_interno_legado ?? '—', mono: true },
               { label: 'Codigo CWR Orig.', value: obra.codigo_obra_cwr_original ?? '—', mono: true },
               { label: 'ISWC',             value: obra.iswc ?? 'Pendente SOCINPRO' },
-              { label: 'Idioma',           value: obra.idioma },
+              { label: 'Idioma',           value: obra.idioma ?? '—' },
               { label: 'Genero',           value: obra.genero ?? '—' },
               { label: 'Ano de Criacao',   value: obra.ano_criacao?.toString() ?? '—' },
               { label: 'Duracao',          value: obra.duracao ? `${Math.floor(obra.duracao/60)}:${String(obra.duracao%60).padStart(2,'0')}` : '—' },
@@ -210,13 +267,13 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
           <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5 space-y-4">
             <h3 className="text-sm font-semibold text-white">Controle & BackOffice</h3>
             {[
-              { label: 'Status',               value: STATUS_OBRA_LABELS[obra.status] },
-              { label: 'Editora Responsavel',  value: editora?.nome_fantasia ?? '—' },
+              { label: 'Status',               value: STATUS_OBRA_LABELS[obra.status as StatusObra] ?? obra.status },
+              { label: 'Editora Responsavel',  value: editoraNome ?? '—' },
               { label: 'Links de Participacao',value: String(links.length) },
-              { label: 'Links Controlados',    value: String(links.filter(l => l.controlado).length) },
+              { label: 'Links Controlados',    value: String(links.filter((l: any) => l.controlado).length) },
               { label: '% Controlado',         value: `${pcControlado.toFixed(3)}%` },
               { label: 'Fonogramas',           value: String(fonogramas.length) },
-              { label: 'Autorizacoes',         value: String(autorizacoes.length) },
+              { label: 'Autorizacoes',         value: '0' },
               { label: 'BackOffice Song ID',   value: obra.backoffice_song_id ?? '—', mono: true },
               { label: 'BackOffice Work ID',   value: obra.backoffice_work_id ?? '—', mono: true },
               { label: 'Status BackOffice',    value: obra.backoffice_status ?? 'nao_enviada' },
@@ -241,7 +298,7 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
         <div className="space-y-3">
           <div className="flex items-center gap-3 mb-1">
             <span className="text-xs text-white/40">
-              {links.length} link{links.length !== 1 ? 's' : ''} · {links.filter(l => l.controlado).length} controlado{links.filter(l=>l.controlado).length!==1?'s':''}
+              {links.length} link{links.length !== 1 ? 's' : ''} · {links.filter((l: any) => l.controlado).length} controlado{links.filter((l: any) =>l.controlado).length!==1?'s':''}
             </span>
             <span className="text-xs text-violet-400 font-semibold ml-auto">{pcControlado.toFixed(2)}% controlado</span>
           </div>
@@ -262,8 +319,8 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.04]">
-                  {links.flatMap(link =>
-                    (link.titulares ?? []).map(t => (
+                  {links.flatMap((link: any) =>
+                    (link.titulares ?? []).map((t: any) => (
                       <tr key={t.id} className="hover:bg-white/[0.02] transition-colors">
                         <td className="px-4 py-3 text-center">
                           <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 text-[10px] font-bold text-white">
@@ -291,12 +348,19 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
                       </tr>
                     ))
                   )}
+                  {links.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-xs text-white/30">
+                        Nenhum integrante vinculado.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
                 <tfoot>
                   <tr className="border-t border-white/[0.08]">
                     <td colSpan={4} className="px-4 py-2 text-right text-xs text-white/25 font-medium">Total</td>
                     <td className="px-5 py-2 text-right font-bold tabular-nums text-xs text-white/50">
-                      {formatarPercentual(links.flatMap(l => l.titulares ?? []).reduce((s, t) => s + t.percentual, 0))}
+                      {formatarPercentual(links.flatMap((l: any) => l.titulares ?? []).reduce((s: number, t: any) => s + t.percentual, 0))}
                     </td>
                   </tr>
                 </tfoot>
@@ -337,13 +401,13 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.03]">
-                  {fonogramas.map(f => (
+                  {fonogramas.map((f: any) => (
                     <tr key={f.id} className="hover:bg-white/[0.02]">
                       <td className="px-5 py-3 font-medium text-white/70">{f.titulo_fonograma}</td>
                       <td className="px-4 py-3 text-white/50">{f.interprete}</td>
                       <td className="px-4 py-3 text-center font-mono text-white/40">{f.isrc ?? <span className="text-amber-400/60 italic">Pendente</span>}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className="text-white/40">{f.plataformas_json?.length ?? 0} plataformas</span>
+                        <span className="text-white/40">{f.plataformas?.length ?? 0} plataformas</span>
                       </td>
                       <td className="px-4 py-3 text-center text-white/40">{f.data_lancamento ?? '—'}</td>
                     </tr>
@@ -385,99 +449,11 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
       )}
 
       {/* Tab: Conta Corrente */}
-      {activeTab === 'conta_corrente' && (() => {
-        const ccObras = MOCK_CC_OBRAS.filter(o => o.obra_id === params.id)
-        const totalSaldo = ccObras.reduce((s, o) => s + o.saldo_atual, 0)
-        const totalDist  = ccObras.reduce((s, o) => s + o.saldo_distribuido, 0)
-        if (ccObras.length === 0) return (
-          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-10 text-center text-white/30 text-sm">
-            Nenhum recebimento distribuído para esta obra ainda.
-          </div>
-        )
-        return (
-          <div className="space-y-6">
-            {/* KPI cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="bg-[#0d1526] border border-emerald-500/10 rounded-2xl p-4">
-                <p className="text-[10px] text-emerald-400/70 mb-1">Saldo Total</p>
-                <p className="text-xl font-bold text-emerald-400 tabular-nums">{fmtBRL(totalSaldo)}</p>
-              </div>
-              <div className="bg-[#0d1526] border border-violet-500/10 rounded-2xl p-4">
-                <p className="text-[10px] text-violet-400/70 mb-1">Total Distribuído</p>
-                <p className="text-xl font-bold text-violet-400 tabular-nums">{fmtBRL(totalDist)}</p>
-              </div>
-              <div className="bg-[#0d1526] border border-sky-500/10 rounded-2xl p-4">
-                <p className="text-[10px] text-sky-400/70 mb-1">Statements</p>
-                <p className="text-xl font-bold text-sky-400 tabular-nums">{ccObras.length}</p>
-              </div>
-            </div>
-
-            {/* Por statement */}
-            {ccObras.map(cc => {
-              const allMovimentos = cc.movimentos
-              return (
-                <div key={cc.id} className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
-                  <div className="px-5 py-3 border-b border-white/[0.05] flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-white/80">{cc.obra_titulo}</p>
-                      <p className="text-[10px] text-white/35 font-mono">{cc.id}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-emerald-400 tabular-nums">{fmtBRL(cc.saldo_atual)}</p>
-                      <p className="text-[10px] text-white/35">saldo</p>
-                    </div>
-                  </div>
-
-                  {/* Movimentos com campos estruturados */}
-                  {allMovimentos.map(m => {
-                    const parsed = parseDescricao(m.descricao)
-                    return (
-                      <div key={m.id} className="px-5 py-4 border-b border-white/[0.04] last:border-0">
-                        <div className="flex items-start justify-between gap-3 mb-2">
-                          <div>
-                            <p className="text-xs font-semibold text-white/70">{parsed?.header ?? m.descricao}</p>
-                            <p className="text-[10px] text-white/35">{fmtDate(m.data_movimento)}</p>
-                          </div>
-                          <span className="text-sm font-bold text-emerald-400 tabular-nums shrink-0">+{fmtBRL(m.valor_liquido)}</span>
-                        </div>
-                        {parsed && parsed.fields.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 mb-3">
-                            {parsed.fields.map(f => (
-                              <span key={f.label} className="inline-flex items-center gap-1 text-[10px] bg-white/[0.04] border border-white/[0.08] rounded px-1.5 py-0.5">
-                                <span className="text-white/30">{f.label}:</span>
-                                <span className="text-white/65">{f.value}</span>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-
-                  {/* Distribuições por titular */}
-                  {cc.distribuicoes.length > 0 && (
-                    <div className="px-5 py-3 border-t border-white/[0.05] bg-white/[0.01]">
-                      <p className="text-[10px] text-white/30 font-semibold uppercase mb-2">Distribuição por Titular</p>
-                      <div className="space-y-1.5">
-                        {cc.distribuicoes.map(d => (
-                          <div key={d.id} className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Users className="w-3 h-3 text-violet-400 shrink-0" />
-                              <span className="text-xs text-white/60 truncate">{d.titular_nome}</span>
-                              <span className="text-[10px] text-white/30 shrink-0">{d.percentual_aplicado.toFixed(2)}%</span>
-                            </div>
-                            <span className="text-xs font-semibold text-violet-400 tabular-nums shrink-0">{fmtBRL(d.valor_destinado)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )
-      })()}
+      {activeTab === 'conta_corrente' && (
+        <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-10 text-center text-white/30 text-sm">
+          Nenhum recebimento distribuído para esta obra ainda.
+        </div>
+      )}
 
       {/* Tab: Divergencias */}
       {activeTab === 'divergencias' && (

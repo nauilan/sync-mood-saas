@@ -6,6 +6,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { logAudit } from '@/lib/audit'
 
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
@@ -106,7 +107,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'nome obrigatório' }, { status: 400 })
   }
 
-  // Código do titular: usa o fornecido (validando unicidade por tenant) ou gera T####
+  // Contagem atual — compartilhada entre codigo_titular e codigo_interno sequenciais
+  const { count: totalTitulares } = await sb
+    .from('titulares')
+    .select('*', { count: 'exact', head: true })
+    .eq('tenant_id', tenant_id)
+  const seqBase = (totalTitulares ?? 0) + 1
+
+  // Código do titular: usa o fornecido (validando unicidade) ou gera T####
   let codigo_titular: string
   const codigoCustom = (body.codigo_titular ?? '').trim()
   if (codigoCustom) {
@@ -123,30 +131,48 @@ export async function POST(req: NextRequest) {
     }
     codigo_titular = codigoCustom
   } else {
-    // Auto-gera sequencial T0001, T0002...
-    const { count: total } = await sb
-      .from('titulares')
-      .select('*', { count: 'exact', head: true })
-      .eq('tenant_id', tenant_id)
-    const seq = (total ?? 0) + 1
-    codigo_titular = `T${String(seq).padStart(4, '0')}`
+    codigo_titular = `T${String(seqBase).padStart(4, '0')}`
   }
+
+  // ID Interno: usa o digitado ou gera ID#### sequencial automaticamente
+  const codigo_interno = (body.codigo_interno ?? '').trim() || `ID${String(seqBase).padStart(4, '0')}`
 
   const payload: Record<string, unknown> = {
     tenant_id,
     codigo_titular,
-    tipo: body.tipo ?? 'autor',
+    codigo_interno,
+    tipo:   body.tipo ?? 'autor',
     pessoa: body.tipo_pessoa ?? body.pessoa ?? 'PF',
     nome_completo: nomeCompleto,
     status: 'ativo',
   }
-  if (body.nome_artistico) payload.nome_artistico = body.nome_artistico
-  if (body.cpf_cnpj) payload.cpf_cnpj = body.cpf_cnpj
-  if (body.ipi) payload.ipi = body.ipi
-  if (body.codigo_ipi) payload.codigo_ipi = body.codigo_ipi
-  if (body.codigo_cae) payload.codigo_cae = body.codigo_cae
+
+  // Campos escalares opcionais — inclui apenas se presentes
+  for (const field of [
+    'nome_artistico', 'cpf_cnpj', 'ipi', 'codigo_ipi', 'codigo_cae',
+    'sexo', 'estado_civil', 'profissao', 'nacionalidade', 'sociedade_autoral',
+    'observacoes', 'editora_id', 'editora_vinculada_id',
+  ]) {
+    if (body[field] !== undefined && body[field] !== null && body[field] !== '') {
+      payload[field] = body[field]
+    }
+  }
+  // Campos estruturados
+  if (body.dados_bancarios && typeof body.dados_bancarios === 'object') payload.dados_bancarios = body.dados_bancarios
+  if (Array.isArray(body.funcoes)  && body.funcoes.length  > 0) payload.funcoes  = body.funcoes
+  if (body.endereco && typeof body.endereco === 'object')         payload.endereco = body.endereco
+  if (Array.isArray(body.contatos) && body.contatos.length > 0)  payload.contatos = body.contatos
 
   const { data, error } = await sb.from('titulares').insert(payload).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await logAudit({
+    tenant_id,
+    acao: 'criar',
+    modulo: 'titulares',
+    tabela_afetada: 'titulares',
+    registro_id: (data as { id: string }).id,
+    dados_novos: data as Record<string, unknown>,
+    origem_execucao: 'usuario',
+  })
   return NextResponse.json({ data }, { status: 201 })
 }

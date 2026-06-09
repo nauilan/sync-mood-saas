@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { authFetch } from '@/lib/supabase/client'
 import {
   ChevronLeft, ChevronRight, Check, Scale, Users, ShieldCheck,
   Music, Globe, Pen, Eye, Plus, Trash2, AlertTriangle,
-  Info, BookOpen, Search, CheckCircle2, Download, UserCheck,
-  Building2, Pencil,
+  Info, Search, CheckCircle2, Download, UserCheck, X,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 
@@ -62,48 +62,14 @@ const DIREITOS_EXT = [
   { codigo: 'EXT_g', nome: 'g) Comunicação ao Público' },
 ]
 
-// Mocks de titulares PF
-const TITULARES_PF = [
-  { id: 'pf-001', nome: 'NAUILAN BARBOSA SILVA',   cpf: '123.456.789-00', codigo: 'TIT001A' },
-  { id: 'pf-002', nome: 'GIOVANI ALVES RODRIGUES', cpf: '234.567.890-11', codigo: 'TIT002B' },
-  { id: 'pf-003', nome: 'MARCELO COSTA FERREIRA',  cpf: '345.678.901-22', codigo: 'TIT003C' },
-  { id: 'pf-004', nome: 'JOAO PEDRO MORAES LIMA',  cpf: '456.789.012-33', codigo: 'TIT004D' },
-  { id: 'pf-005', nome: 'ANA CAROLINA SOUZA',      cpf: '567.890.123-44', codigo: 'TIT005E' },
-  { id: 'pf-006', nome: 'ROBERTO FERREIRA DIAS',   cpf: '678.901.234-55', codigo: 'TIT006F' },
-]
+// ── Signatários — selecionados de PF reais do banco (sem cargo manual) ────────
 
-// Editoras disponíveis para coedição
-const EDITORAS = [
-  { id: 'ed-tsm', nome: 'TOP SHOW MUSIC', cnpj: '12.345.678/0001-90' },
-  { id: 'ed-univ', nome: 'UNIVERSAL MUSIC', cnpj: '00.000.000/0001-00' },
-  { id: 'ed-sony', nome: 'SONY MUSIC', cnpj: '11.111.111/0001-11' },
-  { id: 'ed-emi',  nome: 'EMI MUSIC', cnpj: '22.222.222/0001-22' },
-]
-
-// ── Signatários — pessoas do banco de dados disponíveis p/ assinar ───────────
-
-type Signatario = {
+type SignatarioForm = {
   id: string
   nome: string
-  cargo: string
   cpf: string
   email: string
 }
-
-// Responsáveis da editora cadastrados (o primeiro é o padrão)
-const RESPONSAVEIS_EDITORA: Signatario[] = [
-  { id: 'resp-001', nome: 'MARINA LOPES',          cargo: 'Diretora Executiva',    cpf: '111.222.333-44', email: 'marina@topshowmusic.com.br' },
-  { id: 'resp-002', nome: 'CARLOS EDUARDO MELO',   cargo: 'Diretor Jurídico',      cpf: '222.333.444-55', email: 'carlos@topshowmusic.com.br' },
-  { id: 'resp-003', nome: 'PATRICIA SOUZA RAMOS',  cargo: 'Gerente de Contratos',  cpf: '333.444.555-66', email: 'patricia@topshowmusic.com.br' },
-]
-
-// Testemunhas cadastradas (as primeiras duas são o padrão)
-const TESTEMUNHAS_DB: Signatario[] = [
-  { id: 'test-001', nome: 'RODRIGO ANDRADE SILVA', cargo: 'Assistente Jurídico',   cpf: '444.555.666-77', email: 'rodrigo@topshowmusic.com.br' },
-  { id: 'test-002', nome: 'JULIANA COSTA LIMA',    cargo: 'Assessora Editorial',   cpf: '555.666.777-88', email: 'juliana@topshowmusic.com.br' },
-  { id: 'test-003', nome: 'FERNANDO BRAGA NETO',   cargo: 'Coordenador Financeiro',cpf: '666.777.888-99', email: 'fernando@topshowmusic.com.br' },
-  { id: 'test-004', nome: 'SABRINA MOURA DIAS',    cargo: 'Analista de Royalties', cpf: '777.888.999-00', email: 'sabrina@topshowmusic.com.br' },
-]
 
 // Siglas oficiais: CA=Compositor/Autor | AD=Adaptador | AR=Arranjador
 //                  V=Versionista | E=Editora | SE=Subeditora | AM=Editora Administradora
@@ -129,13 +95,15 @@ type DireitoForm = {
   pct_editora: number
 }
 
+// Regra de negócio: coautores NÃO são controlados automaticamente pela editora
+// neste contrato. Cada titular possui seu próprio instrumento contratual.
+// O campo "editado" foi removido — controle editorial é sempre derivado de contrato próprio.
 type CoAutor = {
   id: string
   titular_id: string
   nome: string
   pct: number
   papel: string
-  editado: boolean   // true = tem contrato de edição com esta editora → gera linha da editora no cadastro
 }
 
 type ObraForm = {
@@ -160,16 +128,26 @@ type FormState = {
   tipo: TipoObra | ''
   titular_id: string
   titular_nome: string
+  titular_email: string
   direitos: DireitoForm[]
   obras: ObraForm[]
   editoras_coeditoras: EditoraCoeditora[]
   data_emissao: string
   provedor_assinatura: string
-  // Signatários
-  responsavel_editora_id: string
-  testemunha1_id: string
-  testemunha2_id: string
+  // Signatários — selecionados de PF reais do banco
+  responsavel_editora: SignatarioForm
+  testemunha1: SignatarioForm
+  testemunha2: SignatarioForm
   observacoes: string
+}
+
+// ── PF para pickers ───────────────────────────────────────────────────────────
+
+type PessoaFisica = {
+  id: string
+  nome_completo: string
+  cpf_cnpj?: string
+  email?: string
 }
 
 function novaObra(): ObraForm {
@@ -192,18 +170,21 @@ function buildDireitos(): DireitoForm[] {
   ]
 }
 
+const INITIAL_SIGNATARIO: SignatarioForm = { id: '', nome: '', cpf: '', email: '' }
+
 const INITIAL: FormState = {
   tipo: '',
   titular_id: '',
   titular_nome: '',
+  titular_email: '',
   direitos: buildDireitos(),
   obras: [novaObra()],
   editoras_coeditoras: [],
   data_emissao: new Date().toISOString().slice(0, 10),
   provedor_assinatura: 'd4sign',
-  responsavel_editora_id: RESPONSAVEIS_EDITORA[0].id,
-  testemunha1_id: TESTEMUNHAS_DB[0].id,
-  testemunha2_id: TESTEMUNHAS_DB[1].id,
+  responsavel_editora: { ...INITIAL_SIGNATARIO },
+  testemunha1: { ...INITIAL_SIGNATARIO },
+  testemunha2: { ...INITIAL_SIGNATARIO },
   observacoes: '',
 }
 
@@ -242,9 +223,9 @@ function AlertBox({ children, variant = 'amber' }: { children: React.ReactNode; 
 // ── Geração de download do contrato (texto formatado → blob) ─────────────────
 
 function gerarDownloadContrato(form: FormState, modo: 'rascunho' | 'assinado') {
-  const resp = RESPONSAVEIS_EDITORA.find(r => r.id === form.responsavel_editora_id) || RESPONSAVEIS_EDITORA[0]
-  const t1   = TESTEMUNHAS_DB.find(t => t.id === form.testemunha1_id)   || TESTEMUNHAS_DB[0]
-  const t2   = TESTEMUNHAS_DB.find(t => t.id === form.testemunha2_id)   || TESTEMUNHAS_DB[1]
+  const resp = form.responsavel_editora
+  const t1   = form.testemunha1
+  const t2   = form.testemunha2
   const tipoNome = form.tipo ? TIPO_CONFIG[form.tipo].nome : '—'
   const linhaDir = (d: DireitoForm) =>
     `   [${d.ativo ? 'X' : ' '}] ${d.nome}\n       Autor: ${d.pct_autor}%   |   Editora: ${d.pct_editora}%\n`
@@ -261,7 +242,6 @@ function gerarDownloadContrato(form: FormState, modo: 'rascunho' | 'assinado') {
     '── EDITORA ─────────────────────────────────────────────',
     'TOP SHOW MUSIC',
     `Responsável     : ${resp.nome}`,
-    `Cargo           : ${resp.cargo}`,
     `CPF             : ${resp.cpf}`,
     `E-mail          : ${resp.email}`,
     '',
@@ -282,18 +262,12 @@ function gerarDownloadContrato(form: FormState, modo: 'rascunho' | 'assinado') {
     ...form.direitos.filter(d => d.bloco === 'BR').map(linhaDir),
     '── DIREITOS EXTERIOR ────────────────────────────────────',
     ...form.direitos.filter(d => d.bloco === 'EXT').map(linhaDir),
-    // observacoes NÃO vai para o contrato — fica salvo apenas no cadastro da(s) obra(s)
     '── ASSINATURAS ──────────────────────────────────────────',
     '',
     `Cedente: ${form.titular_nome || '—'}`,
     modo === 'assinado' ? '  Assinado digitalmente' : '  _________________________________',
     '',
-    ...form.obras.flatMap(o => o.co_autores.filter(c => c.nome).map(c => [
-      `Co-autor: ${c.nome}`,
-      modo === 'assinado' ? '  Assinado digitalmente' : '  _________________________________',
-      '',
-    ])).flat(),
-    `Responsável Editora: ${resp.nome} — ${resp.cargo}`,
+    `Responsável Editora: ${resp.nome}`,
     modo === 'assinado' ? '  Assinado digitalmente' : '  _________________________________',
     '',
     `Testemunha 1: ${t1.nome}`,
@@ -316,20 +290,117 @@ function gerarDownloadContrato(form: FormState, modo: 'rascunho' | 'assinado') {
   URL.revokeObjectURL(url)
 }
 
-// ── Componente auxiliar de linha de signatário (read-only) ───────────────────
+// ── PessoaPicker — seleciona PF real do banco ────────────────────────────────
 
-function SignatarioRow({ label, icon, cor, nome, cargo, cpf, readOnly }: {
-  label: string; icon: React.ReactNode; cor: string
-  nome: string; cargo: string; cpf: string; readOnly?: boolean
+function PessoaPicker({
+  label, cor, badge, valor, onChange, lista,
+}: {
+  label: string
+  cor: string
+  badge: string
+  valor: SignatarioForm
+  onChange: (v: SignatarioForm) => void
+  lista: PessoaFisica[]
 }) {
+  const [aberto, setAberto] = useState(false)
+  const [busca, setBusca] = useState('')
+
+  const filtrado = lista.filter(p => {
+    const q = busca.toUpperCase()
+    return (
+      (p.nome_completo ?? '').toUpperCase().includes(q) ||
+      (p.cpf_cnpj ?? '').includes(q)
+    )
+  })
+
+  function selecionar(p: PessoaFisica) {
+    onChange({ id: p.id, nome: p.nome_completo, cpf: p.cpf_cnpj ?? '', email: p.email ?? '' })
+    setAberto(false)
+    setBusca('')
+  }
+
+  function limpar() {
+    onChange({ id: '', nome: '', cpf: '', email: '' })
+    setAberto(false)
+    setBusca('')
+  }
+
+  const borderColor = `border-${cor}-500/20`
+  const bgColor = `bg-${cor}-500/15`
+  const iconColor = `text-${cor}-400`
+  const badgeColor = `text-${cor}-400/70 bg-${cor}-500/10 border-${cor}-500/20`
+
   return (
-    <div className={`flex items-center gap-3 bg-white/[0.02] border border-${cor}-500/20 rounded-xl px-4 py-3`}>
-      <div className={`w-8 h-8 rounded-full bg-${cor}-500/15 flex items-center justify-center shrink-0`}>{icon}</div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-white/80 truncate">{nome}</p>
-        <p className="text-[10px] text-white/35">{cargo}{readOnly ? ' · bloqueado' : ''}</p>
+    <div className={`bg-white/[0.02] border ${borderColor} rounded-xl p-4 space-y-2.5`}>
+      <div className="flex items-center gap-2">
+        <div className={`w-8 h-8 rounded-full ${bgColor} flex items-center justify-center shrink-0`}>
+          <UserCheck className={`w-4 h-4 ${iconColor}`} />
+        </div>
+        <div className="flex-1">
+          <p className="text-xs font-semibold text-white/70">{label}</p>
+          <p className="text-[10px] text-white/35">Pessoa Física cadastrada no banco</p>
+        </div>
+        <span className={`text-[10px] ${badgeColor} px-2 py-0.5 rounded border`}>{badge}</span>
       </div>
-      <span className={`text-[10px] text-${cor}-400/70 bg-${cor}-500/10 px-2 py-0.5 rounded border border-${cor}-500/20 shrink-0 uppercase`}>{label}</span>
+
+      {valor.id ? (
+        <div className="flex items-center gap-2 bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white/80 truncate">{valor.nome}</p>
+            <p className="text-[10px] text-white/40">
+              {valor.cpf ? `CPF: ${valor.cpf}` : ''}
+              {valor.cpf && valor.email ? ' · ' : ''}
+              {valor.email}
+            </p>
+          </div>
+          <button
+            onClick={limpar}
+            className="p-1 rounded hover:bg-rose-500/10 text-white/25 hover:text-rose-400 transition-colors shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setAberto(o => !o)}
+          className="w-full h-9 flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-sm text-white/30 hover:border-white/15 transition-colors"
+        >
+          <Search className="w-3.5 h-3.5" />
+          Selecionar pessoa física...
+        </button>
+      )}
+
+      {aberto && (
+        <div className="space-y-2">
+          <input
+            autoFocus
+            type="text"
+            placeholder="Buscar por nome ou CPF..."
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-sm text-white/70 placeholder:text-white/20 outline-none focus:border-violet-500/40"
+          />
+          <div className="max-h-48 overflow-y-auto space-y-1">
+            {filtrado.length === 0 && (
+              <p className="text-xs text-white/25 py-3 text-center">Nenhuma pessoa encontrada.</p>
+            )}
+            {filtrado.map(p => (
+              <button
+                key={p.id}
+                onClick={() => selecionar(p)}
+                className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/[0.04] transition-colors"
+              >
+                <p className="text-sm text-white/70">{p.nome_completo}</p>
+                <p className="text-[10px] text-white/35">
+                  {p.cpf_cnpj ? `CPF: ${p.cpf_cnpj}` : ''}
+                  {p.cpf_cnpj && p.email ? ' · ' : ''}
+                  {p.email}
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -338,32 +409,190 @@ function SignatarioRow({ label, icon, cor, nome, cargo, cpf, readOnly }: {
 
 export default function NovoContratoObrasPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [step, setStep] = useState(0)
   const [form, setForm] = useState<FormState>(INITIAL)
   const [buscaTitular, setBuscaTitular] = useState('')
   const [obraAtiva, setObraAtiva] = useState(0)
+  const [editContratoId, setEditContratoId] = useState<string | null>(null)
   const btnProximoRef = useRef<HTMLButtonElement>(null)
+  // Titulares PF+Autor para Step 1
+  const [titulares, setTitulares] = useState<{ id: string; nome_completo: string; cpf?: string; codigo_titular?: string; pessoa?: string; email?: string; contatos?: Array<{tipo: string; valor: string}> }[]>([])
+  // Todas as PF do banco para pickers de assinantes
+  const [pessoasFisicas, setPessoasFisicas] = useState<PessoaFisica[]>([])
+  const [editoras, setEditoras] = useState<{ id: string; nome_fantasia: string; cnpj?: string }[]>([])
+  const [salvando, setSalvando] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  // Detecção de obra duplicada
+  const [obrasExistentes, setObrasExistentes] = useState<{ id: string; titulo: string }[]>([])
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Reset/carrega ao montar — garante wizard limpo ou pré-preenchido em modo edição
+  useEffect(() => {
+    const editId = searchParams?.get('edit') ?? null
+    setBuscaTitular('')
+    setObraAtiva(0)
+    setSaveError(null)
+
+    if (editId) {
+      // Modo edição: carregar contrato existente
+      setEditContratoId(editId)
+      authFetch(`/api/contratos/${editId}`)
+        .then(r => r.json())
+        .then(json => {
+          const c = json.contrato
+          if (!c) return
+
+          // Reverse-map tipo DB → form value
+          const tipoFormMap: Record<string, string> = { cessao: 'cessao_obras', cessao_parcial: 'cessao_obras' }
+          const d4sign: Array<{ papel: string; nome?: string; cpf?: string; email?: string; titular_id?: string }> = c.assinantes_d4sign ?? []
+
+          const findSignatario = (papel: string): SignatarioForm => {
+            const a = d4sign.find(x => x.papel === papel)
+            return a ? { id: a.titular_id ?? '', nome: a.nome ?? '', cpf: a.cpf ?? '', email: a.email ?? '' } : { ...INITIAL_SIGNATARIO }
+          }
+
+          setStep(0)
+          setForm({
+            tipo:                    (tipoFormMap[c.tipo] ?? c.tipo ?? '') as TipoObra | '',
+            titular_id:              c.titular_id ?? '',
+            titular_nome:            c.titular_principal ?? '',
+            titular_email:           d4sign.find(a => a.papel === 'cedente')?.email ?? '',
+            direitos:                Array.isArray(c.splits_direitos) && c.splits_direitos.length ? c.splits_direitos : buildDireitos(),
+            obras:                   Array.isArray(c.obras_json) && c.obras_json.length ? c.obras_json : [novaObra()],
+            editoras_coeditoras:     [],
+            data_emissao:            c.vigencia_inicio ?? c.data_inicio ?? new Date().toISOString().slice(0, 10),
+            provedor_assinatura:     c.provedor_assinatura ?? 'd4sign',
+            responsavel_editora:     findSignatario('responsavel_editora'),
+            testemunha1:             findSignatario('testemunha_1'),
+            testemunha2:             findSignatario('testemunha_2'),
+            observacoes:             c.observacoes ?? '',
+          })
+        })
+        .catch(() => {
+          // Falha ao carregar: wizard limpo
+          setEditContratoId(null)
+          setForm({ tipo: '', titular_id: '', titular_email: '', titular_nome: '', direitos: buildDireitos(), obras: [novaObra()], editoras_coeditoras: [], data_emissao: new Date().toISOString().slice(0, 10), provedor_assinatura: 'd4sign', responsavel_editora: { ...INITIAL_SIGNATARIO }, testemunha1: { ...INITIAL_SIGNATARIO }, testemunha2: { ...INITIAL_SIGNATARIO }, observacoes: '' })
+        })
+    } else {
+      // Modo criação: wizard limpo
+      setEditContratoId(null)
+      setStep(0)
+      setForm({
+        tipo: '',
+        titular_id: '',
+        titular_nome: '',
+        titular_email: '',
+        direitos: buildDireitos(),
+        obras: [novaObra()],
+        editoras_coeditoras: [],
+        data_emissao: new Date().toISOString().slice(0, 10),
+        provedor_assinatura: 'd4sign',
+        responsavel_editora: { ...INITIAL_SIGNATARIO },
+        testemunha1: { ...INITIAL_SIGNATARIO },
+        testemunha2: { ...INITIAL_SIGNATARIO },
+        observacoes: '',
+      })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    // Step 1: apenas PF categoria autor
+    authFetch('/api/titulares?tipo=autor&status=ativo&per_page=200')
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(d => {
+        const pf = (d.data ?? []).filter((t: { pessoa?: string }) => !t.pessoa || t.pessoa === 'PF')
+        setTitulares(pf)
+      })
+      .catch(() => {})
+
+    // Pickers de assinantes: todas as PF ativas
+    authFetch('/api/titulares?tipo=todos&status=ativo&per_page=500')
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(d => {
+        const pf: PessoaFisica[] = (d.data ?? [])
+          .filter((t: { pessoa?: string }) => !t.pessoa || t.pessoa === 'PF')
+          .map((t: { id: string; nome_completo: string; cpf?: string; cpf_cnpj?: string; email?: string; contatos?: Array<{tipo: string; valor: string}> }) => {
+            const email = t.email
+              ?? (Array.isArray(t.contatos) ? t.contatos.find(c => c.tipo === 'email')?.valor ?? '' : '')
+            return {
+              id: t.id,
+              nome_completo: t.nome_completo,
+              cpf_cnpj: t.cpf ?? t.cpf_cnpj ?? '',
+              email,
+            }
+          })
+        setPessoasFisicas(pf)
+      })
+      .catch(() => {})
+
+    authFetch('/api/editoras?status=todos')
+      .then(r => r.ok ? r.json() : { editoras: [] })
+      .then(d => setEditoras(d.editoras ?? []))
+      .catch(() => {})
+  }, [])
+
+  // Reconciliação edit-mode: preenche titular_id dos signatários pelo CPF quando pessoasFisicas carrega
+  useEffect(() => {
+    if (!editContratoId || pessoasFisicas.length === 0) return
+    setForm(prev => {
+      function reconciliar(sig: SignatarioForm): SignatarioForm {
+        if (sig.id || !sig.cpf) return sig
+        const match = pessoasFisicas.find(p => (p.cpf_cnpj ?? '').replace(/\D/g, '') === sig.cpf.replace(/\D/g, ''))
+        return match ? { ...sig, id: match.id, email: sig.email || match.email || '' } : sig
+      }
+      return {
+        ...prev,
+        responsavel_editora: reconciliar(prev.responsavel_editora),
+        testemunha1: reconciliar(prev.testemunha1),
+        testemunha2: reconciliar(prev.testemunha2),
+      }
+    })
+  }, [editContratoId, pessoasFisicas]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Debounce: verificar obra duplicada pelo título
+  const checkObra = useCallback((titulo: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!titulo.trim()) { setObrasExistentes([]); return }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const r = await authFetch(`/api/obras?search=${encodeURIComponent(titulo)}&per_page=5`)
+        if (r.ok) {
+          const d = await r.json()
+          setObrasExistentes(d.data ?? d.obras ?? [])
+        }
+      } catch { /* silencioso */ }
+    }, 600)
+  }, [])
 
   function upd(patch: Partial<FormState>) { setForm(f => ({ ...f, ...patch })) }
   function next() { if (step < TOTAL_STEPS - 1) setStep(s => s + 1) }
   function prev() { if (step > 0) setStep(s => s - 1) }
 
-  const titularFiltrado = TITULARES_PF.filter(t =>
-    t.nome.includes(buscaTitular.toUpperCase()) ||
-    t.cpf.includes(buscaTitular) ||
-    t.codigo.includes(buscaTitular.toUpperCase())
-  )
+  const titularFiltrado = titulares.filter(t => {
+    const q = buscaTitular.toUpperCase()
+    return (
+      (t.nome_completo ?? '').toUpperCase().includes(q) ||
+      (t.cpf ?? '').includes(q) ||
+      (t.codigo_titular ?? '').toUpperCase().includes(q)
+    )
+  })
 
   // ── Obra helpers ──────────────────────────────────────────────────────────
 
   function updateObra(idx: number, patch: Partial<ObraForm>) {
-    const obras = form.obras.map((o, i) => i === idx ? { ...o, ...patch } : o)
+    const obras = form.obras.map((o, i) => {
+      if (i !== idx) return o
+      const updated = { ...o, ...patch }
+      if ('titulo' in patch) checkObra(patch.titulo ?? '')
+      return updated
+    })
     upd({ obras })
   }
 
   function addCoAutor(obraIdx: number) {
     const obras = form.obras.map((o, i) => i === obraIdx
-      ? { ...o, co_autores: [...o.co_autores, { id: `ca-${Date.now()}`, titular_id: '', nome: '', pct: 0, papel: 'compositor', editado: false }] }
+      ? { ...o, co_autores: [...o.co_autores, { id: `ca-${Date.now()}`, titular_id: '', nome: '', pct: 0, papel: 'compositor' }] }
       : o
     )
     upd({ obras })
@@ -391,8 +620,6 @@ export default function NovoContratoObrasPage() {
   }
 
   function updateDireito(codigo: string, patch: Partial<DireitoForm>) {
-    // Se todos do bloco estiverem selecionados e o patch contiver pct_autor,
-    // aplica o mesmo percentual em todos do mesmo bloco (sincronização em massa)
     const alvo = form.direitos.find(d => d.codigo === codigo)
     if (alvo && 'pct_autor' in patch) {
       const todosBloco = form.direitos.filter(d => d.bloco === alvo.bloco)
@@ -414,19 +641,127 @@ export default function NovoContratoObrasPage() {
 
   const obraInvalidas = form.obras.filter(o => somaTotal(o) !== 100 || !o.titulo.trim())
 
-  function salvarContrato() {
-    const contratos = JSON.parse(localStorage.getItem('sync_contratos_obras_v1') || '[]')
-    const novo = {
-      id: `cnt-obras-${Date.now()}`,
-      numero: `CTO-${String(contratos.length + 1).padStart(4, '0')}`,
-      ...form,
-      status: 'rascunho',
-      aguarda_montagem_obra: true,
-      created_at: new Date().toISOString(),
+  // Valida os 4 assinantes obrigatórios
+  // Regra jurídica: T1 ≠ cedente, T1 ≠ responsável; T2 ≠ cedente, T2 ≠ responsável, T2 ≠ T1
+  // Email é obrigatório para todos (integração D4Sign)
+  const errosAssinantes: string[] = (() => {
+    const erros: string[] = []
+    const cid  = form.titular_id
+    const rid  = form.responsavel_editora.id
+    const t1id = form.testemunha1.id
+    const t2id = form.testemunha2.id
+
+    // Presença obrigatória
+    if (!rid)  erros.push('Responsável da editora não selecionado.')
+    if (!t1id) erros.push('Testemunha 1 não selecionada.')
+    if (!t2id) erros.push('Testemunha 2 não selecionada.')
+
+    // Regra jurídica: testemunhas devem ser neutras (≠ cedente e ≠ responsável)
+    if (cid && t1id && t1id === cid) erros.push('Testemunha 1 não pode ser o cedente.')
+    if (rid && t1id && t1id === rid) erros.push('Testemunha 1 não pode ser o responsável da editora.')
+    if (cid && t2id && t2id === cid) erros.push('Testemunha 2 não pode ser o cedente.')
+    if (rid && t2id && t2id === rid) erros.push('Testemunha 2 não pode ser o responsável da editora.')
+    if (t1id && t2id && t1id === t2id) erros.push('Testemunha 1 e Testemunha 2 não podem ser a mesma pessoa.')
+
+    // E-mail obrigatório para D4Sign
+    if (cid && !form.titular_email)                  erros.push('Cedente sem e-mail — atualize o cadastro do titular.')
+    if (rid && !form.responsavel_editora.email)      erros.push('Responsável da editora sem e-mail cadastrado.')
+    if (t1id && !form.testemunha1.email)             erros.push('Testemunha 1 sem e-mail cadastrado.')
+    if (t2id && !form.testemunha2.email)             erros.push('Testemunha 2 sem e-mail cadastrado.')
+
+    return erros
+  })()
+
+  async function salvarContrato(): Promise<{ id: string; numero: string } | null> {
+    setSalvando(true)
+    setSaveError(null)
+    try {
+      const payload = {
+        tipo:            form.tipo || 'cessao_obras',
+        titular_id:      form.titular_id || null,
+        data_inicio:     form.data_emissao || null,
+        observacoes:     form.observacoes || null,
+        splits_direitos: form.direitos,
+        status:          'rascunho',
+        numero:          `CTO-${Date.now()}`,
+        // Obras vinculadas ao contrato
+        obras: form.obras.map(o => ({
+          titulo:             o.titulo,
+          titulo_alternativo: o.titulo_alternativo || null,
+          subtitulo:          o.subtitulo || null,
+          texto_poetico:      o.texto_poetico || null,
+          pct_autor:          o.pct_autor,
+          papel_autor:        o.papel_autor,
+          co_autores: o.co_autores.map(c => ({
+            titular_id: c.titular_id || null,
+            nome:       c.nome,
+            pct:        c.pct,
+            papel:      c.papel,
+          })),
+        })),
+        // Payload estruturado para D4Sign — 4 assinantes com e-mail
+        assinantes_d4sign: [
+          {
+            papel:      'cedente',
+            nome:       form.titular_nome,
+            titular_id: form.titular_id,
+            email:      form.titular_email,
+          },
+          {
+            papel:      'responsavel_editora',
+            titular_id: form.responsavel_editora.id,
+            nome:       form.responsavel_editora.nome,
+            cpf:        form.responsavel_editora.cpf,
+            email:      form.responsavel_editora.email,
+          },
+          {
+            papel:      'testemunha_1',
+            titular_id: form.testemunha1.id,
+            nome:       form.testemunha1.nome,
+            cpf:        form.testemunha1.cpf,
+            email:      form.testemunha1.email,
+          },
+          {
+            papel:      'testemunha_2',
+            titular_id: form.testemunha2.id,
+            nome:       form.testemunha2.nome,
+            cpf:        form.testemunha2.cpf,
+            email:      form.testemunha2.email,
+          },
+        ],
+        provedor_assinatura: form.provedor_assinatura,
+      }
+
+      let res: Response
+      if (editContratoId) {
+        // Modo edição: PATCH no contrato existente
+        res = await authFetch(`/api/contratos/${editContratoId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        })
+      } else {
+        // Modo criação: POST novo contrato
+        const createPayload = { ...payload, status: 'rascunho', numero: `CTO-${Date.now()}` }
+        res = await authFetch('/api/contratos', {
+          method: 'POST',
+          body: JSON.stringify(createPayload),
+        })
+      }
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        setSaveError((err as Record<string, string>).error ?? `Erro ${res.status} ao salvar contrato.`)
+        return null
+      }
+      const json = await res.json()
+      const saved = (json.data ?? json.contrato) as { id: string; numero: string }
+      return { id: editContratoId ?? saved.id, numero: saved.numero ?? `CTO-${editContratoId?.slice(-8) ?? ''}` }
+    } catch {
+      setSaveError('Erro inesperado ao salvar. Verifique a conexão.')
+      return null
+    } finally {
+      setSalvando(false)
     }
-    contratos.unshift(novo)
-    localStorage.setItem('sync_contratos_obras_v1', JSON.stringify(contratos))
-    return novo
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -467,7 +802,7 @@ export default function NovoContratoObrasPage() {
   )
 
   // ─────────────────────────────────────────────────────────────────────────
-  // STEP 1 — Titular PF
+  // STEP 1 — Titular PF + categoria Autor
   // ─────────────────────────────────────────────────────────────────────────
 
   const renderStep1 = () => (
@@ -495,7 +830,9 @@ export default function NovoContratoObrasPage() {
           <button
             key={t.id}
             onClick={() => {
-              upd({ titular_id: t.id, titular_nome: t.nome })
+              const emailTitular = t.email
+                ?? (Array.isArray(t.contatos) ? t.contatos.find(c => c.tipo === 'email')?.valor ?? '' : '')
+              upd({ titular_id: t.id, titular_nome: t.nome_completo, titular_email: emailTitular })
               setTimeout(() => btnProximoRef.current?.focus(), 50)
             }}
             className={[
@@ -506,11 +843,11 @@ export default function NovoContratoObrasPage() {
             ].join(' ')}
           >
             <div className="w-8 h-8 rounded-full bg-violet-500/10 flex items-center justify-center text-xs font-bold text-violet-400 shrink-0">
-              {t.nome[0]}
+              {(t.nome_completo ?? '?')[0]}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-white/80 truncate">{t.nome}</p>
-              <p className="text-xs text-white/40">CPF: {t.cpf} · Cód: {t.codigo}</p>
+              <p className="text-sm font-semibold text-white/80 truncate">{t.nome_completo}</p>
+              <p className="text-xs text-white/40">{t.cpf ? `CPF: ${t.cpf}` : ''}{t.cpf && t.codigo_titular ? ' · ' : ''}{t.codigo_titular ? `Cód: ${t.codigo_titular}` : ''}</p>
             </div>
             {form.titular_id === t.id && (
               <Check className="w-4 h-4 text-violet-400 ml-auto shrink-0" />
@@ -519,7 +856,7 @@ export default function NovoContratoObrasPage() {
         ))}
         {titularFiltrado.length === 0 && (
           <div className="text-xs text-white/30 py-6 text-center">
-            Nenhum titular encontrado. Cadastre pelo menu M1 Titulares.
+            Nenhum titular Pessoa Física / Autor encontrado. Cadastre pelo menu Titulares.
           </div>
         )}
       </div>
@@ -658,6 +995,12 @@ export default function NovoContratoObrasPage() {
     const soma = somaTotal(obra)
     const somaOk = soma === 100
 
+    // Obras do banco que coincidem com o título digitado
+    const coincidentes = obrasExistentes.filter(o =>
+      o.titulo?.toUpperCase().includes(obra.titulo.trim().toUpperCase()) ||
+      obra.titulo.trim().toUpperCase().includes((o.titulo ?? '').toUpperCase())
+    )
+
     return (
       <div className="space-y-4">
         {/* Abas das obras */}
@@ -713,6 +1056,21 @@ export default function NovoContratoObrasPage() {
               placeholder="EX: AMOR DE BAR"
               className="w-full h-10 bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 text-sm text-white/80 uppercase placeholder:text-white/20 outline-none focus:border-violet-500/40"
             />
+            {/* Alerta de possível obra duplicada */}
+            {coincidentes.length > 0 && obra.titulo.trim().length >= 3 && (
+              <div className="mt-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-xs text-amber-300 space-y-1">
+                <p className="font-semibold flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  Possível obra já existente no banco:
+                </p>
+                {coincidentes.map(o => (
+                  <p key={o.id} className="text-amber-300/70 pl-5">· {o.titulo}</p>
+                ))}
+                <p className="text-amber-300/50 pl-5 mt-1">
+                  Confira antes de criar para evitar duplicidade. O sistema não consolida automaticamente.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -792,21 +1150,21 @@ export default function NovoContratoObrasPage() {
               </div>
             </div>
 
-            {/* Co-autores */}
+            {/* Co-autores — participam da obra, SEM controle editorial automático */}
             {obra.co_autores.map((ca, cai) => (
               <div key={ca.id} className="flex items-center gap-2 flex-wrap">
                 <div className="w-6 h-6 rounded-full bg-sky-500/15 flex items-center justify-center text-[10px] font-bold text-sky-400 shrink-0">C</div>
                 <select
                   value={ca.titular_id}
                   onChange={e => {
-                    const t = TITULARES_PF.find(t => t.id === e.target.value)
-                    updateCoAutor(obraAtiva, cai, { titular_id: e.target.value, nome: t?.nome || '' })
+                    const t = titulares.find(t => t.id === e.target.value)
+                    updateCoAutor(obraAtiva, cai, { titular_id: e.target.value, nome: t?.nome_completo || '' })
                   }}
                   className="flex-1 min-w-[140px] h-8 bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 text-xs text-white/70 outline-none focus:border-sky-500/40"
                 >
                   <option value="">Selecionar co-autor...</option>
-                  {TITULARES_PF.filter(t => t.id !== form.titular_id).map(t => (
-                    <option key={t.id} value={t.id}>{t.nome}</option>
+                  {titulares.filter(t => t.id !== form.titular_id).map(t => (
+                    <option key={t.id} value={t.id}>{t.nome_completo}</option>
                   ))}
                 </select>
                 <select
@@ -827,18 +1185,6 @@ export default function NovoContratoObrasPage() {
                     className="w-16 h-8 bg-white/[0.06] border border-white/[0.10] rounded-lg px-2 text-sm text-white/80 outline-none focus:border-sky-500/40 text-center font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                   <span className="text-sm text-white/40">%</span>
-                  {/* Toggle: co-autor editado por esta editora? */}
-                  <button
-                    title={ca.editado ? 'Tem contrato de edição com esta editora' : 'Sem contrato de edição (100% CA)'}
-                    onClick={() => updateCoAutor(obraAtiva, cai, { editado: !ca.editado })}
-                    className={`h-6 px-2 rounded text-[10px] font-bold border transition-colors shrink-0 ${
-                      ca.editado
-                        ? 'bg-sky-500/20 border-sky-500/40 text-sky-300'
-                        : 'bg-white/[0.03] border-white/[0.08] text-white/25'
-                    }`}
-                  >
-                    {ca.editado ? 'Editado (E)' : 'Sem edição'}
-                  </button>
                   <button
                     onClick={() => removeCoAutor(obraAtiva, cai)}
                     className="p-1 rounded hover:bg-rose-500/10 text-white/25 hover:text-rose-400 transition-colors"
@@ -859,7 +1205,14 @@ export default function NovoContratoObrasPage() {
             {!somaOk && <AlertBox variant="amber">A soma das participações deve ser exatamente 100%. Atual: {soma}%</AlertBox>}
           </div>
 
-          {/* Coedição: adicionar editora coeditora por obra */}
+          {/* Nota sobre coautores */}
+          <div className="bg-sky-500/[0.04] border border-sky-500/15 rounded-xl px-4 py-3 text-xs text-sky-400/70">
+            Co-autores participam da obra mas <strong>não assinam este contrato</strong> e
+            <strong> não são controlados automaticamente</strong> pela editora.
+            Cada titular possui seu próprio instrumento contratual.
+          </div>
+
+          {/* Coedição */}
           {form.tipo === 'coedicao' && (
             <div className="bg-teal-500/[0.04] border border-teal-500/20 rounded-xl p-4 space-y-3">
               <p className="text-xs font-bold text-teal-400 uppercase tracking-wider">Editoras coeditoras</p>
@@ -871,17 +1224,17 @@ export default function NovoContratoObrasPage() {
                   <select
                     value={ec.editora_id}
                     onChange={e => {
-                      const ed = EDITORAS.find(x => x.id === e.target.value)
+                      const ed = editoras.find(x => x.id === e.target.value)
                       upd({
                         editoras_coeditoras: form.editoras_coeditoras.map((x, i) =>
-                          i === eci ? { ...x, editora_id: e.target.value, nome: ed?.nome || '' } : x
+                          i === eci ? { ...x, editora_id: e.target.value, nome: ed?.nome_fantasia || '' } : x
                         ),
                       })
                     }}
                     className="flex-1 h-8 bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 text-xs text-white/70 outline-none focus:border-teal-500/40 min-w-0"
                   >
                     <option value="">Selecionar editora...</option>
-                    {EDITORAS.map(ed => <option key={ed.id} value={ed.id}>{ed.nome}</option>)}
+                    {editoras.map(ed => <option key={ed.id} value={ed.id}>{ed.nome_fantasia}</option>)}
                   </select>
                   <input
                     type="number"
@@ -924,20 +1277,17 @@ export default function NovoContratoObrasPage() {
 
   // ─────────────────────────────────────────────────────────────────────────
   // STEP CADASTRO — Formação do Cadastro de Obra
-  // Mostra preview da estrutura: Link | Nome | Pseudônimo | % | Categoria
-  // Para cada obra: autor do contrato + editora (Link 1) + co-autores (Links seguintes)
-  // Os % são calculados: pct_participacao × pct_direito_br (média ativa)
+  // Regra: co-autores são sempre CA puro (sem linha de editora).
+  // A editora NÃO entra nos links dos co-autores — cada titular tem seu contrato.
   // ─────────────────────────────────────────────────────────────────────────
 
   const renderStepCadastro = () => {
-    // Percentual médio BR ativo (todos sincronizados quando "Selecionar todos")
     const brAtivos = form.direitos.filter(d => d.bloco === 'BR' && d.ativo)
     const avgPctAutorBR = brAtivos.length
       ? brAtivos.reduce((s, d) => s + d.pct_autor, 0) / brAtivos.length
       : 75
     const avgPctEditoraBR = 100 - avgPctAutorBR
 
-    // Percentual médio EXT ativo
     const extAtivos = form.direitos.filter(d => d.bloco === 'EXT' && d.ativo)
     const avgPctAutorEXT = extAtivos.length
       ? extAtivos.reduce((s, d) => s + d.pct_autor, 0) / extAtivos.length
@@ -966,7 +1316,7 @@ export default function NovoContratoObrasPage() {
           const linhas: LinhaTabela[] = []
           let linkNum = 1
 
-          // — Link do titular do contrato + editora
+          // — Link 1: titular do contrato + editora (controlado)
           const pctAutorTitular = (obra.pct_autor * avgPctAutorBR) / 100
           const pctEditoraTitular = (obra.pct_autor * avgPctEditoraBR) / 100
 
@@ -988,30 +1338,15 @@ export default function NovoContratoObrasPage() {
           }
           linkNum++
 
-          // — Links dos co-autores
+          // — Links dos co-autores: CA puro (sem contrato próprio = sem linha de editora)
           for (const ca of obra.co_autores.filter(c => c.nome && c.pct > 0)) {
-            const pctCaAutor = ca.editado
-              ? (ca.pct * avgPctAutorBR) / 100
-              : ca.pct                              // sem contrato → 100% CA
-            const pctCaEditora = ca.editado
-              ? (ca.pct * avgPctEditoraBR) / 100
-              : 0                                   // sem contrato → editora não entra
             linhas.push({
               link: linkNum,
               nome: ca.nome.toUpperCase(),
               pseudo: ca.nome.split(' ')[0].toUpperCase(),
-              pct: parseFloat(pctCaAutor.toFixed(4)),
+              pct: parseFloat(ca.pct.toFixed(4)),
               categoria: 'CA',
             })
-            if (pctCaEditora > 0) {
-              linhas.push({
-                link: linkNum,
-                nome: EDITORA_NOME,
-                pseudo: EDITORA_PSEUDO,
-                pct: parseFloat(pctCaEditora.toFixed(4)),
-                categoria: EDITORA_SIGLA,
-              })
-            }
             linkNum++
           }
 
@@ -1019,7 +1354,6 @@ export default function NovoContratoObrasPage() {
 
           return (
             <div key={idx} className="bg-white/[0.02] border border-white/[0.06] rounded-xl overflow-hidden">
-              {/* Cabeçalho da obra */}
               <div className="bg-white/[0.03] border-b border-white/[0.06] px-4 py-3 grid grid-cols-3 gap-2 text-xs">
                 <div>
                   <span className="text-white/30 block">Título da Obra</span>
@@ -1035,7 +1369,6 @@ export default function NovoContratoObrasPage() {
                 </div>
               </div>
 
-              {/* Tabela */}
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
@@ -1084,7 +1417,6 @@ export default function NovoContratoObrasPage() {
                 </table>
               </div>
 
-              {/* Nota EXT */}
               <div className="px-4 py-2 border-t border-white/[0.04] text-[10px] text-white/25">
                 Baseado nos direitos BR · Autor {avgPctAutorBR.toFixed(0)}% / Editora {avgPctEditoraBR.toFixed(0)}%
                 {avgPctAutorEXT !== avgPctAutorBR && ` · Exterior Autor ${avgPctAutorEXT.toFixed(0)}%`}
@@ -1094,8 +1426,8 @@ export default function NovoContratoObrasPage() {
         })}
 
         <p className="text-[10px] text-white/20 text-center">
-          Este cadastro será gerado automaticamente ao validar o contrato assinado.
-          Co-autores poderão editar sua participação futuramente.
+          Co-autores listados como CA puro — sem controle editorial desta editora neste instrumento.
+          Cada co-autor pode ter seu próprio contrato de cessão futuramente.
         </p>
       </div>
     )
@@ -1165,13 +1497,12 @@ export default function NovoContratoObrasPage() {
 
   // ─────────────────────────────────────────────────────────────────────────
   // STEP 5 — Assinatura
+  // Signatários: cedente (fixo) + responsável editora + 2 testemunhas (todos PF do banco)
+  // Co-autores: participam da obra mas NÃO assinam este contrato
   // ─────────────────────────────────────────────────────────────────────────
 
-  const respEditora = RESPONSAVEIS_EDITORA.find(r => r.id === form.responsavel_editora_id) || RESPONSAVEIS_EDITORA[0]
-  const test1 = TESTEMUNHAS_DB.find(t => t.id === form.testemunha1_id) || TESTEMUNHAS_DB[0]
-  const test2 = TESTEMUNHAS_DB.find(t => t.id === form.testemunha2_id) || TESTEMUNHAS_DB[1]
   const coAutoresObras = form.obras.flatMap(o => o.co_autores.filter(c => c.nome))
-  const totalAssinantes = 1 + coAutoresObras.length + 1 + 2
+  const totalAssinantes = 4
 
   const renderStep5 = () => (
     <div className="space-y-5">
@@ -1210,7 +1541,7 @@ export default function NovoContratoObrasPage() {
           Partes que assinarão — {totalAssinantes} assinantes
         </p>
 
-        {/* Cedente (autor) — fixo */}
+        {/* Cedente (autor) — fixo, determinado pelo Step 1 */}
         <div className="flex items-center gap-3 bg-white/[0.02] border border-violet-500/20 rounded-xl px-4 py-3">
           <div className="w-8 h-8 rounded-full bg-violet-500/15 flex items-center justify-center shrink-0">
             <Users className="w-4 h-4 text-violet-400" />
@@ -1222,95 +1553,76 @@ export default function NovoContratoObrasPage() {
           <span className="text-[10px] text-violet-400/70 bg-violet-500/10 px-2 py-0.5 rounded border border-violet-500/20 shrink-0">CEDENTE</span>
         </div>
 
-        {/* Co-autores — fixos */}
-        {coAutoresObras.map(c => (
-          <div key={c.id} className="flex items-center gap-3 bg-white/[0.02] border border-sky-500/20 rounded-xl px-4 py-3">
-            <div className="w-8 h-8 rounded-full bg-sky-500/15 flex items-center justify-center shrink-0">
-              <Users className="w-4 h-4 text-sky-400" />
+        {/* Co-autores — participam da obra, NÃO assinam */}
+        {coAutoresObras.length > 0 && (
+          <div className="bg-sky-500/[0.04] border border-sky-500/15 rounded-xl px-4 py-3">
+            <p className="text-xs font-semibold text-sky-400/80 mb-1">Co-autores das obras ({coAutoresObras.length})</p>
+            <p className="text-[10px] text-white/35">
+              Participam das obras mas NÃO assinam este contrato. Cada titular assina seu próprio instrumento.
+            </p>
+            <div className="mt-2 space-y-1">
+              {coAutoresObras.map(c => (
+                <p key={c.id} className="text-[11px] text-white/50">{c.nome} — {c.pct}%</p>
+              ))}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-white/80 truncate">{c.nome}</p>
-              <p className="text-[10px] text-white/35">Co-autor · bloqueado</p>
-            </div>
-            <span className="text-[10px] text-sky-400/70 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20 shrink-0">CO-AUTOR</span>
           </div>
-        ))}
+        )}
 
-        {/* Responsável editora — editável */}
-        <div className="bg-white/[0.02] border border-amber-500/20 rounded-xl p-4 space-y-2.5">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-amber-500/15 flex items-center justify-center shrink-0">
-              <Building2 className="w-4 h-4 text-amber-400" />
-            </div>
-            <div className="flex-1">
-              <p className="text-xs font-semibold text-white/70">Responsável pela Editora</p>
-              <p className="text-[10px] text-white/35">TOP SHOW MUSIC</p>
-            </div>
-            <span className="text-[10px] text-amber-400/70 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">EDITORA</span>
-          </div>
-          <select
-            value={form.responsavel_editora_id}
-            onChange={e => upd({ responsavel_editora_id: e.target.value })}
-            className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-sm text-white/80 outline-none focus:border-amber-500/40"
-          >
-            {RESPONSAVEIS_EDITORA.map(r => (
-              <option key={r.id} value={r.id}>{r.nome} — {r.cargo}</option>
-            ))}
-          </select>
-          <div className="flex gap-4 text-[10px] text-white/30 px-1">
-            <span>CPF: {respEditora.cpf}</span>
-            <span>{respEditora.email}</span>
-          </div>
-        </div>
+        {/* Responsável pela editora — qualquer PF cadastrada */}
+        <PessoaPicker
+          label="Responsável pela Editora"
+          cor="amber"
+          badge="EDITORA"
+          valor={form.responsavel_editora}
+          onChange={v => upd({ responsavel_editora: v })}
+          lista={pessoasFisicas}
+        />
 
-        {/* Testemunha 1 — editável */}
-        <div className="bg-white/[0.02] border border-emerald-500/20 rounded-xl p-4 space-y-2.5">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0">
-              <UserCheck className="w-4 h-4 text-emerald-400" />
-            </div>
-            <p className="text-xs font-semibold text-white/70 flex-1">Testemunha 1</p>
-            <span className="text-[10px] text-emerald-400/70 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">TESTEMUNHA</span>
-          </div>
-          <select
-            value={form.testemunha1_id}
-            onChange={e => upd({ testemunha1_id: e.target.value })}
-            className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-sm text-white/80 outline-none focus:border-emerald-500/40"
-          >
-            {TESTEMUNHAS_DB.filter(t => t.id !== form.testemunha2_id).map(t => (
-              <option key={t.id} value={t.id}>{t.nome}</option>
-            ))}
-          </select>
-          <div className="flex gap-4 text-[10px] text-white/30 px-1">
-            <span>CPF: {test1.cpf}</span>
-            <span>{test1.email}</span>
-          </div>
-        </div>
+        {/* Testemunha 1 — PF neutra: ≠ cedente e ≠ responsável */}
+        <PessoaPicker
+          label="Testemunha 1"
+          cor="emerald"
+          badge="TESTEMUNHA"
+          valor={form.testemunha1}
+          onChange={v => upd({ testemunha1: v })}
+          lista={pessoasFisicas.filter(p => p.id !== form.titular_id && p.id !== form.responsavel_editora.id)}
+        />
 
-        {/* Testemunha 2 — editável */}
-        <div className="bg-white/[0.02] border border-emerald-500/20 rounded-xl p-4 space-y-2.5">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-emerald-500/15 flex items-center justify-center shrink-0">
-              <UserCheck className="w-4 h-4 text-emerald-400" />
-            </div>
-            <p className="text-xs font-semibold text-white/70 flex-1">Testemunha 2</p>
-            <span className="text-[10px] text-emerald-400/70 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">TESTEMUNHA</span>
-          </div>
-          <select
-            value={form.testemunha2_id}
-            onChange={e => upd({ testemunha2_id: e.target.value })}
-            className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-sm text-white/80 outline-none focus:border-emerald-500/40"
-          >
-            {TESTEMUNHAS_DB.filter(t => t.id !== form.testemunha1_id).map(t => (
-              <option key={t.id} value={t.id}>{t.nome}</option>
-            ))}
-          </select>
-          <div className="flex gap-4 text-[10px] text-white/30 px-1">
-            <span>CPF: {test2.cpf}</span>
-            <span>{test2.email}</span>
-          </div>
-        </div>
+        {/* Testemunha 2 — PF neutra: ≠ cedente, ≠ responsável, ≠ T1 */}
+        <PessoaPicker
+          label="Testemunha 2"
+          cor="emerald"
+          badge="TESTEMUNHA"
+          valor={form.testemunha2}
+          onChange={v => upd({ testemunha2: v })}
+          lista={pessoasFisicas.filter(p =>
+            p.id !== form.titular_id &&
+            p.id !== form.responsavel_editora.id &&
+            p.id !== form.testemunha1.id
+          )}
+        />
       </div>
+
+      {/* Alerta: PF insuficientes para preencher as 2 testemunhas neutras */}
+      {pessoasFisicas.filter(p => p.id !== form.titular_id && p.id !== form.responsavel_editora.id).length < 2 && (
+        <AlertBox variant="rose">
+          São necessárias pelo menos 2 Pessoas Físicas cadastradas (além do cedente e do responsável) para preencher as 2 testemunhas neutras.
+          Cadastre mais titulares PF antes de continuar.
+        </AlertBox>
+      )}
+
+      {/* Erros de validação dos assinantes */}
+      {errosAssinantes.length > 0 && (
+        <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-3 space-y-1.5">
+          <p className="text-xs font-semibold text-rose-400 flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            É necessário informar todos os assinantes do contrato:
+          </p>
+          {errosAssinantes.map((e, i) => (
+            <p key={i} className="text-xs text-rose-400/80 pl-5">· {e}</p>
+          ))}
+        </div>
+      )}
 
       <div className="bg-sky-500/[0.05] border border-sky-500/20 rounded-xl px-4 py-3 text-xs text-sky-400/70">
         <p className="font-semibold text-sky-400 mb-1">Após o envio:</p>
@@ -1333,6 +1645,12 @@ export default function NovoContratoObrasPage() {
         </AlertBox>
       )}
 
+      {errosAssinantes.length > 0 && (
+        <AlertBox variant="rose">
+          Assinantes incompletos ou inválidos. Volte ao passo Assinatura e corrija antes de prosseguir.
+        </AlertBox>
+      )}
+
       {form.obras.map((o, i) => {
         const somaOk = somaTotal(o) === 100
         return (
@@ -1347,7 +1665,7 @@ export default function NovoContratoObrasPage() {
             {o.titulo_alternativo && <p className="text-xs text-white/40">Alt: {o.titulo_alternativo}</p>}
             {o.subtitulo && <p className="text-xs text-white/40">Sub: {o.subtitulo}</p>}
             {o.texto_poetico && (
-              <p className="text-xs text-white/30 line-clamp-2 italic">"{o.texto_poetico.slice(0, 80)}..."</p>
+              <p className="text-xs text-white/30 line-clamp-2 italic">&ldquo;{o.texto_poetico.slice(0, 80)}...&rdquo;</p>
             )}
             <div className="flex flex-wrap gap-1.5 mt-1">
               <span className="text-xs bg-violet-500/10 text-violet-400 px-1.5 py-0.5 rounded">
@@ -1367,11 +1685,10 @@ export default function NovoContratoObrasPage() {
       <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-4 space-y-2">
         <p className="text-xs font-bold text-white/40 uppercase tracking-wider mb-3">Assinantes do Contrato</p>
         {[
-          { nome: form.titular_nome || '—',   papel: 'Cedente (Autor)',             cor: 'text-violet-400' },
-          ...coAutoresObras.map(c => ({ nome: c.nome, papel: 'Co-autor', cor: 'text-sky-400' })),
-          { nome: respEditora.nome,            papel: `Responsável Editora · ${respEditora.cargo}`, cor: 'text-amber-400' },
-          { nome: test1.nome, papel: 'Testemunha 1', cor: 'text-emerald-400' },
-          { nome: test2.nome, papel: 'Testemunha 2', cor: 'text-emerald-400' },
+          { nome: form.titular_nome || '—',              papel: 'Cedente (Autor)',       cor: 'text-violet-400' },
+          { nome: form.responsavel_editora.nome || '—',  papel: 'Responsável Editora',   cor: 'text-amber-400'  },
+          { nome: form.testemunha1.nome || '—',          papel: 'Testemunha 1',          cor: 'text-emerald-400' },
+          { nome: form.testemunha2.nome || '—',          papel: 'Testemunha 2',          cor: 'text-emerald-400' },
         ].map((s, i) => (
           <div key={i} className="flex items-center justify-between py-1.5 border-b border-white/[0.04] last:border-0">
             <span className={`text-sm font-medium ${s.cor}`}>{s.nome}</span>
@@ -1394,30 +1711,30 @@ export default function NovoContratoObrasPage() {
         onClick={() => gerarDownloadContrato(form, 'rascunho')}
         className="w-full h-9 flex items-center justify-center gap-2 border border-white/[0.08] text-white/50 hover:text-white/70 hover:border-white/15 text-sm rounded-xl transition-colors"
       >
-        <Download className="w-4 h-4" /> Baixar rascunho do contrato (PDF)
+        <Download className="w-4 h-4" /> Baixar rascunho do contrato
       </button>
 
       <button
-        disabled={obraInvalidas.length > 0 || !form.titular_id || !form.tipo}
-        onClick={() => {
-          const contrato = salvarContrato()
-          localStorage.setItem('sync_obras_prefill', JSON.stringify({
-            contrato_id: contrato.id,
-            titular_id: form.titular_id,
-            obras: form.obras,
-            observacoes: form.observacoes, // salvo no cadastro da obra, não no contrato
-          }))
-          router.push('/master/obras/catalogo?origem=contrato')
+        disabled={obraInvalidas.length > 0 || errosAssinantes.length > 0 || !form.titular_id || !form.tipo || salvando}
+        onClick={async () => {
+          const contrato = await salvarContrato()
+          if (!contrato) return
+          router.push('/master/obras?origem=contrato&contrato_id=' + contrato.id)
         }}
         className="w-full h-11 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-colors"
       >
-        Criar Contrato e Iniciar Cadastro de Obras
+        {salvando ? 'Salvando...' : 'Criar Contrato e Iniciar Cadastro de Obras'}
       </button>
 
+      {saveError && (
+        <p className="text-xs text-rose-400 text-center">{saveError}</p>
+      )}
+
       <button
-        disabled={obraInvalidas.length > 0 || !form.titular_id || !form.tipo}
-        onClick={() => {
-          salvarContrato()
+        disabled={obraInvalidas.length > 0 || errosAssinantes.length > 0 || !form.titular_id || !form.tipo || salvando}
+        onClick={async () => {
+          const contrato = await salvarContrato()
+          if (!contrato) return
           router.push('/master/contratos')
         }}
         className="w-full h-9 border border-white/[0.08] text-white/50 hover:text-white/70 text-sm rounded-xl transition-colors disabled:opacity-40"
@@ -1436,10 +1753,10 @@ export default function NovoContratoObrasPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <PageHeader
-        title="Novo Contrato de Obras"
-        description={`Passo ${step + 1} de ${TOTAL_STEPS} — ${STEP_LABELS[step].label}`}
+        title={editContratoId ? 'Editar Rascunho' : 'Novo Contrato de Obras'}
+        description={`Passo ${step + 1} de ${TOTAL_STEPS} — ${STEP_LABELS[step].label}${editContratoId ? ' · Modo Edição' : ''}`}
         actions={
-          <button onClick={() => router.push('/master/contratos')} className="text-sm text-white/40 hover:text-white/70">
+          <button onClick={() => editContratoId ? router.push(`/master/contratos/${editContratoId}`) : router.push('/master/contratos')} className="text-sm text-white/40 hover:text-white/70">
             Cancelar
           </button>
         }
@@ -1488,7 +1805,7 @@ export default function NovoContratoObrasPage() {
         {steps[step]()}
       </div>
 
-      {/* Navegação — visível em todos os passos exceto o primeiro tem Anterior */}
+      {/* Navegação */}
       {step < TOTAL_STEPS - 1 ? (
         <div className="flex justify-between">
           <button
@@ -1503,7 +1820,8 @@ export default function NovoContratoObrasPage() {
             ref={btnProximoRef}
             disabled={
               (step === 0 && !form.tipo) ||
-              (step === 1 && !form.titular_id)
+              (step === 1 && !form.titular_id) ||
+              (step === 6 && errosAssinantes.length > 0)
             }
             className="flex items-center gap-1.5 h-9 px-5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-sm text-white font-semibold transition-colors focus:ring-2 focus:ring-violet-400/50 focus:outline-none"
           >

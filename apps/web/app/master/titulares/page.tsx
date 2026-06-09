@@ -7,14 +7,13 @@ import {
   AlertCircle, Music, FileText, SlidersHorizontal, ChevronDown,
   X, Phone, Mail, MapPin, CreditCard, Hash, Globe, Calendar,
   Shield, ChevronRight, Copy, ExternalLink, Edit3, CheckCircle2,
-  Clock, Pen, BookOpen, Tag,
+  Clock, Pen, BookOpen, Tag, Loader2,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { KpiCard } from '@/components/ui/kpi-card'
-import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
-import { MOCK_CONTRATOS_V2 } from '@/lib/mock-contratos-v2'
+
 import { authFetch } from '@/lib/supabase/client'
 import { FUNCAO_LABEL, nomeTitular, cpfCnpjTitular, nomeArtistico, emailPrincipal } from '@/lib/types-cadastros'
 import type { FuncaoTitular, TipoPessoa, TitularComDados } from '@/lib/types-cadastros'
@@ -71,13 +70,29 @@ const TIPO_CONTRATO: Record<string, string> = {
 }
 
 function ObrasContratosTab({ titular }: { titular: TitularComDados }) {
-  const contratos = useMemo(
-    () => MOCK_CONTRATOS_V2.filter(c => c._partes?.some(p => p.titular_id === titular.id)),
-    [titular.id]
-  )
+  const [contratos, setContratos] = useState<any[]>([])
+  const [loadingContratos, setLoadingContratos] = useState(false)
 
-  // TODO: conectar ao banco real via API para buscar obras vinculadas
-  const obrasVinculadas: { obra: any; papel: string; percentual: number }[] = useMemo(() => [], [])
+  useEffect(() => {
+    setLoadingContratos(true)
+    authFetch(`/api/contratos?titular_id=${titular.id}&per_page=50`)
+      .then(r => r.json())
+      .then(json => setContratos(json.data ?? []))
+      .catch(() => {})
+      .finally(() => setLoadingContratos(false))
+  }, [titular.id])
+
+  // Obras vinculadas via API real
+  const [obrasVinculadas, setObrasVinculadas] = useState<any[]>([])
+  const [loadingObras, setLoadingObras] = useState(false)
+  useEffect(() => {
+    setLoadingObras(true)
+    authFetch(`/api/titulares/${titular.id}/obras`)
+      .then(r => r.json())
+      .then(d => setObrasVinculadas(d.data ?? []))
+      .catch(() => {})
+      .finally(() => setLoadingObras(false))
+  }, [titular.id])
 
   const [subTab, setSubTab] = useState<'contratos' | 'obras'>('contratos')
 
@@ -123,7 +138,8 @@ function ObrasContratosTab({ titular }: { titular: TitularComDados }) {
             </div>
           ) : contratos.map(c => {
             const st = STATUS_CONTRATO[c.status] ?? { label: c.status, cls: 'bg-white/10 text-white/50 border-white/10' }
-            const parte = c._partes?.find(p => p.titular_id === titular.id)
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const parte = (c._partes as any[])?.find((p: any) => p.titular_id === titular.id)
             return (
               <div key={c.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 space-y-2 hover:border-white/10 transition-colors">
                 <div className="flex items-start justify-between gap-2">
@@ -151,7 +167,8 @@ function ObrasContratosTab({ titular }: { titular: TitularComDados }) {
                   <div className="pt-1 border-t border-white/[0.05]">
                     <p className="text-[10px] text-white/30 mb-1">Obras no contrato</p>
                     <div className="flex flex-wrap gap-1">
-                      {c._obras.slice(0, 4).map(o => (
+                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {(c._obras as any[]).slice(0, 4).map((o: any) => (
                         <span key={o.id} className="text-[10px] bg-violet-500/10 text-violet-400 border border-violet-500/20 rounded-md px-2 py-0.5 font-mono">{o.codigo_obra}</span>
                       ))}
                       {c._obras.length > 4 && (
@@ -169,24 +186,30 @@ function ObrasContratosTab({ titular }: { titular: TitularComDados }) {
       {/* Obras list */}
       {subTab === 'obras' && (
         <div className="space-y-2">
-          {obrasVinculadas.length === 0 ? (
+          {loadingObras && (
+            <div className="flex justify-center py-8 text-white/25">
+              <Loader2 className="w-6 h-6 animate-spin" />
+            </div>
+          )}
+          {!loadingObras && obrasVinculadas.length === 0 && (
             <div className="flex flex-col items-center gap-2 py-8 text-white/25">
               <Music className="w-8 h-8" />
               <p className="text-sm">Nenhuma obra vinculada</p>
             </div>
-          ) : obrasVinculadas.map(({ obra, papel, percentual }) => (
-            <div key={obra.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 flex items-center gap-3 hover:border-white/10 transition-colors">
+          )}
+          {!loadingObras && obrasVinculadas.map((item: any) => (
+            <div key={item.link_titular_id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 flex items-center gap-3 hover:border-white/10 transition-colors">
               <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
                 <Music className="w-4 h-4 text-violet-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-white font-mono">{obra.codigo}</p>
-                <p className="text-[11px] text-white/60 truncate">{obra.titulo}</p>
-                <p className="text-[10px] text-white/30">{papel} · {percentual}%</p>
+                <p className="text-xs font-bold text-white font-mono">{item.obra_codigo}</p>
+                <p className="text-[11px] text-white/60 truncate">{item.obra_titulo}</p>
+                <p className="text-[10px] text-white/30">{item.papel} · {item.percentual_exec_publica ?? 0}%</p>
               </div>
               <span className={`text-[10px] px-2 py-0.5 rounded-full border shrink-0 ${
-                obra.status === 'ativa' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-white/5 text-white/30 border-white/10'
-              }`}>{obra.status}</span>
+                item.obra_status === 'ativa' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-white/5 text-white/30 border-white/10'
+              }`}>{item.obra_status ?? '—'}</span>
             </div>
           ))}
         </div>
@@ -195,13 +218,13 @@ function ObrasContratosTab({ titular }: { titular: TitularComDados }) {
   )
 }
 
-function TitularDrawer({ t, onClose }: { t: TitularComDados; onClose: () => void }) {
+function TitularDrawer({ t, editoras, onClose }: { t: TitularComDados; editoras: { id: string; nome_fantasia: string }[]; onClose: () => void }) {
   const [tab, setTab] = useState<'dados' | 'contatos' | 'funcoes' | 'obras'>('dados')
 
   const nome = nomeTitular(t)
   const doc  = cpfCnpjTitular(t)
   const pseudo = nomeArtistico(t)
-  const editora = MOCK_EDITORAS.find(e => e.id === t.editora_id)
+  const editora = editoras.find(e => e.id === t.editora_id)
   const isPF = t.tipo_pessoa === 'PF'
   const pf = t._pf
   const pj = t._pj
@@ -441,6 +464,14 @@ export default function TitularesPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  const [editoras, setEditoras] = useState<{ id: string; nome_fantasia: string }[]>([])
+  useEffect(() => {
+    authFetch('/api/editoras?per_page=200')
+      .then(r => r.json())
+      .then(json => setEditoras(json.data ?? []))
+      .catch(() => {})
+  }, [])
+
   // Normaliza campos: banco usa flat columns
   const allTitulares = useMemo(() => rawTitulares.map((t: any) => ({
     ...t,
@@ -573,7 +604,7 @@ export default function TitularesPage() {
               onChange={e => setFilterEditora(e.target.value)}
             >
               <option value="">Todas as editoras</option>
-              {MOCK_EDITORAS.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia}</option>)}
+              {editoras.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia}</option>)}
             </select>
             <select
               className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-1.5 text-xs text-white/70 outline-none"
@@ -633,7 +664,7 @@ export default function TitularesPage() {
                 const docNum = cpfCnpjTitular(t)
                 const pseudo = nomeArtistico(t)
                 const badge = getTipoBadge(t)
-                const editora = MOCK_EDITORAS.find(e => e.id === t.editora_id)
+                const editora = editoras.find(e => e.id === t.editora_id)
 
                 return (
                   <tr
@@ -701,7 +732,7 @@ export default function TitularesPage() {
 
       {/* Drawer de detalhes */}
       {titularAtivo && (
-        <TitularDrawer t={titularAtivo} onClose={() => setTitularAtivo(null)} />
+        <TitularDrawer t={titularAtivo} editoras={editoras} onClose={() => setTitularAtivo(null)} />
       )}
     </div>
   )

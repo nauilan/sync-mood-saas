@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 1. Processar TODOS os titulares do CWR (autores + editoras) ─────────────
+  // Matching em 2 camadas: (1) codigo_interno_legado, (2) IPI/codigo_ipi
   const todosTitulares = body.titulares ?? []
 
   if (todosTitulares.length > 0) {
@@ -63,6 +64,11 @@ export async function POST(req: NextRequest) {
       )
       .filter(Boolean)
 
+    const ipisNoCwr = todosTitulares
+      .map((t: Record<string, unknown>) => String(t.ipi ?? '').trim())
+      .filter(c => c && /\d{4,}/.test(c))
+
+    // Layer 1: lookup por codigo_interno_legado
     let jaExistemCodigos = new Set<string>()
     if (codigosNoCwr.length > 0) {
       const { data: existentes } = await sb
@@ -75,9 +81,33 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Layer 2: lookup por IPI — evita duplicar titulares reais já cadastrados
+    let jaExistemIpis = new Set<string>()
+    if (ipisNoCwr.length > 0) {
+      const { data: existentesPorIpi } = await sb
+        .from('titulares')
+        .select('codigo_ipi')
+        .eq('tenant_id', tenantId)
+        .in('codigo_ipi', ipisNoCwr)
+      jaExistemIpis = new Set(
+        (existentesPorIpi ?? []).map((e: any) => e.codigo_ipi?.trim()).filter(Boolean)
+      )
+      const { data: existentesPorIpiLegado } = await sb
+        .from('titulares')
+        .select('ipi')
+        .eq('tenant_id', tenantId)
+        .in('ipi', ipisNoCwr)
+      for (const e of (existentesPorIpiLegado ?? []) as any[]) {
+        if (e.ipi?.trim()) jaExistemIpis.add(e.ipi.trim())
+      }
+    }
+
     const novos = todosTitulares.filter((t: Record<string, unknown>) => {
       const cod = String(t.codigo_interno_legado ?? t.codigo_sequence_cwr ?? '').trim()
-      return !cod || !jaExistemCodigos.has(cod)
+      const ipi = String(t.ipi ?? '').trim()
+      if (cod && jaExistemCodigos.has(cod)) return false
+      if (ipi && jaExistemIpis.has(ipi)) return false
+      return true
     })
 
     result.titulares_ja_existiam = todosTitulares.length - novos.length

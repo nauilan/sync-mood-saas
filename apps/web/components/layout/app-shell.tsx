@@ -1,5 +1,4 @@
 'use client'
-
 import { useState } from 'react'
 import { Sidebar } from './sidebar'
 import { Topbar } from './topbar'
@@ -9,6 +8,8 @@ interface AppShellProps {
   nav: NavSection[]
   role: 'master' | 'editora' | 'titular'
   editoraNome?: string
+  tenantNome?: string
+  userRole?: string
   userName?: string
   userInitials?: string
   breadcrumb?: string[]
@@ -20,7 +21,8 @@ interface AppShellProps {
 }
 
 export function AppShell({
-  nav, role, editoraNome, userName, userInitials,
+  nav, role, editoraNome, tenantNome, userRole,
+  userName, userInitials,
   breadcrumb, topbarBadge, topbarBadgeColor, topbarActions,
   notificationCount, children,
 }: AppShellProps) {
@@ -28,33 +30,31 @@ export function AppShell({
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#07060f]">
-      {/* Mobile overlay backdrop */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
-
       <Sidebar
         nav={nav}
         role={role}
         editoraNome={editoraNome}
-        userName={userName ?? 'Marina Lopes'}
-        userInitials={userInitials ?? 'ML'}
+        tenantNome={tenantNome}
+        userName={userName}
+        userInitials={userInitials}
         mobileOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
-
       <div className="flex flex-col flex-1 min-w-0 h-screen overflow-hidden">
         <Topbar
           breadcrumb={breadcrumb}
           badge={topbarBadge}
           badgeColor={topbarBadgeColor}
           actions={topbarActions}
-          notificationCount={notificationCount ?? 3}
-          userName={userName ?? 'Marina Lopes'}
-          userInitials={userInitials ?? 'ML'}
+          notificationCount={notificationCount}
+          userName={userName}
+          userInitials={userInitials}
           onMenuClick={() => setSidebarOpen(true)}
         />
         <main className="flex-1 overflow-y-auto">{children}</main>

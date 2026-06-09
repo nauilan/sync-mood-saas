@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { proximoCodigoObra } from '@/lib/codigos'
 import { PageHeader } from '@/components/ui/page-header'
 import {
   ChevronRight, Plus, Trash2, CheckCircle2, AlertCircle,
@@ -13,8 +12,7 @@ import {
 import type { PapelTitularLink } from '@/lib/types-obras'
 import { PAPEL_TITULAR_LABELS, PAPEL_TITULAR_COLORS, GENEROS_MUSICAIS } from '@/lib/types-obras'
 import { formatarPercentual } from '@/lib/percentual'
-import { MOCK_TITULARES } from '@/lib/mock-cadastros'
-import { MOCK_CONTRATOS_V2, getContratoV2ById } from '@/lib/mock-contratos-v2'
+import { authFetch } from '@/lib/supabase/client'
 
 // ── Siglas oficiais ──────────────────────────────────────────────────────────
 // CA = Compositor/Autor | AD = Adaptador | AR = Arranjador | V = Versionista
@@ -37,6 +35,7 @@ interface LinkTitular {
   percentual: number
   controlado: boolean
   sociedade: string
+  titular_id?: string
 }
 
 interface ObraLink {
@@ -134,7 +133,7 @@ const LETRAS_DEMO: Record<string, string> = {
 function TitularRow({
   t, linkId, onUpdate, onRemove, onOpenNovoTitular
 }: {
-  t: { tempId: string; nome: string; ipi: string; papel: PapelTitularLink; percentual: number; controlado: boolean; sociedade: string }
+  t: { tempId: string; nome: string; ipi: string; papel: PapelTitularLink; percentual: number; controlado: boolean; sociedade: string; titular_id?: string }
   linkId: string
   onUpdate: (linkId: string, tId: string, field: string, val: string | number | boolean) => void
   onRemove: (linkId: string, tId: string) => void
@@ -142,21 +141,31 @@ function TitularRow({
 }) {
   const [query, setQuery] = useState(t.nome)
   const [open, setOpen] = useState(false)
+  const [resultados, setResultados] = useState<{ id: string; nome: string; ipi: string }[]>([])
 
-  // Monta lista de todos os titulares do banco (PF + PJ)
-  const todos = MOCK_TITULARES?.map((x: any) => ({
-    id: x.id,
-    nome: x.nome_artistico || x.razao_social || x.nome_completo || '',
-    ipi: x.ipi || x.cae || '',
-  })) ?? []
-
-  const resultados = query.length >= 2
-    ? todos.filter(x => x.nome.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
-    : []
+  useEffect(() => {
+    if (query.length < 2) { setResultados([]); return }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await authFetch(`/api/titulares?q=${encodeURIComponent(query)}&per_page=8`)
+        if (res.ok) {
+          const json = await res.json()
+          const raw = json.data ?? []
+          setResultados(raw.map((x: Record<string, unknown>) => ({
+            id: x.id as string,
+            nome: (x.nome_artistico || x.razao_social || x.nome_completo || '') as string,
+            ipi: (x.ipi || x.cae || '') as string,
+          })))
+        }
+      } catch { setResultados([]) }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query])
 
   function selecionar(item: { id: string; nome: string; ipi: string }) {
     onUpdate(linkId, t.tempId, 'nome', item.nome)
     onUpdate(linkId, t.tempId, 'ipi', item.ipi)
+    onUpdate(linkId, t.tempId, 'titular_id', item.id)
     setQuery(item.nome)
     setOpen(false)
   }
@@ -286,6 +295,14 @@ export default function NovaObraPage() {
   // Contrato de origem (selecionado no step 0 para importar dados)
   const [contratoOrigemId, setContratoOrigemId] = useState('')
   const [importado, setImportado] = useState(false)
+  const [contratos, setContratos] = useState<{ id: string; numero: string; tipo: string; titulo_obra?: string }[]>([])
+
+  useEffect(() => {
+    authFetch('/api/contratos?per_page=200')
+      .then(r => r.json())
+      .then(json => setContratos(json.data ?? []))
+      .catch(() => {})
+  }, [])
 
   // Step 1 — links
   const [links, setLinks] = useState<ObraLink[]>([
@@ -305,13 +322,15 @@ export default function NovaObraPage() {
 
   // Importa dados do contrato para os links
   function importarContrato(cId: string) {
-    const contrato = getContratoV2ById(cId)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const contrato = contratos.find((c: any) => c.id === cId) as any
     if (!contrato?._partes?.length) return
 
-    // Separa cedentes (autores/CA) de editoras/administradoras
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const _partes: any[] = contrato._partes
     const papeisCedente = ['cedente', 'autor_ca', 'compositor', 'versionista', 'adaptador'] as const
-    const cedentes = contrato._partes.filter(p => (papeisCedente as readonly string[]).includes(p.papel))
-    const editoras = contrato._partes.filter(p => !(papeisCedente as readonly string[]).includes(p.papel))
+    const cedentes = _partes.filter(p => (papeisCedente as readonly string[]).includes(p.papel))
+    const editoras = _partes.filter(p => !(papeisCedente as readonly string[]).includes(p.papel))
 
     let novosLinks: ObraLink[] = []
 
@@ -320,10 +339,10 @@ export default function NovaObraPage() {
       novosLinks = [{
         tempId: uid(),
         ordem: 1,
-        descricao: contrato._partes.map(p => p.nome_titular).join(' / '),
+        descricao: _partes.map(p => p.nome_titular).join(' / '),
         controlado: editoras.length > 0,
         percentual_controlado: editoras.reduce((s, p) => s + (p.percentual ?? 0), 0),
-        titulares: contrato._partes.map(p => ({
+        titulares: _partes.map(p => ({
           tempId: uid(),
           nome: p.nome_titular,
           ipi: '',
@@ -400,6 +419,7 @@ export default function NovaObraPage() {
   // UI
   const [saved, setSaved] = useState(false)
   const [savedCodigo, setSavedCodigo] = useState('')
+  const [saving, setSaving] = useState(false)
 
   const inputCls = 'w-full h-9 bg-white/5 border border-white/[0.08] rounded-lg px-3 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 focus:bg-violet-500/5 transition-colors'
 
@@ -525,33 +545,37 @@ export default function NovaObraPage() {
 
   // ── Salvar obra ─────────────────────────────────────────────────────────────
 
-  function salvarObra() {
-        const savedCodes = (JSON.parse(localStorage.getItem('obras_salvas') ?? '[]') as {codigo:string}[]).map(o => o.codigo)
-    const MOCK_SEQS = ['TSM00001','TSM00002','TSM00003','TSM00004','TSM00005','TSM00006','TSM00007']
-    const novoCodigo = proximoCodigoObra([...MOCK_SEQS, ...savedCodes])
-    const obraData = {
-      codigo: novoCodigo,
-      titulo,
-      titulo_alternativo: tituloAlternativo,
-      subtitulo,
-      idioma,
-      genero,
-      ano_criacao: anoSriacao,
-      duracao,
-      links,
-      fonogramas,
-      letra,
-      contrato_file: contratoFile?.name,
-      contrato_vinculado_id: contratoVinculadoId,
-      status: 'validada',
-      created_at: new Date().toISOString(),
-    }
+  async function salvarObra() {
+    if (saving) return
+    setSaving(true)
     try {
-      const existentes = JSON.parse(localStorage.getItem('obras_salvas') || '[]')
-      localStorage.setItem('obras_salvas', JSON.stringify([...existentes, obraData]))
-    } catch {}
-    setSavedCodigo(novoCodigo)
-    setSaved(true)
+      const payload = {
+        titulo,
+        titulo_alternativo: tituloAlternativo || null,
+        subtitulo: subtitulo || null,
+        idioma,
+        genero: genero || null,
+        ano_criacao: anoSriacao || null,
+        duracao_segundos: duracao ? parseInt(duracao) : null,
+        letra: letra || null,
+        status: 'validada',
+        links,
+        fonogramas,
+      }
+      const res = await authFetch('/api/obras', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao salvar obra')
+      setSavedCodigo(data.codigo_obra || '')
+      setSaved(true)
+    } catch (err) {
+      console.error('[salvarObra]', err)
+      alert('Erro ao salvar obra. Verifique os dados e tente novamente.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   // ── Tela de sucesso ─────────────────────────────────────────────────────────
@@ -678,9 +702,9 @@ export default function NovaObraPage() {
                 className={inputCls + ' cursor-pointer flex-1'}
               >
                 <option value="">Selecione um contrato...</option>
-                {MOCK_CONTRATOS_V2.map(c => (
+                {contratos.map(c => (
                   <option key={c.id} value={c.id}>
-                    {c.numero} — {c.titular_principal} ({c.tipo.replace(/_/g, ' ')})
+                    {c.numero}{c.titulo_obra ? ` — ${c.titulo_obra}` : ''} ({(c.tipo ?? '').replace(/_/g, ' ')})
                   </option>
                 ))}
               </select>
@@ -693,7 +717,8 @@ export default function NovaObraPage() {
               </button>
             </div>
             {importado && contratoOrigemId && (() => {
-              const c = getContratoV2ById(contratoOrigemId)
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const c = contratos.find(x => x.id === contratoOrigemId) as any
               if (!c) return null
               return (
                 <div className="flex items-start gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
@@ -704,7 +729,8 @@ export default function NovaObraPage() {
                       {c._partes?.length ?? 0} participante(s) carregados para os Links — revise no próximo passo.
                     </p>
                     <div className="flex flex-wrap gap-1.5 mt-2">
-                      {c._partes?.map(p => (
+                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                      {c._partes?.map((p: any) => (
                         <span key={p.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 text-[10px] text-white/60">
                           <span className={`w-1.5 h-1.5 rounded-full ${p.papel === 'cedente' ? 'bg-sky-400' : 'bg-violet-400'}`} />
                           {p.nome_titular} · {p.percentual}%
@@ -1145,9 +1171,9 @@ export default function NovaObraPage() {
               <label className="text-xs font-medium text-white/50">Vincular ao Registro de Contrato no Sistema (opcional)</label>
               <select value={contratoVinculadoId} onChange={e => setContratoVinculadoId(e.target.value)} className={inputCls + ' cursor-pointer'}>
                 <option value="">Nenhum registro vinculado</option>
-                {(MOCK_CONTRATOS_V2 as any[]).map((c: any) => (
+                {contratos.map(c => (
                   <option key={c.id} value={c.id}>
-                    {c.numero_contrato} — {c.contratante_nome ?? c.contratante_razao_social ?? c.id}
+                    {c.numero}{c.titulo_obra ? ` — ${c.titulo_obra}` : ''} ({(c.tipo ?? '').replace(/_/g, ' ')})
                   </option>
                 ))}
               </select>
@@ -1257,9 +1283,9 @@ export default function NovaObraPage() {
           ) : (
             <button
               onClick={salvarObra}
-              disabled={!canStep1 || !titulo || !canStep4}
+              disabled={saving || !canStep1 || !titulo || !canStep4}
               className="flex items-center gap-1.5 h-9 px-6 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 disabled:pointer-events-none text-sm text-white font-semibold transition-colors">
-              <CheckCircle2 className="w-4 h-4" /> Salvar e Incluir no Catálogo
+              <CheckCircle2 className="w-4 h-4" /> {saving ? 'Salvando...' : 'Salvar e Incluir no Catálogo'}
             </button>
           )}
         </div>

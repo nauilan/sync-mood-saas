@@ -129,8 +129,9 @@ export default function TitularDetalhePage() {
     <div className="space-y-6">
       {/* Back + Header */}
       <div className="flex items-start gap-3">
-        <button onClick={() => router.back()} className="mt-1 text-white/40 hover:text-white/70 transition-colors">
-          <ChevronLeft className="w-5 h-5" />
+        <button onClick={() => router.push('/master/titulares')} className="mt-1 flex items-center gap-1 text-white/40 hover:text-white/70 transition-colors text-xs">
+          <ChevronLeft className="w-4 h-4" />
+          Voltar
         </button>
         <div className="flex-1">
           <PageHeader
@@ -210,7 +211,16 @@ export default function TitularDetalhePage() {
                   <InfoRow label="Nome artístico"   value={titular.nome_artistico} />
                   <InfoRow label={isPF ? 'CPF' : 'CNPJ'} value={<span className="font-mono">{titular.cpf_cnpj}</span>} />
                   <InfoRow label="Nacionalidade"    value={titular.nacionalidade} />
-                  <InfoRow label="Sociedade autoral" value={titular.sociedade_autoral} />
+                  {isPF && <InfoRow label="Estado Civil"    value={titular.estado_civil} />}
+                  {isPF && <InfoRow label="Profissão"       value={titular.profissao} />}
+                  {isPF && <InfoRow label="Sexo"            value={
+                    titular.sexo === 'masculino'     ? 'Masculino' :
+                    titular.sexo === 'feminino'      ? 'Feminino' :
+                    titular.sexo === 'outro'         ? 'Outro' :
+                    titular.sexo === 'nao_informado' ? 'Prefiro não informar' :
+                    titular.sexo
+                  } />}
+                  <InfoRow label="Sociedade Autoral" value={titular.sociedade_autoral} />
                 </div>
                 <div>
                   <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">Arrecadação</h4>
@@ -229,7 +239,80 @@ export default function TitularDetalhePage() {
             </div>
           )}
 
-          {tab !== 'dados' && (
+          {tab === 'funcoes' && (
+            <div className="space-y-4">
+              {titular.funcoes && titular.funcoes.length > 0 ? (
+                <div>
+                  <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">Funções e Papéis</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {titular.funcoes.map((fn: string, i: number) => (
+                      <span key={i} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-violet-600/20 border border-violet-500/30 text-violet-300">
+                        {fn}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-white/20 gap-2">
+                  <Briefcase className="w-8 h-8" />
+                  <p className="text-sm">Nenhuma função cadastrada.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === 'endereco' && (
+            <div className="space-y-4">
+              {titular.endereco && Object.values(titular.endereco).some(Boolean) ? (
+                <div>
+                  <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">Endereço</h4>
+                  <InfoRow label="CEP"         value={<span className="font-mono">{titular.endereco.cep}</span>} />
+                  <InfoRow label="Logradouro"  value={titular.endereco.logradouro} />
+                  <InfoRow label="Número"      value={titular.endereco.numero} />
+                  <InfoRow label="Complemento" value={titular.endereco.complemento} />
+                  <InfoRow label="Bairro"      value={titular.endereco.bairro} />
+                  <InfoRow label="Cidade"      value={titular.endereco.cidade} />
+                  <InfoRow label="Estado"      value={titular.endereco.estado} />
+                  <InfoRow label="País"        value={titular.endereco.pais} />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-white/20 gap-2">
+                  <MapPin className="w-8 h-8" />
+                  <p className="text-sm">Endereço não cadastrado.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === 'bancario' && (
+            <div className="space-y-4">
+              {titular.dados_bancarios && Object.values(titular.dados_bancarios).some(Boolean) ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div>
+                    <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">Conta Bancária</h4>
+                    <InfoRow label="Banco"    value={titular.dados_bancarios.banco} />
+                    <InfoRow label="Agência"  value={<span className="font-mono">{titular.dados_bancarios.agencia}</span>} />
+                    <InfoRow label="Conta"    value={<span className="font-mono">{titular.dados_bancarios.conta}</span>} />
+                    <InfoRow label="Tipo"     value={titular.dados_bancarios.tipo_conta} />
+                    <InfoRow label="Titular"  value={titular.dados_bancarios.titular_conta} />
+                    <InfoRow label="Operação" value={titular.dados_bancarios.operacao} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">PIX</h4>
+                    <InfoRow label="Tipo de Chave" value={titular.dados_bancarios.pix_tipo} />
+                    <InfoRow label="Chave PIX"     value={<span className="font-mono">{titular.dados_bancarios.pix_chave}</span>} />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-white/20 gap-2">
+                  <CreditCard className="w-8 h-8" />
+                  <p className="text-sm">Dados bancários não cadastrados.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab !== 'dados' && tab !== 'funcoes' && tab !== 'endereco' && tab !== 'bancario' && (
             <div className="flex flex-col items-center justify-center py-12 text-white/20 gap-2">
               <FileText className="w-8 h-8" />
               <p className="text-sm">Seção em construção — dados serão exibidos em breve.</p>

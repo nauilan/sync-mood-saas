@@ -261,6 +261,31 @@ export interface HistoricoContratoV2 {
   created_at: string
 }
 
+// ── Payload D4Sign (migration 045) ───────────────────────────────────────────
+
+export interface AssinanteD4Sign {
+  papel: string          // 'cedente' | 'responsavel_editora' | 'testemunha_1' | 'testemunha_2'
+  nome: string
+  cpf?: string
+  email?: string
+  titular_id?: string | null
+}
+
+export interface ObraJson {
+  titulo: string
+  titulo_alternativo?: string | null
+  subtitulo?: string | null
+  texto_poetico?: string | null
+  pct_autor: number
+  papel_autor: string
+  co_autores: Array<{
+    titular_id?: string | null
+    nome: string
+    pct: number
+    papel: string
+  }>
+}
+
 export interface ContratoV2 {
   id: string
   editora_id: string
@@ -280,6 +305,11 @@ export interface ContratoV2 {
   observacoes: string | null
   created_at: string
   updated_at: string
+  // campos migration 045
+  titular_id?: string | null
+  assinantes_d4sign?: AssinanteD4Sign[] | null
+  obras_json?: ObraJson[] | null
+  provedor_assinatura?: string | null
   // joins opcionais
   _partes?: ParteContratoV2[]
   _direitos?: DireitoContratoV2[]

@@ -37,55 +37,55 @@ export const MASTER_NAV: NavSection[] = [
     { label: 'Precificacao', href: '/master/autorizacoes/precificacao', iconName: 'DollarSign' },
     { label: 'Nova Autorizacao', href: '/master/autorizacoes/nova', iconName: 'FilePlus' },
   ]},
-  { title: 'M5 Importacoes', items: [
-    { label: 'Importar DSPs (Royalties)', href: '/master/backoffice/importacao', iconName: 'FileInput' },
-    { label: 'Importar CWR (Catalogo)', href: '/master/backoffice/importacao-cwr', iconName: 'FileCode2' },
-    { label: 'Importar Recebimentos', href: '/master/recebimentos/importar', iconName: 'Download' },
-    { label: 'Importar TV / Audiovisual', href: '/master/tv/importacoes', iconName: 'Tv' },
-    { label: 'Nova Importacao TV', href: '/master/tv/importacoes/nova', iconName: 'FilePlus' },
-  ]},
-  { title: 'M5 Exportacoes', items: [
-    { label: 'Exportacoes CWR', href: '/master/backoffice/exportacoes', iconName: 'Upload' },
-    { label: 'Nova Exportacao CWR', href: '/master/backoffice/exportacoes/nova', iconName: 'FilePlus' },
-  ]},
+
 
   // -----------------------------------------------------------------------
   // BACKOFFICE — INFORMACAO
-  // Responsavel por: identificacao, matching, Song Codes, ONI, logs, juridico
+  // Responsavel por: Song Code, ISRC, CWR, matching, importacao, ONI,
+  //                  pendencias juridicas, rastreabilidade de processamento
+  // Regra: BackOffice = informacao | Financeiro = dinheiro
   // -----------------------------------------------------------------------
   { title: 'BackOffice — Informacao', items: [
-    { label: 'Dashboard', href: '/master/backoffice', iconName: 'Database' },
-    { label: 'Catalogo BackOffice', href: '/master/backoffice/catalogo', iconName: 'BookOpen' },
-    { label: 'Importacao de Arquivos', href: '/master/backoffice/importacao', iconName: 'FileInput' },
-    { label: 'Analise de Lancamentos', href: '/master/backoffice/matching', iconName: 'Shuffle' },
-    { label: 'ONI — Obras Nao Identificadas', href: '/master/backoffice/match-lista-oni', iconName: 'Target' },
-    { label: 'Logs de Processamento', href: '/master/backoffice/logs', iconName: 'ScrollText' },
-    { label: 'Pendencias Juridicas', href: '/master/backoffice/pendencias-juridicas', iconName: 'AlertTriangle' },
+    { label: 'Dashboard',                 href: '/master/backoffice',                      iconName: 'Database'      },
+    { label: 'Catalogo BackOffice',       href: '/master/backoffice/catalogo',             iconName: 'BookOpen'      },
+    { label: 'Importacao de Arquivos',    href: '/master/backoffice/importacao',           iconName: 'FileInput'     },
+    { label: 'Importacao CWR',            href: '/master/backoffice/importacao-cwr',       iconName: 'FileCode2'     },
+    { label: 'Exportacoes CWR',           href: '/master/backoffice/exportacoes',          iconName: 'Upload'        },
+    { label: 'Analise de Lancamentos',    href: '/master/backoffice/matching',             iconName: 'Shuffle'       },
+    { label: 'ONI — Obras Nao Id.',       href: '/master/backoffice/match-lista-oni',      iconName: 'Target'        },
+    { label: 'Relatorios BackOffice',     href: '/master/backoffice/relatorios',           iconName: 'BarChart3'     },
+    { label: 'Logs de Processamento',     href: '/master/backoffice/logs',                 iconName: 'ScrollText'    },
+    { label: 'Pendencias Juridicas',      href: '/master/backoffice/pendencias-juridicas', iconName: 'AlertTriangle' },
+    { label: 'Configuracoes BackOffice',  href: '/master/backoffice/configuracoes',        iconName: 'Settings'      },
   ]},
 
   // -----------------------------------------------------------------------
   // FINANCEIRO — DINHEIRO
   // Responsavel por: recebimentos, distribuicao, conta corrente, prestacao
+  // Fluxo: Periodo → Recebimento → Conferencia → Distribuicao → CC → Prestacao
   // -----------------------------------------------------------------------
   { title: 'Financeiro — Dinheiro', items: [
-    { label: 'Periodos de Pagamento', href: '/master/financeiro/periodos', iconName: 'Calendar' },
-    { label: 'Recebimentos', href: '/master/recebimentos', iconName: 'DollarSign' },
-    { label: 'Conferencia', href: '/master/recebimentos/divergencias', iconName: 'CheckCircle2' },
-    { label: 'Distribuicoes', href: '/master/distribuicao', iconName: 'PieChart' },
-    { label: 'Conta Corrente', href: '/master/cc-obra', iconName: 'CreditCard' },
-    { label: 'Prestacao de Contas', href: '/master/prestacao-contas', iconName: 'FileText' },
-    { label: 'Adiantamentos', href: '/master/financeiro-m11/contas-pagar', iconName: 'Wallet' },
-    { label: 'Comissoes', href: '/master/financeiro-m11/contas-receber', iconName: 'TrendingUp' },
+    { label: 'Dashboard Financeiro',      href: '/master/financeiro',                       iconName: 'LayoutDashboard' },
+    { label: 'Periodos de Pagamento',     href: '/master/financeiro/periodos',              iconName: 'Calendar'        },
+    { label: 'Recebimentos',             href: '/master/recebimentos',                     iconName: 'DollarSign'      },
+    { label: 'Conferencia',              href: '/master/recebimentos/divergencias',        iconName: 'CheckCircle2'    },
+    { label: 'Distribuicoes',            href: '/master/distribuicao',                     iconName: 'PieChart'        },
+    { label: 'CC — Obras',               href: '/master/cc-obra',                          iconName: 'CreditCard'      },
+    { label: 'CC — Titulares',           href: '/master/cc-titular',                       iconName: 'Wallet'          },
+    { label: 'Prestacao de Contas',      href: '/master/prestacao-contas',                 iconName: 'FileText'        },
+    { label: 'Adiantamentos',            href: '/master/financeiro-m11/contas-pagar',      iconName: 'Wallet'          },
+    { label: 'Comissoes',                href: '/master/financeiro-m11/contas-receber',    iconName: 'TrendingUp'      },
   ]},
 
   { title: 'M6 TV Audiovisual', items: [
-    { label: 'TV Dashboard', href: '/master/tv/dashboard', iconName: 'BarChart3' },
-    { label: 'Execucoes TV', href: '/master/tv/execucoes', iconName: 'Tv' },
+    { label: 'TV Dashboard',    href: '/master/tv/dashboard',    iconName: 'BarChart3'     },
+    { label: 'Importacoes TV',  href: '/master/tv/importacoes',  iconName: 'FileInput'     },
+    { label: 'Execucoes TV',    href: '/master/tv/execucoes',    iconName: 'Tv'            },
     { label: 'Divergencias TV', href: '/master/tv/divergencias', iconName: 'AlertTriangle' },
-    { label: 'Precificacao TV', href: '/master/tv/precificacao', iconName: 'DollarSign' },
-    { label: 'Autorizacoes TV', href: '/master/tv/autorizacoes', iconName: 'Shield' },
-    { label: 'Cobranca TV', href: '/master/tv/cobranca', iconName: 'TrendingUp' },
-    { label: 'TV Home', href: '/master/tv', iconName: 'Tv' },
+    { label: 'Precificacao TV', href: '/master/tv/precificacao', iconName: 'DollarSign'    },
+    { label: 'Autorizacoes TV', href: '/master/tv/autorizacoes', iconName: 'Shield'        },
+    { label: 'Cobranca TV',     href: '/master/tv/cobranca',     iconName: 'TrendingUp'    },
+    { label: 'TV Home',         href: '/master/tv',              iconName: 'Tv'            },
   ]},
   { title: 'M7 Conciliacao', items: [
     { label: 'Conciliacoes', href: '/master/conciliacao', iconName: 'Activity' },

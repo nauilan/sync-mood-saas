@@ -76,10 +76,10 @@ export function Topbar({
         {/* User */}
         <button className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-white/[0.05] transition-all duration-150 group">
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-violet-700 flex items-center justify-center text-[10px] font-bold text-white shrink-0 overflow-hidden">
-            {userInitials ?? (userName ? userName[0] : 'ML')}
+            {userInitials ?? (userName ? userName.split(' ').map(n => n[0]).slice(0,2).join('') : '?')}
           </div>
           <span className="text-[12.5px] font-medium text-white/70 hidden sm:block">
-            {userName ?? 'Marina Lopes'}
+            {userName ?? ''}
           </span>
           <ChevronDown className="w-3 h-3 text-white/25 group-hover:text-white/50 transition-colors hidden sm:block" strokeWidth={2}/>
         </button>

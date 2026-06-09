@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { logAudit } from '@/lib/audit'
 
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
@@ -65,22 +66,25 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const tenant_id = await autenticar(sb, req)
   if (!tenant_id) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { data: titular } = await sb
+  const { data: dadosAnteriores } = await sb
     .from('titulares')
-    .select('id')
+    .select('*')
     .eq('id', id)
     .eq('tenant_id', tenant_id)
     .is('deleted_at', null)
     .single()
 
-  if (!titular) return NextResponse.json({ error: 'Titular não encontrado' }, { status: 404 })
+  if (!dadosAnteriores) return NextResponse.json({ error: 'Titular não encontrado' }, { status: 404 })
 
   const body = await req.json()
 
   const ALLOWED = [
-    'nome_completo', 'nome_artistico', 'cpf_cnpj', 'tipo', 'tipo_pessoa',
+    'nome_completo', 'nome_artistico', 'cpf_cnpj', 'tipo', 'pessoa',
     'codigo_titular', 'codigo_cae', 'codigo_ipi', 'ipi', 'dados_bancarios',
-    'status', 'observacoes', 'editora_vinculada_id',
+    'status', 'observacoes', 'editora_vinculada_id', 'editora_id',
+    'profissao', 'estado_civil', 'nacionalidade', 'sociedade_autoral',
+    'funcoes', 'sexo', 'endereco', 'codigo_interno',
+    'contatos', 'pseudonimos', 'documentos',
   ]
 
   const update: Record<string, unknown> = {}
@@ -100,6 +104,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await logAudit({
+    tenant_id,
+    acao: 'alterar',
+    modulo: 'titulares',
+    tabela_afetada: 'titulares',
+    registro_id: id,
+    dados_anteriores: dadosAnteriores as Record<string, unknown>,
+    dados_novos: data as Record<string, unknown>,
+    origem_execucao: 'usuario',
+  })
   return NextResponse.json({ data })
 }
 

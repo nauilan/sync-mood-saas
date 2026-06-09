@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import {
   ChevronLeft, Save, Loader2, AlertTriangle,
   User, Building2, Briefcase, MapPin, Phone, Landmark,
+  Plus, Trash2, Mail, MessageSquare, FileText,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import { Button } from '@/components/ui/button'
@@ -88,7 +89,7 @@ export default function EditarTitularPage() {
     cpf_cnpj: '',
     nacionalidade: 'Brasileira',
     estado_civil: '',
-    profissao: '',
+    sexo: '',
     sociedade_autoral: '',
     codigo_interno: '',
     codigo_cae: '',
@@ -97,6 +98,10 @@ export default function EditarTitularPage() {
     funcoes: [] as FuncaoTitular[],
     status: 'ativo',
     observacoes: '',
+    contatos: [
+      { tipo: 'email' as 'email' | 'whatsapp' | 'telefone', valor: '', principal: true },
+      { tipo: 'whatsapp' as 'email' | 'whatsapp' | 'telefone', valor: '', principal: false },
+    ],
     // Endereço
     cep: '', endereco: '', numero: '', compl: '', bairro: '', cidade: '', estado: '', pais: 'Brasil',
     // Bancário
@@ -120,6 +125,15 @@ export default function EditarTitularPage() {
       const db = t.dados_bancarios ?? {}
       // Separa conta e dígito
       const [contaNum = '', contaDig = ''] = (db.conta ?? '').split('-')
+
+      // Contatos: usa os salvos ou cria estrutura padrão
+      const contatosSalvos = Array.isArray(t.contatos) && t.contatos.length > 0
+        ? t.contatos
+        : [
+            { tipo: 'email',    valor: '', principal: true  },
+            { tipo: 'whatsapp', valor: '', principal: false },
+          ]
+
       setF({
         tipo_pessoa:    t.pessoa === 'PJ' ? 'PJ' : 'PF',
         tipo:           t.tipo ?? '',
@@ -129,7 +143,7 @@ export default function EditarTitularPage() {
         cpf_cnpj:       t.cpf_cnpj ?? '',
         nacionalidade:  t.nacionalidade ?? 'Brasileira',
         estado_civil:   t.estado_civil ?? '',
-        profissao:      t.profissao ?? '',
+        sexo:           t.sexo ?? '',
         sociedade_autoral: t.sociedade_autoral ?? '',
         codigo_interno: t.codigo_interno ?? '',
         codigo_cae:     t.codigo_cae ?? '',
@@ -138,6 +152,7 @@ export default function EditarTitularPage() {
         funcoes:        t.funcoes ?? [],
         status:         t.status ?? 'ativo',
         observacoes:    t.observacoes ?? '',
+        contatos:       contatosSalvos,
         cep:            t.endereco?.cep ?? '',
         endereco:       t.endereco?.logradouro ?? '',
         numero:         t.endereco?.numero ?? '',
@@ -190,7 +205,7 @@ export default function EditarTitularPage() {
         nome_artistico: f.nome_artistico.trim() || undefined,
         cpf_cnpj:       f.cpf_cnpj.trim() || undefined,
         tipo:           f.tipo || undefined,
-        tipo_pessoa:    f.tipo_pessoa,
+        pessoa:         f.tipo_pessoa,
         codigo_interno: f.codigo_interno.trim() || undefined,
         codigo_cae:     f.codigo_cae.trim() || undefined,
         codigo_ipi:     f.codigo_ipi.trim() || undefined,
@@ -198,6 +213,34 @@ export default function EditarTitularPage() {
         codigo_titular: f.codigo_titular.trim() || undefined,
         status:         f.status,
         observacoes:    f.observacoes.trim() || undefined,
+        estado_civil:   f.estado_civil || undefined,
+        nacionalidade:  f.nacionalidade.trim() || undefined,
+        sociedade_autoral: f.sociedade_autoral || undefined,
+        funcoes:        f.funcoes.length > 0 ? f.funcoes : undefined,
+        sexo:           f.sexo || undefined,
+      }
+
+      // Contatos (email, whatsapp, telefone)
+      const contatosFilled = f.contatos.filter(c => c.valor.trim() !== '')
+      if (contatosFilled.length > 0) {
+        payload.contatos = contatosFilled.map(c => ({
+          tipo:      c.tipo,
+          valor:     c.valor.trim(),
+          principal: c.principal,
+        }))
+      }
+
+      if (f.cep || f.endereco || f.cidade) {
+        payload.endereco = {
+          cep:         f.cep.trim() || undefined,
+          logradouro:  f.endereco.trim() || undefined,
+          numero:      f.numero.trim() || undefined,
+          complemento: f.compl.trim() || undefined,
+          bairro:      f.bairro.trim() || undefined,
+          cidade:      f.cidade.trim() || undefined,
+          estado:      f.estado || undefined,
+          pais:        f.pais.trim() || 'Brasil',
+        }
       }
 
       if (f.banco || f.agencia || f.conta) {
@@ -258,8 +301,9 @@ export default function EditarTitularPage() {
     <div className="space-y-6 pb-16">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <button onClick={() => router.back()} className="text-white/40 hover:text-white/70 transition-colors">
-          <ChevronLeft className="w-5 h-5" />
+        <button onClick={() => router.push(`/master/titulares/${id}`)} className="flex items-center gap-1 text-white/40 hover:text-white/70 transition-colors text-xs">
+          <ChevronLeft className="w-4 h-4" />
+          Voltar
         </button>
         <PageHeader
           title="Editar Titular"
@@ -333,8 +377,14 @@ export default function EditarTitularPage() {
                   <option key={v} value={v}>{v}</option>)}
               </select>
             </Field>
-            <Field label="Profissão">
-              <input className={inputCls} value={f.profissao} onChange={setUpper('profissao')} placeholder="COMPOSITOR" />
+            <Field label="Sexo">
+              <select className={inputCls} value={f.sexo} onChange={setField('sexo')}>
+                <option value="">— Selecione —</option>
+                <option value="masculino">Masculino</option>
+                <option value="feminino">Feminino</option>
+                <option value="outro">Outro</option>
+                <option value="nao_informado">Prefiro não informar</option>
+              </select>
             </Field>
           </>
         ) : (
@@ -501,8 +551,56 @@ export default function EditarTitularPage() {
         </Field>
       </Section>
 
+      {/* Contatos */}
+      <Section icon={<Phone className="w-4 h-4" />} title="Contatos">
+        <div className="md:col-span-2 space-y-3">
+          {f.contatos.map((c, idx) => (
+            <div key={idx} className="flex gap-2 items-center">
+              <select
+                className={inputCls + ' w-36 shrink-0'}
+                value={c.tipo}
+                onChange={e => setF(prev => {
+                  const next = [...prev.contatos]
+                  next[idx] = { ...next[idx], tipo: e.target.value as 'email' | 'whatsapp' | 'telefone' }
+                  return { ...prev, contatos: next }
+                })}
+              >
+                <option value="email">E-mail</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="telefone">Telefone</option>
+              </select>
+              <input
+                className={inputCls + ' flex-1'}
+                value={c.valor}
+                onChange={e => setF(prev => {
+                  const next = [...prev.contatos]
+                  next[idx] = { ...next[idx], valor: e.target.value }
+                  return { ...prev, contatos: next }
+                })}
+                placeholder={c.tipo === 'email' ? 'EMAIL@DOMINIO.COM' : c.tipo === 'whatsapp' ? '(XX) XXXXX-XXXX' : '(XX) XXXX-XXXX'}
+              />
+              <button
+                type="button"
+                className="p-1.5 text-white/40 hover:text-red-400 transition-colors"
+                onClick={() => setF(prev => ({ ...prev, contatos: prev.contatos.filter((_, i) => i !== idx) }))}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+            onClick={() => setF(prev => ({ ...prev, contatos: [...prev.contatos, { tipo: 'email', valor: '', principal: false }] }))}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Adicionar contato
+          </button>
+        </div>
+      </Section>
+
       {/* Observações */}
-      <Section icon={<Phone className="w-4 h-4" />} title="Observações">
+      <Section icon={<FileText className="w-4 h-4" />} title="Observações">
         <div className="md:col-span-2">
           <textarea
             className={inputCls + ' h-28 resize-none'}
@@ -515,7 +613,7 @@ export default function EditarTitularPage() {
 
       {/* Botão inferior */}
       <div className="flex justify-end gap-3">
-        <Button variant="ghost" onClick={() => router.back()}>Cancelar</Button>
+        <Button variant="ghost" onClick={() => router.push(`/master/titulares/${id}`)}>Cancelar</Button>
         <Button onClick={salvar} disabled={saving}>
           {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : <><Save className="w-4 h-4" /> Salvar alterações</>}
         </Button>

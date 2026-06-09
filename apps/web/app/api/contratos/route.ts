@@ -6,6 +6,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { logAudit } from '@/lib/audit'
 
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
@@ -52,6 +53,7 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search') ?? ''
   const tipo = searchParams.get('tipo') ?? 'todos'
   const status = searchParams.get('status') ?? 'todos'
+  const titular_id = searchParams.get('titular_id')
   const per_page = Math.min(Number(searchParams.get('per_page') ?? 50), 200)
   const page = Math.max(Number(searchParams.get('page') ?? 1), 1)
   const offset = (page - 1) * per_page
@@ -63,6 +65,7 @@ export async function GET(req: NextRequest) {
     .order('created_at', { ascending: false })
     .range(offset, offset + per_page - 1)
 
+  if (titular_id) query = query.eq('titular_id', titular_id)
   if (tipo !== 'todos') query = query.eq('tipo', tipo)
   if (status !== 'todos') query = query.eq('status', status)
   if (search) {
@@ -112,13 +115,38 @@ export async function POST(req: NextRequest) {
     splits_direitos, data_inicio, data_fim, prazo_indeterminado,
     territorio, exclusividade, status, numero, observacoes,
     titulo_obra, descricao, tipo_direito, abrangencia,
+    obras, assinantes_d4sign, provedor_assinatura,
   } = body
+
+  // Mapeia valor do frontend para enum do banco
+  const tipoMapa: Record<string, string> = {
+    cessao_obras: 'cessao',
+    coedicao: 'coedicao',
+    administracao: 'administracao',
+    subedicao: 'subedicao',
+    licenciamento: 'licenciamento',
+    autorizacao: 'autorizacao',
+  }
+  const tipoDb = tipoMapa[tipo] ?? tipo ?? 'cessao'
+
+  // Se editora_id não fornecido, usa a editora principal do tenant
+  let resolvedEditoraId = editora_id
+  if (!resolvedEditoraId) {
+    const { data: editoraTenant } = await sb
+      .from('editoras')
+      .select('id')
+      .eq('tenant_id', tenant_id)
+      .limit(1)
+      .single()
+    resolvedEditoraId = editoraTenant?.id ?? null
+  }
 
   const payload: Record<string, unknown> = {
     tenant_id,
-    tipo:                tipo ?? 'cessao',
-    status:              status ?? 'assinado',
-    numero:              numero ?? `CTR-${Date.now()}`,
+    tipo:                tipoDb,
+    status:              status ?? 'rascunho',
+    numero:              numero ?? `CTO-${Date.now()}`,
+    editora_id:          resolvedEditoraId,
   }
   if (editora_id !== undefined)           payload.editora_id           = editora_id
   if (titular_id !== undefined)           payload.titular_id           = titular_id
@@ -135,7 +163,11 @@ export async function POST(req: NextRequest) {
   if (descricao !== undefined)            payload.descricao            = descricao
   if (tipo_direito !== undefined)         payload.tipo_direito         = tipo_direito
   if (abrangencia !== undefined)          payload.abrangencia          = abrangencia
+  if (assinantes_d4sign !== undefined)    payload.assinantes_d4sign    = assinantes_d4sign
+  if (provedor_assinatura !== undefined)  payload.provedor_assinatura  = provedor_assinatura
+  if (obras !== undefined)               payload.obras_json            = obras
 
+  // Requer migration 045 (assinantes_d4sign, provedor_assinatura, obras_json)
   const { data, error } = await sb
     .from('contratos')
     .insert(payload)
@@ -143,5 +175,14 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await logAudit({
+    tenant_id,
+    acao: 'criar',
+    modulo: 'contratos',
+    tabela_afetada: 'contratos',
+    registro_id: (data as { id: string }).id,
+    dados_novos: data as Record<string, unknown>,
+    origem_execucao: 'usuario',
+  })
   return NextResponse.json({ data }, { status: 201 })
 }

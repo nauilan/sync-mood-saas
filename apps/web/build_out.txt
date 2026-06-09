@@ -1,0 +1,200 @@
+
+> web@0.1.0 build
+> next build
+
+Warning: Custom Cache-Control headers detected for the following routes:
+  - /_next/static/(.*)
+
+Setting a custom Cache-Control header can break Next.js development behavior.
+▲ Next.js 16.2.6 (Turbopack)
+- Environments: .env.local
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 16.5s
+  Running TypeScript ...
+  Finished TypeScript in 19.0s ...
+  Collecting page data using 13 workers ...
+  Generating static pages using 13 workers (0/142) ...
+  Generating static pages using 13 workers (35/142) 
+  Generating static pages using 13 workers (70/142) 
+  Generating static pages using 13 workers (106/142) 
+✓ Generating static pages using 13 workers (142/142) in 2.7s
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/auth/login
+├ ƒ /api/bootstrap-tenant
+├ ƒ /api/cc-obra
+├ ƒ /api/contratos
+├ ƒ /api/contratos/[id]
+├ ƒ /api/editoras
+├ ƒ /api/editoras/[id]
+├ ƒ /api/fonogramas
+├ ƒ /api/importacoes
+├ ƒ /api/me
+├ ƒ /api/negocios-editoriais
+├ ƒ /api/negocios-editoriais/[id]
+├ ƒ /api/obras
+├ ƒ /api/obras/[id]
+├ ƒ /api/obras/[id]/analitico
+├ ƒ /api/obras/[id]/fonogramas
+├ ƒ /api/obras/[id]/links
+├ ƒ /api/obras/importar-cwr
+├ ƒ /api/obras/migrar-editoras-cwr
+├ ƒ /api/recebimentos
+├ ƒ /api/recebimentos/[id]
+├ ƒ /api/tipos-direito
+├ ƒ /api/titulares
+├ ƒ /api/titulares/[id]
+├ ƒ /api/titulares/[id]/obras
+├ ƒ /api/validar-direito-administrado
+├ ƒ /auth/callback
+├ ○ /auth/login
+├ ƒ /auth/signout
+├ ƒ /editora/dashboard
+├ ○ /master/admin/auditoria
+├ ○ /master/arquivos
+├ ○ /master/autorizacoes
+├ ƒ /master/autorizacoes/[id]
+├ ○ /master/autorizacoes/cobrancas
+├ ○ /master/autorizacoes/nova
+├ ○ /master/autorizacoes/orcamentos
+├ ○ /master/autorizacoes/orcamentos/novo
+├ ○ /master/autorizacoes/precificacao
+├ ○ /master/autorizacoes/tipos-uso
+├ ○ /master/backoffice
+├ ○ /master/backoffice/catalogo
+├ ○ /master/backoffice/configuracoes
+├ ○ /master/backoffice/exportacoes
+├ ƒ /master/backoffice/exportacoes/[id]
+├ ○ /master/backoffice/exportacoes/nova
+├ ○ /master/backoffice/importacao
+├ ○ /master/backoffice/importacao-cwr
+├ ○ /master/backoffice/logs
+├ ○ /master/backoffice/match-lista-oni
+├ ƒ /master/backoffice/match-lista-oni/[id]/exportar
+├ ƒ /master/backoffice/match-lista-oni/[id]/revisar
+├ ○ /master/backoffice/match-lista-oni/import
+├ ○ /master/backoffice/matching
+├ ○ /master/backoffice/pendencias-juridicas
+├ ○ /master/backoffice/relatorios
+├ ○ /master/cc-obra
+├ ƒ /master/cc-obra/[id]
+├ ○ /master/cc-obra/dashboard
+├ ○ /master/cc-titular
+├ ƒ /master/cc-titular/[id]
+├ ○ /master/cc-titular/dashboard
+├ ○ /master/conciliacao
+├ ƒ /master/conciliacao/[id]
+├ ○ /master/conciliacao/divergencias
+├ ○ /master/config
+├ ○ /master/config/auditoria
+├ ○ /master/config/integracoes
+├ ○ /master/config/modelos-autorizacao
+├ ○ /master/config/modelos-contrato
+├ ○ /master/config/parametros
+├ ○ /master/config/perfis
+├ ○ /master/config/permissoes
+├ ○ /master/config/tipos-direitos
+├ ○ /master/config/usuarios
+├ ○ /master/config/usuarios/novo
+├ ○ /master/contratos
+├ ○ /master/contratos-tipo
+├ ƒ /master/contratos/[id]
+├ ƒ /master/contratos/[id]/aditivo
+├ ○ /master/contratos/alertas
+├ ○ /master/contratos/modelos
+├ ○ /master/contratos/novo
+├ ○ /master/contratos/novo/cessao
+├ ○ /master/contratos/novo/obras
+├ ○ /master/dashboard
+├ ○ /master/distribuicao
+├ ƒ /master/distribuicao/[id]
+├ ○ /master/distribuicao/encerramento
+├ ○ /master/distribuicao/nova
+├ ○ /master/distribuicao/periodos
+├ ○ /master/distribuicao/previa
+├ ○ /master/distribuicao/recoupment
+├ ○ /master/editora
+├ ○ /master/editoras
+├ ƒ /master/editoras/[id]
+├ ○ /master/financeiro
+├ ○ /master/financeiro-m11
+├ ○ /master/financeiro-m11/conciliacao-bancaria
+├ ○ /master/financeiro-m11/contas-bancarias
+├ ○ /master/financeiro-m11/contas-pagar
+├ ○ /master/financeiro-m11/contas-pagar/novo
+├ ○ /master/financeiro-m11/contas-receber
+├ ○ /master/financeiro-m11/fluxo-caixa
+├ ○ /master/financeiro/conta-corrente-obras
+├ ○ /master/financeiro/conta-corrente-titulares
+├ ○ /master/financeiro/demonstrativos
+├ ○ /master/financeiro/distribuicao
+├ ○ /master/financeiro/periodos
+├ ○ /master/gravacoes
+├ ○ /master/modelos-contrato
+├ ƒ /master/modelos-contrato/[id]
+├ ○ /master/negocios-editoriais
+├ ○ /master/obras
+├ ƒ /master/obras/[id]
+├ ○ /master/obras/importar-cwr
+├ ○ /master/obras/nova
+├ ○ /master/prestacao-contas
+├ ƒ /master/prestacao-contas/[id]
+├ ○ /master/prestacao-contas/automacao
+├ ○ /master/prestacao-contas/contestacoes
+├ ○ /master/prestacao-contas/nova
+├ ○ /master/recebimentos
+├ ƒ /master/recebimentos/[id]
+├ ○ /master/recebimentos/divergencias
+├ ○ /master/recebimentos/fontes
+├ ○ /master/recebimentos/importar
+├ ○ /master/recebimentos/socinpro
+├ ○ /master/relatorios
+├ ○ /master/relatorios/auditoria
+├ ○ /master/relatorios/autorizacoes
+├ ○ /master/relatorios/bi-estrategico
+├ ○ /master/relatorios/cc-obra
+├ ○ /master/relatorios/cc-titular
+├ ○ /master/relatorios/contratos
+├ ○ /master/relatorios/financeiros
+├ ○ /master/relatorios/obras
+├ ○ /master/relatorios/obras-gravadas
+├ ○ /master/relatorios/recebimentos
+├ ○ /master/relatorios/royalties-futuros
+├ ○ /master/relatorios/titulares
+├ ○ /master/titulares
+├ ƒ /master/titulares/[id]
+├ ƒ /master/titulares/[id]/editar
+├ ○ /master/titulares/novo
+├ ○ /master/tv
+├ ○ /master/tv/autorizacoes
+├ ○ /master/tv/cobranca
+├ ○ /master/tv/dashboard
+├ ○ /master/tv/divergencias
+├ ○ /master/tv/execucoes
+├ ○ /master/tv/importacoes
+├ ○ /master/tv/importacoes/nova
+├ ○ /master/tv/precificacao
+├ ○ /master/versoes
+├ ○ /portal
+├ ○ /portal/dashboard
+├ ○ /portal/demonstrativos
+├ ƒ /portal/demonstrativos/[id]
+├ ○ /portal/informe-rendimentos
+├ ○ /portal/obras
+├ ƒ /portal/obras/[id]
+├ ○ /portal/perfil
+├ ○ /portal/recebimentos
+├ ○ /portal/recibos
+├ ○ /portal/royalties-futuros
+└ ƒ /titular/dashboard
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

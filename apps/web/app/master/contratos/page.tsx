@@ -14,9 +14,6 @@ import {
   TIPO_CONTRATO_V2_LABELS, TIPO_CONTRATO_V2_COLORS,
   STATUS_CONTRATO_V2_LABELS, STATUS_CONTRATO_V2_COLORS,
 } from '@/lib/types-contratos-v2'
-import {
-  MOCK_CONTRATOS_V2, ALERTAS_EXCLUSIVIDADE,
-} from '@/lib/mock-contratos-v2'
 import { authFetch } from '@/lib/supabase/client'
 
 function formatDate(d?: string | null) {
@@ -63,17 +60,9 @@ export default function ContratosPage() {
   const [filterTipo, setFilterTipo] = useState<FilterTipo>('todos')
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('todos')
   const [filterEditora, setFilterEditora] = useState<FilterEditora>('todos')
-  const [contratosObras, setContratosObras] = useState<any[]>([])
   const [contratosApi, setContratosApi] = useState<any[]>([])
   const [apiKpis, setApiKpis] = useState<any>(null)
   const [loadingApi, setLoadingApi] = useState(true)
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem('sync_contratos_obras_v1')
-      if (raw) setContratosObras(JSON.parse(raw))
-    } catch { /* ignore */ }
-  }, [])
 
   useEffect(() => {
     authFetch('/api/contratos?per_page=100')
@@ -130,20 +119,35 @@ export default function ContratosPage() {
     URL.revokeObjectURL(url)
   }
 
-  function marcarAssinado(id: string) {
-    const updated = contratosObras.map(c => c.id === id ? { ...c, status: 'assinado' } : c)
-    setContratosObras(updated)
-    localStorage.setItem('sync_contratos_obras_v1', JSON.stringify(updated))
+  async function marcarAssinado(id: string) {
+    await authFetch(`/api/contratos/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'assinado' }),
+    })
+    // Recarrega a lista
+    authFetch('/api/contratos?per_page=100')
+      .then(r => r.json())
+      .then(json => { if (json.data) setContratosApi(json.data) })
+      .catch(() => {})
   }
 
   const editoras = useMemo(() => {
-    // Prioriza editoras do banco; fallback para mock para exibição dos filtros
-    const nomes = [...new Set([...contratosApi, ...MOCK_CONTRATOS_V2].map((c: any) => c.editora_nome).filter(Boolean))]
+    const nomes = [...new Set(contratosApi.map((c: any) => c.editora_nome).filter(Boolean))]
     return ['todos', ...nomes]
   }, [contratosApi])
 
-  // Usa contratos do banco se disponível, senão usa mock como fallback visual
-  const fonteContratos = contratosApi.length > 0 ? contratosApi : MOCK_CONTRATOS_V2
+  const alertasExclusividade = useMemo(() => {
+    const hoje = new Date()
+    const limite = new Date()
+    limite.setDate(hoje.getDate() + 90)
+    return contratosApi.filter((c: any) => {
+      if (!c.vigencia_fim) return false
+      const fim = new Date(c.vigencia_fim + 'T00:00:00')
+      return fim >= hoje && fim <= limite
+    })
+  }, [contratosApi])
+
+  const fonteContratos = contratosApi
 
   const contratos = useMemo(() => {
     return fonteContratos.filter((c: any) => {
@@ -165,7 +169,7 @@ export default function ContratosPage() {
   return (
     <div className="space-y-6">
       {/* Alerta exclusividade vencendo */}
-      {ALERTAS_EXCLUSIVIDADE.length > 0 && (
+      {alertasExclusividade.length > 0 && (
         <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
           <ShieldAlert className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
           <div>
@@ -173,7 +177,7 @@ export default function ContratosPage() {
               Alertas de Exclusividade
             </p>
             <p className="text-xs text-amber-400/80">
-              {ALERTAS_EXCLUSIVIDADE.length} contrato(s) com exclusividade autoral vencendo em menos de 90 dias.{' '}
+              {alertasExclusividade.length} contrato(s) com vencimento em menos de 90 dias.{' '}
               <Link href="/master/contratos/alertas" className="underline hover:text-amber-300">
                 Ver alertas
               </Link>
@@ -232,78 +236,6 @@ export default function ContratosPage() {
           icon={<Calendar className="w-4 h-4 text-violet-400" />}
         />
       </div>
-
-      {/* Contratos de Obras (localStorage) */}
-      {contratosObras.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-bold text-white/60 uppercase tracking-wider">Contratos de Obras</p>
-            <span className="text-xs bg-teal-500/10 text-teal-400 px-2 py-0.5 rounded border border-teal-500/20">{contratosObras.length}</span>
-          </div>
-          {contratosObras.map(c => {
-            const assinado = c.status === 'assinado'
-            const tipoNomes: Record<string, string> = {
-              cessao_parcial: 'Cessão Parcial', cessao_total: 'Cessão Total', coedicao: 'Coedição',
-            }
-            return (
-              <div key={c.id} className="bg-[#0d1526] border border-teal-500/20 rounded-xl px-5 py-4">
-                <div className="flex items-start gap-4">
-                  <div className="w-9 h-9 rounded-lg bg-teal-500/10 flex items-center justify-center flex-shrink-0">
-                    <FileText className="w-4 h-4 text-teal-400" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="text-sm font-semibold text-white/90">{c.numero}</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/20">
-                        {tipoNomes[c.tipo] || c.tipo}
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        assinado
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}>
-                        {assinado ? '✓ Assinado' : 'Rascunho'}
-                      </span>
-                    </div>
-                    <div className="flex gap-3 text-xs text-white/40 flex-wrap">
-                      <span><User className="w-3 h-3 inline mr-1" />{c.titular_nome}</span>
-                      <span><Calendar className="w-3 h-3 inline mr-1" />{c.data_emissao}</span>
-                      <span>{(c.obras || []).length} obra(s)</span>
-                    </div>
-                  </div>
-                  {/* Ações */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => downloadContratoObra(c, 'rascunho')}
-                      title="Baixar rascunho"
-                      className="h-8 px-3 flex items-center gap-1.5 text-xs text-white/50 hover:text-white/80 border border-white/[0.08] hover:border-white/15 rounded-lg transition-colors"
-                    >
-                      <Download className="w-3.5 h-3.5" /> Rascunho
-                    </button>
-                    {assinado ? (
-                      <button
-                        onClick={() => downloadContratoObra(c, 'assinado')}
-                        title="Baixar contrato assinado"
-                        className="h-8 px-3 flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/50 rounded-lg transition-colors"
-                      >
-                        <Download className="w-3.5 h-3.5" /> Assinado
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => marcarAssinado(c.id)}
-                        title="Marcar como assinado por todas as partes"
-                        className="h-8 px-3 flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 border border-amber-500/30 hover:border-amber-500/50 rounded-lg transition-colors"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Marcar Assinado
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
 
       {/* Filtros */}
       <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4">

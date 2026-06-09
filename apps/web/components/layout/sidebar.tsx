@@ -32,6 +32,7 @@ interface SidebarProps {
   nav: NavSection[]
   role: 'master' | 'editora' | 'titular'
   editoraNome?: string
+  tenantNome?: string
   userName?: string
   userInitials?: string
   mobileOpen?: boolean
@@ -40,7 +41,7 @@ interface SidebarProps {
 
 const NAV_SCROLL_KEY = 'sidebar_scroll_top'
 
-export function Sidebar({ nav, role, editoraNome, userName, userInitials, mobileOpen, onClose }: SidebarProps) {
+export function Sidebar({ nav, role, editoraNome, tenantNome, userName, userInitials, mobileOpen, onClose }: SidebarProps) {
   const pathname = usePathname()
   const navRef    = useRef<HTMLElement>(null)
   const activeRef = useRef<HTMLAnchorElement>(null)
@@ -173,7 +174,7 @@ export function Sidebar({ nav, role, editoraNome, userName, userInitials, mobile
             </div>
             <div className="min-w-0 flex-1 text-left">
               <p className="text-[12px] font-medium text-white/80 truncate">{userName}</p>
-              <p className="text-[10px] text-white/35 truncate">Editora Top Show</p>
+              <p className="text-[10px] text-white/35 truncate">{tenantNome ?? editoraNome ?? ''}</p>
             </div>
             <ChevronDown className="w-3.5 h-3.5 text-white/25 shrink-0 group-hover:text-white/50 transition-colors" strokeWidth={2}/>
           </button>

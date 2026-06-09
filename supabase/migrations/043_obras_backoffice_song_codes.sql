@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS recebimentos_itens (
   tenant_id            UUID REFERENCES tenants(id),
   recebimento_id       UUID NOT NULL REFERENCES recebimentos(id),
   -- Ajuste 1: rastreabilidade — arquivo de origem
-  importacao_id        UUID REFERENCES importacoes(id),
+  importacao_id        UUID REFERENCES importacoes_log(id),
 
   -- Identificacao da obra (pos-matching)
   origem_receita_id    UUID REFERENCES origens_receita(id),
@@ -182,15 +182,16 @@ CREATE OR REPLACE VIEW v_catalogo_backoffice AS
 SELECT
   o.id                                                                     AS obra_id,
   o.titulo,
-  o.id_interno,
+  o.codigo_obra                                                            AS id_interno,
   -- Indicadores operacionais
   EXISTS(
     SELECT 1 FROM obras_backoffice ob
     WHERE ob.obra_id = o.id AND ob.ativo = TRUE
   )                                                                        AS tem_songcode,
+  -- tem_isrc: verifica fonogramas (tabela real, vide migration 006)
   EXISTS(
-    SELECT 1 FROM gravacoes g
-    WHERE g.obra_id = o.id
+    SELECT 1 FROM fonogramas f
+    WHERE f.obra_id = o.id
   )                                                                        AS tem_isrc,
   EXISTS(
     SELECT 1 FROM recebimentos_itens ri
@@ -207,21 +208,22 @@ SELECT
       AND ri.status_juridico IN ('pendente_identificacao','pendente_validacao','bloqueado')
   )                                                                        AS possui_pendencia,
   -- Ajuste 3: cobertura juridica
+  -- JOIN via obras_participantes (nome real, vide migration 033)
   (
     SELECT ne.id FROM negocios_editoriais ne
-    JOIN obras_participacoes op ON op.editora_id = ne.editora_administrada_id
+    JOIN obras_participantes op ON op.editora_id = ne.editora_administrada_id
     WHERE op.obra_id = o.id AND ne.status = 'ativo' LIMIT 1
   )                                                                        AS negocio_editorial_id,
   (
     SELECT jsonb_array_length(COALESCE(ne.direitos_brasil, '[]'::jsonb))
     FROM negocios_editoriais ne
-    JOIN obras_participacoes op ON op.editora_id = ne.editora_administrada_id
+    JOIN obras_participantes op ON op.editora_id = ne.editora_administrada_id
     WHERE op.obra_id = o.id AND ne.status = 'ativo' LIMIT 1
   )                                                                        AS qt_direitos_brasil,
   (
     SELECT jsonb_array_length(COALESCE(ne.direitos_exterior, '[]'::jsonb))
     FROM negocios_editoriais ne
-    JOIN obras_participacoes op ON op.editora_id = ne.editora_administrada_id
+    JOIN obras_participantes op ON op.editora_id = ne.editora_administrada_id
     WHERE op.obra_id = o.id AND ne.status = 'ativo' LIMIT 1
   )                                                                        AS qt_direitos_exterior,
   -- Semaforo: completo / atencao / pendente
@@ -233,7 +235,7 @@ SELECT
          )
          OR NOT EXISTS(
            SELECT 1 FROM negocios_editoriais ne
-           JOIN obras_participacoes op ON op.editora_id = ne.editora_administrada_id
+           JOIN obras_participantes op ON op.editora_id = ne.editora_administrada_id
            WHERE op.obra_id = o.id AND ne.status = 'ativo'
          )
       THEN 'pendente'
@@ -242,7 +244,7 @@ SELECT
            WHERE ob.obra_id = o.id AND ob.ativo = TRUE
          )
          OR NOT EXISTS(
-           SELECT 1 FROM gravacoes g WHERE g.obra_id = o.id
+           SELECT 1 FROM fonogramas f WHERE f.obra_id = o.id
          )
       THEN 'atencao'
     ELSE 'completo'

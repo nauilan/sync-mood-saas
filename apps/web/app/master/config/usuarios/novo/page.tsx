@@ -1,31 +1,66 @@
 'use client'
 import Link from 'next/link'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/components/ui/page-header'
-import { MOCK_PERMISSOES } from '@/lib/mock-config'
-import type { PerfilCodigo } from '@/lib/types-config'
 import { ArrowLeft, Save, User } from 'lucide-react'
 
-const AMOSTRA_PERMISSOES = MOCK_PERMISSOES.slice(0, 6)
+const ROLES = [
+  { value: 'admin',                label: 'Admin' },
+  { value: 'editora_administrada', label: 'Editora Adm.' },
+  { value: 'financeiro',           label: 'Financeiro' },
+  { value: 'juridico',             label: 'Jurídico' },
+  { value: 'atendimento',          label: 'Operacional' },
+  { value: 'autor',                label: 'Autor' },
+]
 
 export default function NovoUsuarioPage() {
-  const [nome, setNome] = useState('')
-  const [email, setEmail] = useState('')
-  const [telefone, setTelefone] = useState('')
-  const [perfil, setPerfil] = useState<PerfilCodigo | ''>('')
-  const [editora, setEditora] = useState('')
-  const [permsExtras, setPermsExtras] = useState<string[]>([])
-  const [saved, setSaved] = useState(false)
+  const router = useRouter()
+  const [nome,      setNome]      = useState('')
+  const [email,     setEmail]     = useState('')
+  const [cpf,       setCpf]       = useState('')
+  const [telefone,  setTelefone]  = useState('')
+  const [role,      setRole]      = useState('atendimento')
+  const [senha,     setSenha]     = useState('')
+  const [saving,    setSaving]    = useState(false)
+  const [error,     setError]     = useState('')
+  const [success,   setSuccess]   = useState(false)
 
-  function togglePerm(id: string) {
-    setPermsExtras((prev) =>
-      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
-    )
+  function maskCpf(v: string) {
+    return v.replace(/\D/g, '').slice(0, 11)
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+      .replace(/(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4')
   }
 
-  function handleSave() {
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+  async function handleSave() {
+    setError('')
+    if (!nome.trim())   return setError('Nome é obrigatório')
+    if (!senha.trim() || senha.length < 6) return setError('Senha mínima de 6 caracteres')
+    if (!email.trim() && cpf.replace(/\D/g, '').length !== 11) {
+      return setError('Informe e-mail ou CPF (11 dígitos)')
+    }
+
+    setSaving(true)
+    const body: Record<string, string> = { nome: nome.trim(), senha, role }
+    if (email.trim()) body.email = email.trim()
+    if (cpf)          body.cpf   = cpf.replace(/\D/g, '')
+    if (telefone)     body.telefone = telefone.trim()
+
+    const res = await fetch('/api/usuarios', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const data = await res.json()
+    setSaving(false)
+
+    if (!res.ok) {
+      setError(data.error ?? 'Erro ao criar usuário')
+      return
+    }
+    setSuccess(true)
+    setTimeout(() => router.push('/master/config/usuarios'), 1500)
   }
 
   return (
@@ -49,7 +84,7 @@ export default function NovoUsuarioPage() {
           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-violet-700 flex items-center justify-center shrink-0">
             {nome ? (
               <span className="text-sm font-bold text-white">
-                {nome.split(' ').map((n) => n[0]).slice(0, 2).join('')}
+                {nome.split(' ').filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase()}
               </span>
             ) : (
               <User className="w-5 h-5 text-white/60" strokeWidth={1.5} />
@@ -57,16 +92,13 @@ export default function NovoUsuarioPage() {
           </div>
           <div>
             <p className="text-sm font-medium text-white/70">{nome || 'Nome do Usuário'}</p>
-            <p className="text-xs text-white/35">{email || 'email@editora.com.br'}</p>
+            <p className="text-xs text-white/35">{email || (cpf ? `CPF: ${cpf}` : 'e-mail ou CPF')}</p>
           </div>
         </div>
 
-        {/* Campos */}
         <div className="grid grid-cols-1 gap-4">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-white/50 uppercase tracking-wider">
-              Nome Completo *
-            </label>
+            <label className="text-xs font-medium text-white/50 uppercase tracking-wider">Nome Completo *</label>
             <input
               type="text"
               value={nome}
@@ -76,96 +108,61 @@ export default function NovoUsuarioPage() {
             />
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-white/50 uppercase tracking-wider">
-              Email *
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="usuario@editora.com.br"
-              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-white/80 placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 transition-colors"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-white/50 uppercase tracking-wider">
-              Telefone
-            </label>
-            <input
-              type="tel"
-              value={telefone}
-              onChange={(e) => setTelefone(e.target.value)}
-              placeholder="(11) 99999-0000"
-              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-white/80 placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 transition-colors"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-white/50 uppercase tracking-wider">E-mail</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="usuario@editora.com.br"
+                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-white/80 placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 transition-colors"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-white/50 uppercase tracking-wider">CPF (se não tiver e-mail)</label>
+              <input
+                type="text"
+                value={maskCpf(cpf)}
+                onChange={(e) => setCpf(e.target.value.replace(/\D/g, ''))}
+                placeholder="000.000.000-00"
+                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-white/80 placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 transition-colors"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/50 uppercase tracking-wider">
-                Perfil *
-              </label>
-              <select
-                value={perfil}
-                onChange={(e) => setPerfil(e.target.value as PerfilCodigo | '')}
-                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-white/60 focus:outline-none focus:border-violet-500/50 transition-colors"
-              >
-                <option value="">Selecione...</option>
-                <option value="master">Master</option>
-                <option value="administrada">Administrada</option>
-                <option value="autor">Autor</option>
-                <option value="financeiro">Financeiro</option>
-                <option value="juridico">Jurídico</option>
-                <option value="operacional">Operacional</option>
-              </select>
+              <label className="text-xs font-medium text-white/50 uppercase tracking-wider">Telefone</label>
+              <input
+                type="tel"
+                value={telefone}
+                onChange={(e) => setTelefone(e.target.value)}
+                placeholder="(11) 99999-0000"
+                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-white/80 placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 transition-colors"
+              />
             </div>
-
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/50 uppercase tracking-wider">
-                Editora *
-              </label>
+              <label className="text-xs font-medium text-white/50 uppercase tracking-wider">Perfil *</label>
               <select
-                value={editora}
-                onChange={(e) => setEditora(e.target.value)}
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
                 className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-white/60 focus:outline-none focus:border-violet-500/50 transition-colors"
               >
-                <option value="">Selecione...</option>
-                <option value="ed-tsm">Top Show Music</option>
-                <option value="ed-edi">Edi Music</option>
-                <option value="ed-lr">LR Edições</option>
-                <option value="ed-p3">P3 Music</option>
-                <option value="ed-lamu">Lamu Edições</option>
+                {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
               </select>
             </div>
           </div>
-        </div>
 
-        {/* Permissões adicionais */}
-        <div className="space-y-3 pt-2 border-t border-white/[0.06]">
-          <p className="text-xs font-medium text-white/50 uppercase tracking-wider">
-            Permissões Adicionais (opcional)
-          </p>
-          <div className="grid grid-cols-1 gap-2">
-            {AMOSTRA_PERMISSOES.map((perm) => (
-              <label
-                key={perm.id}
-                className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.04] cursor-pointer transition-colors"
-              >
-                <input
-                  type="checkbox"
-                  checked={permsExtras.includes(perm.id)}
-                  onChange={() => togglePerm(perm.id)}
-                  className="mt-0.5 accent-violet-500"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-mono text-violet-400">{perm.codigo}</p>
-                  <p className="text-xs text-white/50 mt-0.5">{perm.descricao}</p>
-                </div>
-                <span className="text-[10px] text-white/25 shrink-0">{perm.modulo}</span>
-              </label>
-            ))}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-white/50 uppercase tracking-wider">Senha Inicial *</label>
+            <input
+              type="password"
+              value={senha}
+              onChange={(e) => setSenha(e.target.value)}
+              placeholder="Mínimo 6 caracteres"
+              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-white/80 placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 transition-colors"
+            />
           </div>
         </div>
 
@@ -178,17 +175,15 @@ export default function NovoUsuarioPage() {
             Cancelar
           </Link>
           <div className="flex items-center gap-3">
-            {saved && (
-              <span className="text-xs text-emerald-400 animate-pulse">
-                Usuário criado com sucesso!
-              </span>
-            )}
+            {error && <p className="text-xs text-rose-400">{error}</p>}
+            {success && <p className="text-xs text-emerald-400">Usuário criado! Redirecionando...</p>}
             <button
               onClick={handleSave}
-              className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-violet-600 text-white text-sm hover:bg-violet-700 transition-colors"
+              disabled={saving}
+              className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-violet-600 text-white text-sm hover:bg-violet-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
               <Save className="w-4 h-4" />
-              Criar Usuário
+              {saving ? 'Criando...' : 'Criar Usuário'}
             </button>
           </div>
         </div>

@@ -11,13 +11,13 @@ import {
   Send, Database, Tag, ShieldCheck, ShieldAlert, Loader2,
   Save, FileSpreadsheet, FileText, Check, Calculator, RefreshCw,
 } from 'lucide-react'
-import { MOCK_OBRAS, MOCK_OBRAS_LINKS, MOCK_OBRAS_FONOGRAMAS } from '@/lib/mock-obras'
+import { MOCK_OBRAS, MOCK_OBRAS_LINKS } from '@/lib/mock-obras'
 import { STORE_KEYS } from '@/lib/store'
 import { authFetch } from '@/lib/supabase/client'
 import { createClient } from '@supabase/supabase-js'
-import { MOCK_EDITORAS } from '@/lib/mock-cadastros'
+// MOCK_EDITORAS removido — editoras carregadas via /api/editoras
 import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, normalizarLinksObra } from '@/lib/types-obras'
-import type { StatusObra } from '@/lib/types-obras'
+import type { StatusObra, Fonograma } from '@/lib/types-obras'
 
 /** Distribui percentuais garantindo soma = 100,00 (algoritmo largest-remainder, 2 casas) */
 function largestRemainder(values: number[]): number[] {
@@ -109,7 +109,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
 }
 
 // ─── Drawer de detalhes da obra ──────────────────────────────────────────────
-function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => void }) {
+function ObraDrawer({ obra: obraInicial, onClose, editoras = [] }: { obra: any; onClose: () => void; editoras?: { id: string; nome_fantasia: string }[] }) {
   const [tab, setTab] = useState<'info' | 'titulares' | 'fonogramas' | 'letra'>('info')
   const [letraExpanded, setLetraExpanded] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -190,8 +190,20 @@ function ObraDrawer({ obra: obraInicial, onClose }: { obra: any; onClose: () => 
     }, 0).toFixed(2)
   )
 
-  const fonogramas = MOCK_OBRAS_FONOGRAMAS?.[obra.id] ?? []
-  const editora = MOCK_EDITORAS.find(e => e.id === obra.editora_id)
+  // ── Fonogramas reais da obra ─────────────────────────────────────────────
+  const [fonogramas, setFonogramas] = useState<Fonograma[]>([])
+  const [loadingFonogramas, setLoadingFonogramas] = useState(false)
+  useEffect(() => {
+    if (tab !== 'fonogramas') return
+    setLoadingFonogramas(true)
+    authFetch(`/api/obras/${obra.id}/fonogramas`)
+      .then(r => r.json())
+      .then(d => setFonogramas(d.data ?? []))
+      .catch(() => {})
+      .finally(() => setLoadingFonogramas(false))
+  }, [obra.id, tab])
+
+  const editora = editoras.find(e => e.id === obra.editora_id)
   const editoraNome = editora?.nome_fantasia
     ?? links.flatMap((l: any) => l.titulares ?? [])
         .find((t: any) => ['editora_original', 'administradora'].includes(t.papel))?.nome
@@ -751,26 +763,31 @@ tfoot td{background:#f7f7f7;font-weight:bold}
 
           {tab === 'fonogramas' && (
             <div className="space-y-2">
-              {fonogramas.length === 0 && (
+              {loadingFonogramas && (
+                <div className="flex justify-center py-10 text-white/25">
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                </div>
+              )}
+              {!loadingFonogramas && fonogramas.length === 0 && (
                 <div className="flex flex-col items-center gap-2 py-10 text-white/25">
                   <Mic2 className="w-8 h-8" />
                   <p className="text-sm">Nenhum fonograma cadastrado</p>
                 </div>
               )}
-              {fonogramas.map((f: any, i: number) => (
+              {!loadingFonogramas && fonogramas.map((f, i) => (
                 <div key={f.id || i} className="bg-white/[0.03] rounded-xl p-4 flex items-center gap-3">
                   <div className="w-9 h-9 rounded-lg bg-sky-500/10 flex items-center justify-center shrink-0">
                     <Mic2 className="w-4 h-4 text-sky-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white/80 font-medium truncate">{f.titulo || f.nome || `Fonograma ${i + 1}`}</p>
+                    <p className="text-sm text-white/80 font-medium truncate">{f.titulo_fonograma || `Fonograma ${i + 1}`}</p>
                     <div className="flex items-center gap-3 mt-0.5">
                       {f.isrc && <span className="text-[10px] font-mono text-emerald-400">{f.isrc}</span>}
-                      {f.duracao && <span className="text-[10px] text-white/30">{f.duracao}</span>}
-                      {f.artista && <span className="text-[10px] text-white/30">{f.artista}</span>}
+                      {f.duracao_segundos && <span className="text-[10px] text-white/30">{Math.floor(f.duracao_segundos/60)}:{String(f.duracao_segundos%60).padStart(2,'0')}</span>}
+                      {f.interprete && <span className="text-[10px] text-white/30">{f.interprete}</span>}
                     </div>
                   </div>
-                  {f.ano && <span className="text-xs text-white/30 shrink-0">{f.ano}</span>}
+                  {f.ano_gravacao && <span className="text-xs text-white/30 shrink-0">{f.ano_gravacao}</span>}
                 </div>
               ))}
             </div>
@@ -929,6 +946,7 @@ export default function ObrasPage() {
   const [obrasData, setObrasData] = useState<any[]>([])
   const [obrasLoading, setObrasLoading] = useState(true)
   const [obrasSource, setObrasSource] = useState<'api' | 'mock'>('mock')
+  const [editoras, setEditoras] = useState<{ id: string; nome_fantasia: string }[]>([])
 
   useEffect(() => {
     async function carregarObras() {
@@ -953,6 +971,13 @@ export default function ObrasPage() {
       }
     }
     carregarObras()
+  }, [])
+
+  useEffect(() => {
+    authFetch('/api/editoras')
+      .then(r => r.ok ? r.json() : { editoras: [] })
+      .then(d => setEditoras(d.editoras ?? []))
+      .catch(() => {})
   }, [])
 
   // Catálogo unificado: deduplicado por codigo, com % controlado recalculado dinamicamente
@@ -1164,7 +1189,7 @@ export default function ObrasPage() {
           </select>
           <select value={filterEditora} onChange={e => setFilterEditora(e.target.value)} className={selectCls}>
             <option value="">Todas editoras</option>
-            {MOCK_EDITORAS.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia}</option>)}
+            {editoras.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia}</option>)}
           </select>
           <select value={filterIswc} onChange={e => setFilterIswc(e.target.value as 'todos' | 'com' | 'sem')} className={selectCls}>
             <option value="todos">ISWC: todos</option>
@@ -1204,7 +1229,7 @@ export default function ObrasPage() {
             <tbody className="divide-y divide-white/[0.04]">
               {obras.map(obra => {
                 const links = normalizarLinksObra(obra._links ?? MOCK_OBRAS_LINKS[obra.id] ?? [])
-                const editora = MOCK_EDITORAS.find(e => e.id === obra.editora_id)
+                const editora = editoras.find(e => e.id === obra.editora_id)
                 const editoraNome = editora?.nome_fantasia
                   ?? links.flatMap((l: any) => l.titulares ?? [])
                       .find((t: any) => ['editora_original', 'administradora'].includes(t.papel))?.nome
@@ -1298,7 +1323,7 @@ export default function ObrasPage() {
       </div>
 
       {obraAtiva && (
-        <ObraDrawer obra={obraAtiva} onClose={() => setObraAtiva(null)} />
+        <ObraDrawer obra={obraAtiva} onClose={() => setObraAtiva(null)} editoras={editoras} />
       )}
     </div>
   )

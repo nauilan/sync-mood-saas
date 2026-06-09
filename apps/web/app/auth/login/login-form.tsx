@@ -3,12 +3,8 @@
 import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 
-// CPF: login por CPF + senha
-// Internamente o Supabase Auth usa "{cpf_digits}@syncmood.app" como email
-
-function formatarCpf(value: string): string {
+function maskCpf(value: string): string {
   const d = value.replace(/\D/g, '').slice(0, 11)
   if (d.length <= 3) return d
   if (d.length <= 6) return `${d.slice(0,3)}.${d.slice(3)}`
@@ -16,28 +12,13 @@ function formatarCpf(value: string): string {
   return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`
 }
 
-const ROLE_HOME: Record<string, string> = {
-  master:               '/master/dashboard',
-  admin:                '/master/dashboard',
-  super_admin:          '/master/dashboard',
-  editora_administrada: '/master/dashboard',
-  financeiro:           '/master/dashboard',
-  juridico:             '/master/dashboard',
-  cadastro:             '/master/dashboard',
-  consulta:             '/master/dashboard',
-  atendimento:          '/master/dashboard',
-  autor:                '/portal/dashboard',
-  titular:              '/titular/dashboard',
-  editora:              '/editora/dashboard',
-}
-
 export function LoginForm() {
   const params = useSearchParams()
-  const [cpf, setCpf] = useState('')
+  const [cpf,      setCpf]      = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [loading,  setLoading]  = useState(false)
+  const [error,    setError]    = useState<string | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -48,40 +29,29 @@ export function LoginForm() {
       const cpfDigits = cpf.replace(/\D/g, '')
       if (cpfDigits.length !== 11) {
         setError('CPF inválido. Digite os 11 dígitos.')
+        setLoading(false)
         return
       }
 
-      const supabase = createClient()
-      const email = `${cpfDigits}@syncmood.app`
-
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cpf: cpfDigits, password }),
+        credentials: 'include',
       })
 
-      if (authError || !data.session) {
-        setError('CPF ou senha incorretos.')
+      const json = await res.json()
+
+      if (!res.ok) {
+        setError(json?.error ?? 'CPF ou senha incorretos.')
         return
       }
 
-      // Busca role na tabela usuarios
-      let role = 'master'
-      try {
-        const { data: rows } = await supabase
-          .from('usuarios')
-          .select('role')
-          .eq('auth_user_id', data.user.id)
-          .limit(1)
-        const r = rows as Array<{ role: string }> | null
-        if (Array.isArray(r) && r[0]?.role) role = r[0].role
-      } catch { /* usa master como padrão */ }
-
-      const redirectTo = params.get('redirectTo') ?? ROLE_HOME[role] ?? '/master/dashboard'
+      const redirectTo = params.get('redirectTo') ?? json.redirectTo ?? '/master/dashboard'
       window.location.href = redirectTo
 
-    } catch (err) {
+    } catch {
       setError('Erro de conexão. Tente novamente.')
-      console.error('[login]', err)
     } finally {
       setLoading(false)
     }
@@ -104,7 +74,7 @@ export function LoginForm() {
           type="text"
           inputMode="numeric"
           value={cpf}
-          onChange={(e) => setCpf(formatarCpf(e.target.value))}
+          onChange={(e) => setCpf(maskCpf(e.target.value))}
           required
           autoComplete="username"
           placeholder="000.000.000-00"
@@ -130,11 +100,6 @@ export function LoginForm() {
           >
             {showPass ? <EyeOff className="w-4 h-4" strokeWidth={1.5} /> : <Eye className="w-4 h-4" strokeWidth={1.5} />}
           </button>
-        </div>
-        <div className="flex justify-end">
-          <a href="/auth/reset-password" className="text-xs text-white/25 hover:text-violet-400 transition-colors">
-            Esqueceu a senha?
-          </a>
         </div>
       </div>
 
