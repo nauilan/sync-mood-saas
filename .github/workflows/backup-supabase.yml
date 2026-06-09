@@ -24,25 +24,28 @@ jobs:
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           PGSSLMODE: require
+          PGCONNECT_TIMEOUT: "15"
         run: |
+          set -eo pipefail
           TIMESTAMP=$(date +%Y%m%d_%H%M%S)
           FILENAME="sync-mood-backup-${TIMESTAMP}.sql.gz"
           echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
 
-          # Resolve hostname para IPv4 explicitamente (evita IPv6 unreachable)
           DB_HOST="${{ secrets.SUPABASE_DB_HOST }}"
-          DB_IP=$(getent ahostsv4 "${DB_HOST}" | awk '{print $1; exit}')
-          echo "Conectando em ${DB_HOST} via ${DB_IP}:5432"
+          echo "Conectando em ${DB_HOST}:5432 com sslmode=require"
 
           pg_dump \
-            --host="${DB_IP}" \
+            --host="${DB_HOST}" \
             --port=5432 \
-            --username=postgres \
-            --dbname=postgres \
+            --username="${{ secrets.SUPABASE_DB_USER }}" \
+            --dbname="${{ secrets.SUPABASE_DB_NAME }}" \
             --no-owner \
             --no-acl \
             --format=plain \
-          | gzip > "${FILENAME}"
+            --verbose \
+          2>&1 | tee dump_log.txt | grep -v "^pg_dump:" | gzip > "${FILENAME}"
+
+          echo "Linhas no log: $(wc -l < dump_log.txt)"
 
           echo "Tamanho do dump:"
           ls -lh "${FILENAME}"
