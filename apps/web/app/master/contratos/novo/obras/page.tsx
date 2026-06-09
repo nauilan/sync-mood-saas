@@ -845,7 +845,7 @@ export default function NovoContratoObrasPage() {
             onClick={() => {
               const emailTitular = t.email
                 ?? (Array.isArray(t.contatos) ? t.contatos.find(c => c.tipo === 'email')?.valor ?? '' : '')
-              upd({ titular_id: t.id, titular_nome: t.nome_completo, titular_email: emailTitular, titular_cpf: t.cpf ?? '' })
+              upd({ titular_id: t.id, titular_nome: t.nome_completo, titular_email: emailTitular, titular_cpf: (t as unknown as Record<string,string>).cpf_cnpj ?? t.cpf ?? '' })
               setTimeout(() => btnProximoRef.current?.focus(), 50)
             }}
             className={[
