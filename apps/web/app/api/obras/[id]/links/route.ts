@@ -1,9 +1,3 @@
-/**
- * GET /api/obras/[id]/links
- *
- * Retorna os links da obra com titulares.
- * Usa service_role para contornar RLS e garantir leitura server-side.
- */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
@@ -12,6 +6,23 @@ function getAdminClient() {
   const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()
   if (!url || !key) return null
   return createClient(url, key, { auth: { persistSession: false } })
+}
+
+function getToken(req: NextRequest): string {
+  const auth = req.headers.get('authorization')
+  if (auth?.startsWith('Bearer ')) return auth.slice(7)
+  const chunks: string[] = []
+  for (const c of req.cookies.getAll()) {
+    const m = c.name.match(/auth-token\.(\d+)$/)
+    if (m) { chunks[parseInt(m[1])] = c.value; continue }
+    if (c.name.endsWith('auth-token') && !c.name.match(/\.\d+$/)) { chunks[0] = c.value }
+  }
+  const joined = chunks.filter(Boolean).join('')
+  if (joined) {
+    try { const p = JSON.parse(decodeURIComponent(joined)); if (p?.access_token) return p.access_token } catch { /* */ }
+    try { const p = JSON.parse(joined); if (p?.access_token) return p.access_token } catch { /* */ }
+  }
+  return ''
 }
 
 export async function GET(
@@ -23,9 +34,7 @@ export async function GET(
 
   const { id: obra_id } = await params
 
-  // Autentica via Bearer token
-  const authHeader = req.headers.get('authorization') ?? ''
-  const token = authHeader.replace('Bearer ', '')
+  const token = getToken(req)
   const { data: { user }, error: authErr } = await sb.auth.getUser(token)
   if (authErr || !user) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })

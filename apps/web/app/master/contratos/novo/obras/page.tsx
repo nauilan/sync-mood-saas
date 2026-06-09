@@ -420,7 +420,8 @@ export default function NovoContratoObrasPage() {
   const [titulares, setTitulares] = useState<{ id: string; nome_completo: string; cpf?: string; codigo_titular?: string; pessoa?: string; email?: string; contatos?: Array<{tipo: string; valor: string}> }[]>([])
   // Todas as PF do banco para pickers de assinantes
   const [pessoasFisicas, setPessoasFisicas] = useState<PessoaFisica[]>([])
-  const [editoras, setEditoras] = useState<{ id: string; nome_fantasia: string; cnpj?: string }[]>([])
+  const [editoras, setEditoras] = useState<{ id: string; nome_fantasia: string; cnpj?: string; tipo_editora?: string }[]>([])
+  const [editoraMasterId, setEditoraMasterId] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   // Detecção de obra duplicada
@@ -468,6 +469,7 @@ export default function NovoContratoObrasPage() {
             testemunha2:             findSignatario('testemunha_2'),
             observacoes:             c.observacoes ?? '',
           })
+          if (c.editora_id) setEditoraMasterId(c.editora_id)
         })
         .catch(() => {
           // Falha ao carregar: wizard limpo
@@ -528,7 +530,12 @@ export default function NovoContratoObrasPage() {
 
     authFetch('/api/editoras?status=todos')
       .then(r => r.ok ? r.json() : { editoras: [] })
-      .then(d => setEditoras(d.editoras ?? []))
+      .then(d => {
+        const eds = (d.editoras ?? []) as { id: string; nome_fantasia: string; cnpj?: string; tipo_editora?: string }[]
+        setEditoras(eds)
+        const master = eds.find(e => e.tipo_editora === 'master' || e.tipo_editora === 'propria')
+        if (master) setEditoraMasterId(master.id)
+      })
       .catch(() => {})
   }, [])
 
@@ -679,6 +686,7 @@ export default function NovoContratoObrasPage() {
       const payload = {
         tipo:            form.tipo || 'cessao_obras',
         titular_id:      form.titular_id || null,
+        editora_id:      editoraMasterId || null,
         data_inicio:     form.data_emissao || null,
         observacoes:     form.observacoes || null,
         splits_direitos: form.direitos,

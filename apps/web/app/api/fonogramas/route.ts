@@ -1,15 +1,3 @@
-/**
- * GET /api/fonogramas
- *
- * Lista fonogramas do tenant com suporte a filtros.
- * Query params opcionais:
- *   obra_id   — filtra por obra
- *   isrc      — busca exata por ISRC
- *   interprete — busca parcial (ilike)
- *   status    — 'ativo' | 'inativo' | 'pendente' (default: ativo)
- *   page      — paginação (default: 1)
- *   limit     — itens por página (default: 50, max: 200)
- */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
@@ -20,12 +8,28 @@ function getAdminClient() {
   return createClient(url, key, { auth: { persistSession: false } })
 }
 
+function getToken(req: NextRequest): string {
+  const auth = req.headers.get('authorization')
+  if (auth?.startsWith('Bearer ')) return auth.slice(7)
+  const chunks: string[] = []
+  for (const c of req.cookies.getAll()) {
+    const m = c.name.match(/auth-token\.(\d+)$/)
+    if (m) { chunks[parseInt(m[1])] = c.value; continue }
+    if (c.name.endsWith('auth-token') && !c.name.match(/\.\d+$/)) { chunks[0] = c.value }
+  }
+  const joined = chunks.filter(Boolean).join('')
+  if (joined) {
+    try { const p = JSON.parse(decodeURIComponent(joined)); if (p?.access_token) return p.access_token } catch { /* */ }
+    try { const p = JSON.parse(joined); if (p?.access_token) return p.access_token } catch { /* */ }
+  }
+  return ''
+}
+
 export async function GET(req: NextRequest) {
   const sb = getAdminClient()
   if (!sb) return NextResponse.json({ error: 'Config inválida' }, { status: 500 })
 
-  const authHeader = req.headers.get('authorization') ?? ''
-  const token = authHeader.replace('Bearer ', '')
+  const token = getToken(req)
   const { data: { user }, error: authErr } = await sb.auth.getUser(token)
   if (authErr || !user) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
