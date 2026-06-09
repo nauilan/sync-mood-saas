@@ -9,9 +9,26 @@ function getAdminClient() {
   return createClient(url, key, { auth: { persistSession: false } })
 }
 
+function getToken(req: NextRequest): string {
+  const auth = req.headers.get('authorization')
+  if (auth?.startsWith('Bearer ')) return auth.slice(7)
+  const chunks: string[] = []
+  for (const c of req.cookies.getAll()) {
+    const m = c.name.match(/auth-token\.(\d+)$/)
+    if (m) { chunks[parseInt(m[1])] = c.value; continue }
+    if (c.name.endsWith('auth-token') && !c.name.match(/\.\d+$/)) { chunks[0] = c.value }
+  }
+  const joined = chunks.filter(Boolean).join('')
+  if (joined) {
+    try { const p = JSON.parse(decodeURIComponent(joined)); if (p?.access_token) return p.access_token } catch { /* */ }
+    try { const p = JSON.parse(joined); if (p?.access_token) return p.access_token } catch { /* */ }
+  }
+  return ''
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function autenticar(req: NextRequest, sb: any): Promise<{ tenant_id: string; role: string } | null> {
-  const token = (req.headers.get('authorization') ?? '').replace('Bearer ', '').trim()
+  const token = getToken(req)
   if (!token) return null
   const { data: { user }, error } = await sb.auth.getUser(token)
   if (error || !user) return null
@@ -39,6 +56,7 @@ export async function GET(req: NextRequest) {
     .from('obras')
     .select('*', { count: 'exact' })
     .eq('tenant_id', usuario.tenant_id)
+    .is('deleted_at', null)
     .order('titulo', { ascending: true })
     .range(offset, offset + per_page - 1)
 
@@ -80,10 +98,18 @@ export async function POST(req: NextRequest) {
   if (!titulo) return NextResponse.json({ error: 'Campo "titulo" obrigatório' }, { status: 400 })
 
   // 1. Inserir obra
-  const allowedFields = ['titulo_alternativo', 'subtitulo', 'idioma', 'genero', 'ano_criacao', 'duracao_segundos', 'letra', 'status', 'iswc', 'codigo_obra']
+  const allowedFields = [
+    'titulo_alternativo', 'subtitulo', 'idioma', 'genero_musical',
+    'ano_criacao', 'duracao_segundos', 'letra', 'status', 'iswc', 'codigo_obra',
+    'observacoes', 'contrato_origem_id', 'interprete_referencia', 'editora_id',
+  ]
   const obraPayload: Record<string, unknown> = { titulo, tenant_id: usuario.tenant_id }
   for (const k of allowedFields) {
     if (rest[k] !== undefined && rest[k] !== null && rest[k] !== '') obraPayload[k] = rest[k]
+  }
+  // Compatibilidade: form pode enviar 'genero' mas o banco usa 'genero_musical'
+  if (rest.genero !== undefined && rest.genero !== null && rest.genero !== '' && !obraPayload.genero_musical) {
+    obraPayload.genero_musical = rest.genero
   }
 
   const { data: obra, error: obraErr } = await sb
@@ -118,6 +144,7 @@ export async function POST(req: NextRequest) {
       if (titulares.length > 0) {
         const titRows = titulares.map((t: Record<string, unknown>) => ({
           obra_link_id: linkRow.id,
+          obra_id: obra.id,
           tenant_id: usuario.tenant_id,
           titular_id: t.titular_id ?? null,
           nome: t.nome ?? '',

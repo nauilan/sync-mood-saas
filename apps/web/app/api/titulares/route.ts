@@ -161,7 +161,9 @@ export async function POST(req: NextRequest) {
   if (body.dados_bancarios && typeof body.dados_bancarios === 'object') payload.dados_bancarios = body.dados_bancarios
   if (Array.isArray(body.funcoes)  && body.funcoes.length  > 0) payload.funcoes  = body.funcoes
   if (body.endereco && typeof body.endereco === 'object')         payload.endereco = body.endereco
-  if (Array.isArray(body.contatos) && body.contatos.length > 0)  payload.contatos = body.contatos
+  if (Array.isArray(body.contatos)    && body.contatos.length    > 0) payload.contatos    = body.contatos
+  if (Array.isArray(body.pseudonimos) && body.pseudonimos.length > 0) payload.pseudonimos = body.pseudonimos
+  if (Array.isArray(body.documentos)  && body.documentos.length  > 0) payload.documentos  = body.documentos
 
   const { data, error } = await sb.from('titulares').insert(payload).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
