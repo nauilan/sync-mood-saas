@@ -3,9 +3,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
-  ChevronLeft, Pencil, Users, FileText, CreditCard,
+  ChevronLeft, Pencil, Users, CreditCard,
   MapPin, Phone, Briefcase, UserCircle2, Shield, History,
-  Trash2, AlertTriangle, Loader2
+  Trash2, AlertTriangle, Loader2, Mail, MessageSquare,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import { Badge } from '@/components/ui/badge'
@@ -212,7 +212,6 @@ export default function TitularDetalhePage() {
                   <InfoRow label={isPF ? 'CPF' : 'CNPJ'} value={<span className="font-mono">{titular.cpf_cnpj}</span>} />
                   <InfoRow label="Nacionalidade"    value={titular.nacionalidade} />
                   {isPF && <InfoRow label="Estado Civil"    value={titular.estado_civil} />}
-                  {isPF && <InfoRow label="Profissão"       value={titular.profissao} />}
                   {isPF && <InfoRow label="Sexo"            value={
                     titular.sexo === 'masculino'     ? 'Masculino' :
                     titular.sexo === 'feminino'      ? 'Feminino' :
@@ -312,12 +311,136 @@ export default function TitularDetalhePage() {
             </div>
           )}
 
-          {tab !== 'dados' && tab !== 'funcoes' && tab !== 'endereco' && tab !== 'bancario' && (
-            <div className="flex flex-col items-center justify-center py-12 text-white/20 gap-2">
-              <FileText className="w-8 h-8" />
-              <p className="text-sm">Seção em construção — dados serão exibidos em breve.</p>
+          {/* ── Contatos ── */}
+          {tab === 'contatos' && (
+            <div className="space-y-3">
+              {Array.isArray(titular.contatos) && titular.contatos.length > 0 ? (
+                <>
+                  <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">Contatos</h4>
+                  {titular.contatos.map((c: any, i: number) => (
+                    <div key={i} className="flex items-center gap-3 bg-white/[0.02] rounded-xl px-4 py-3 border border-white/[0.04]">
+                      <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+                        {c.tipo === 'email'
+                          ? <Mail className="w-3.5 h-3.5 text-sky-400" />
+                          : c.tipo === 'whatsapp'
+                          ? <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+                          : <Phone className="w-3.5 h-3.5 text-white/40" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-white/40 capitalize">{c.tipo}{c.descricao ? ` · ${c.descricao}` : ''}</p>
+                        <p className="text-sm font-medium text-white/85 break-all">{c.valor}</p>
+                      </div>
+                      {c.principal && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-300 shrink-0">
+                          Principal
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-white/20 gap-2">
+                  <Phone className="w-8 h-8" />
+                  <p className="text-sm">Nenhum contato cadastrado.</p>
+                  <p className="text-xs text-white/15">Adicione contatos na tela de edição.</p>
+                </div>
+              )}
             </div>
           )}
+
+          {/* ── Pseudônimos ── */}
+          {tab === 'pseudonimos' && (
+            <div className="space-y-3">
+              {Array.isArray(titular.pseudonimos) && titular.pseudonimos.length > 0 ? (
+                <>
+                  <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">Pseudônimos e Nomes Artísticos</h4>
+                  {titular.pseudonimos.map((p: any, i: number) => (
+                    <div key={i} className="flex items-center gap-3 bg-white/[0.02] rounded-xl px-4 py-3 border border-white/[0.04]">
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-white/85">{p.nome ?? p.valor ?? String(p)}</p>
+                        {p.tipo && <p className="text-xs text-white/40 mt-0.5 capitalize">{p.tipo}</p>}
+                      </div>
+                      {p.principal && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-300">
+                          Principal
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-white/20 gap-2">
+                  <UserCircle2 className="w-8 h-8" />
+                  <p className="text-sm">Nenhum pseudônimo cadastrado.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Documentos ── */}
+          {tab === 'documentos' && (
+            <div className="space-y-3">
+              {Array.isArray(titular.documentos) && titular.documentos.length > 0 ? (
+                <>
+                  <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">Documentos</h4>
+                  {titular.documentos.map((d: any, i: number) => (
+                    <div key={i} className="flex items-center gap-3 bg-white/[0.02] rounded-xl px-4 py-3 border border-white/[0.04]">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-white/40 capitalize">{d.tipo ?? 'Documento'}</p>
+                        <p className="text-sm font-mono text-white/85">{d.numero ?? d.valor ?? '—'}</p>
+                        {d.emissor && <p className="text-xs text-white/30 mt-0.5">Emissor: {d.emissor}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-white/20 gap-2">
+                  <Shield className="w-8 h-8" />
+                  <p className="text-sm">Nenhum documento cadastrado.</p>
+                  <p className="text-xs text-white/15">Adicione documentos na tela de edição.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Histórico ── */}
+          {tab === 'historico' && (
+            <div className="space-y-3">
+              <h4 className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-4">Histórico de Alterações</h4>
+              <div className="flex items-start gap-3 bg-white/[0.02] rounded-xl px-4 py-3 border border-white/[0.04]">
+                <div className="w-2 h-2 mt-1.5 rounded-full bg-emerald-400 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-white/80">Titular cadastrado</p>
+                  <p className="text-xs text-white/40 mt-0.5">
+                    {titular.created_at ? new Date(titular.created_at).toLocaleString('pt-BR') : '—'}
+                  </p>
+                </div>
+              </div>
+              {titular.updated_at && titular.updated_at !== titular.created_at && (
+                <div className="flex items-start gap-3 bg-white/[0.02] rounded-xl px-4 py-3 border border-white/[0.04]">
+                  <div className="w-2 h-2 mt-1.5 rounded-full bg-sky-400 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-white/80">Última alteração</p>
+                    <p className="text-xs text-white/40 mt-0.5">
+                      {new Date(titular.updated_at).toLocaleString('pt-BR')}
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-start gap-3 bg-white/[0.02] rounded-xl px-4 py-3 border border-white/[0.04]">
+                <div className={`w-2 h-2 mt-1.5 rounded-full shrink-0 ${titular.status === 'ativo' ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                <div>
+                  <p className="text-sm font-medium text-white/80">
+                    Status atual:{' '}
+                    <span className={titular.status === 'ativo' ? 'text-emerald-400' : 'text-rose-400'}>
+                      {titular.status === 'ativo' ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
 

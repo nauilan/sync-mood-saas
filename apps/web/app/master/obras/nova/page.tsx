@@ -405,7 +405,7 @@ export default function NovaObraPage() {
 
   // Step 4 — contrato assinado
   const [contratoFile, setContratoFile] = useState<File | null>(null)
-  const [contratoVinculadoId, setContratoVinculadoId] = useState('')
+  const [maisDeUmaObra, setMaisDeUmaObra] = useState(false)
   const [dragOver, setDragOver] = useState(false)
 
   // Modal: novo titular rápido
@@ -1166,17 +1166,29 @@ export default function NovaObraPage() {
               </div>
             )}
 
-            {/* Vincular a contrato existente no sistema */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/50">Vincular ao Registro de Contrato no Sistema (opcional)</label>
-              <select value={contratoVinculadoId} onChange={e => setContratoVinculadoId(e.target.value)} className={inputCls + ' cursor-pointer'}>
-                <option value="">Nenhum registro vinculado</option>
-                {contratos.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.numero}{c.titulo_obra ? ` — ${c.titulo_obra}` : ''} ({(c.tipo ?? '').replace(/_/g, ' ')})
-                  </option>
-                ))}
-              </select>
+            {/* Múltiplas obras no mesmo contrato */}
+            <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white">Este contrato possui mais de uma obra?</p>
+                  <p className="text-xs text-white/40 mt-0.5">O mesmo arquivo será usado para compor outras obras contidas neste documento.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMaisDeUmaObra(v => !v)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${maisDeUmaObra ? 'bg-violet-600' : 'bg-white/10'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${maisDeUmaObra ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+              {maisDeUmaObra && (
+                <div className="bg-violet-500/10 border border-violet-500/20 rounded-lg p-3 flex items-start gap-2">
+                  <Sparkles className="w-4 h-4 text-violet-400 shrink-0 mt-0.5" />
+                  <p className="text-xs text-violet-300/80">
+                    Após salvar esta obra, o sistema permitirá cadastrar as demais obras contidas neste mesmo contrato, reaproveitando o arquivo importado e as informações já preenchidas.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Status */}

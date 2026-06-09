@@ -491,9 +491,10 @@ export default function TitularesPage() {
       ipi: t.codigo_ipi ?? t.ipi ?? null,
       cae: t.codigo_cae ?? null,
     } : null),
-    _pseudonimos: t._pseudonimos ?? [],
-    _contatos: t._contatos ?? [],
-    _funcoes: t._funcoes ?? [],
+    _pseudonimos: t._pseudonimos ?? (Array.isArray(t.pseudonimos) ? t.pseudonimos : []),
+    _contatos:    t._contatos    ?? (Array.isArray(t.contatos)    ? t.contatos    : []),
+    _funcoes:     t._funcoes     ?? (Array.isArray(t.funcoes)     ? (t.funcoes as string[]).map(f => ({ funcao: f })) : []),
+    _enderecos:   t._enderecos   ?? (t.endereco && typeof t.endereco === 'object' ? [t.endereco] : []),
   })), [rawTitulares])
 
   const filtered = useMemo(() => {
