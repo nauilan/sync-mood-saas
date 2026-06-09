@@ -26,26 +26,40 @@ jobs:
           PGSSLMODE: require
           PGCONNECT_TIMEOUT: "15"
         run: |
-          set -eo pipefail
           TIMESTAMP=$(date +%Y%m%d_%H%M%S)
           FILENAME="sync-mood-backup-${TIMESTAMP}.sql.gz"
           echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
 
           DB_HOST="${{ secrets.SUPABASE_DB_HOST }}"
-          echo "Conectando em ${DB_HOST}:5432 com sslmode=require"
+          DB_USER="${{ secrets.SUPABASE_DB_USER }}"
+          DB_NAME="${{ secrets.SUPABASE_DB_NAME }}"
 
+          echo "=== Testando conexão ==="
+          psql "postgresql://${DB_USER}:${PGPASSWORD}@${DB_HOST}:5432/${DB_NAME}?sslmode=require&connect_timeout=10" \
+            -c "SELECT version();" 2>&1 || echo "psql test falhou (ver acima)"
+
+          echo "=== Iniciando dump ==="
           pg_dump \
             --host="${DB_HOST}" \
             --port=5432 \
-            --username="${{ secrets.SUPABASE_DB_USER }}" \
-            --dbname="${{ secrets.SUPABASE_DB_NAME }}" \
+            --username="${DB_USER}" \
+            --dbname="${DB_NAME}" \
             --no-owner \
             --no-acl \
             --format=plain \
-            --verbose \
-          2>&1 | tee dump_log.txt | grep -v "^pg_dump:" | gzip > "${FILENAME}"
+            --file="dump_raw.sql" 2>&1
+          DUMP_EXIT=$?
 
-          echo "Linhas no log: $(wc -l < dump_log.txt)"
+          echo "pg_dump exit: ${DUMP_EXIT}"
+          echo "Linhas: $(wc -l < dump_raw.sql 2>/dev/null || echo 0)"
+
+          if [ "${DUMP_EXIT}" -ne 0 ]; then
+            echo "ERRO: pg_dump falhou com exit ${DUMP_EXIT}"
+            exit 1
+          fi
+
+          gzip -c dump_raw.sql > "${FILENAME}"
+          echo "Dump comprimido: $(ls -lh ${FILENAME})"
 
           echo "Tamanho do dump:"
           ls -lh "${FILENAME}"
