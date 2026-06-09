@@ -8,142 +8,119 @@ on:
 
 jobs:
   backup:
-    name: pg_dump → release privado
+    name: export → artifact
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      # ── 1. Instala ferramentas ──────────────────────────────────
-      - name: Instalar postgresql-client
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client
+      # ── 1. Checkout (para ter node e scripts) ──────────────────────
+      - uses: actions/checkout@v4
 
-      # ── 2. Dump do banco ────────────────────────────────────────
-      - name: Fazer pg_dump
+      # ── 2. Setup Node.js ───────────────────────────────────────────
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── 3. Exportar dados via REST API (HTTPS / IPv4) ───────────────
+      # O host direto (db.*.supabase.co) tem apenas IPv6 e GitHub Actions
+      # não tem rota IPv6 para essa faixa AWS. Usamos a API REST do
+      # Supabase (HTTPS) com service_role_key para exportar todos os dados.
+      - name: Exportar dados Supabase
         env:
-          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-          PGSSLMODE: require
-          PGCONNECT_TIMEOUT: "20"
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-          FILENAME="sync-mood-backup-${TIMESTAMP}.sql.gz"
-          echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
+          BACKUP_DIR="backup_${TIMESTAMP}"
+          mkdir -p "${BACKUP_DIR}"
+          echo "BACKUP_DIR=${BACKUP_DIR}" >> $GITHUB_ENV
+          echo "TIMESTAMP=${TIMESTAMP}" >> $GITHUB_ENV
 
-          # O host direto (db.*.supabase.co) resolve apenas IPv6
-          # GitHub Actions não tem rota IPv6 → usar session pooler (IPv4)
-          # Username muda para postgres.PROJECT_REF no pooler
-          PROJECT_REF="tigubwxotanaznqqxogf"
+          # Lista de tabelas a exportar
+          TABLES="titulares editoras negocios_editoriais contratos obras fonogramas \
+                  obras_participantes obras_links obras_links_titulares \
+                  recebimentos distribuicoes cc_obras cc_titulares prestacao_contas \
+                  audit_logs usuarios tenants importacoes_log"
 
-          # Tentar cada região do pooler Supabase até encontrar uma acessível
-          # IPv6 2600:1f1e:: indica us-east-2; testar nessa ordem
-          POOLER_REGIONS="us-east-2 us-east-1 sa-east-1 eu-west-1 us-west-1 ap-southeast-1"
-          DB_HOST=""
-          DB_USER="postgres.${PROJECT_REF}"
-          DB_NAME="${{ secrets.SUPABASE_DB_NAME }}"
+          TOTAL=0
+          FAILED=0
 
-          FIRST_ATTEMPT=true
-          for REGION in ${POOLER_REGIONS}; do
-            CANDIDATE="aws-0-${REGION}.pooler.supabase.com"
-            echo "Testando pooler ${REGION}..."
-            if [ "${FIRST_ATTEMPT}" = "true" ]; then
-              # Primeira tentativa com erro visível para diagnóstico
-              PSQL_OUT=$(PGCONNECT_TIMEOUT=8 psql \
-                --host="${CANDIDATE}" \
-                --port=5432 \
-                --username="${DB_USER}" \
-                --dbname="${DB_NAME}" \
-                -c "SELECT 1;" 2>&1) && DB_HOST="${CANDIDATE}" && break || echo "  Erro: ${PSQL_OUT}"
-              FIRST_ATTEMPT=false
+          for TABLE in ${TABLES}; do
+            echo -n "Exportando ${TABLE}... "
+            HTTP_CODE=$(curl -s -o "${BACKUP_DIR}/${TABLE}.json" -w "%{http_code}" \
+              "${SUPABASE_URL}/rest/v1/${TABLE}?select=*" \
+              -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Accept: application/json" \
+              -H "Prefer: count=none")
+
+            if [ "${HTTP_CODE}" = "200" ]; then
+              ROWS=$(python3 -c "import json,sys; d=json.load(open('${BACKUP_DIR}/${TABLE}.json')); print(len(d) if isinstance(d,list) else 'N/A')" 2>/dev/null || echo "?")
+              echo "OK (${ROWS} linhas, HTTP ${HTTP_CODE})"
+              TOTAL=$((TOTAL + 1))
             else
-              if PGCONNECT_TIMEOUT=8 psql \
-                  --host="${CANDIDATE}" \
-                  --port=5432 \
-                  --username="${DB_USER}" \
-                  --dbname="${DB_NAME}" \
-                  -c "SELECT 1;" 2>/dev/null; then
-                DB_HOST="${CANDIDATE}"
-                break
-              else
-                echo "  -> falhou"
-              fi
+              echo "FALHOU (HTTP ${HTTP_CODE})"
+              FAILED=$((FAILED + 1))
             fi
           done
 
-          if [ -z "${DB_HOST}" ]; then
-            echo "ERRO: nenhum pooler Supabase acessível. Verifique a região do projeto."
+          echo ""
+          echo "=== Resumo ==="
+          echo "Tabelas exportadas: ${TOTAL}"
+          echo "Falhas: ${FAILED}"
+
+          # Metadata do backup
+          cat > "${BACKUP_DIR}/backup_info.json" << EOF
+          {
+            "timestamp": "${TIMESTAMP}",
+            "project_ref": "tigubwxotanaznqqxogf",
+            "tabelas_exportadas": ${TOTAL},
+            "falhas": ${FAILED},
+            "method": "supabase-rest-api"
+          }
+          EOF
+
+          # Verifica se exportou ao menos as tabelas críticas
+          if [ ! -s "${BACKUP_DIR}/titulares.json" ] || [ ! -s "${BACKUP_DIR}/contratos.json" ]; then
+            echo "ERRO: tabelas críticas não exportadas"
             exit 1
           fi
 
-          echo "=== Testando autenticação ==="
-          psql \
-            --host="${DB_HOST}" \
-            --port=5432 \
-            --username="${DB_USER}" \
-            --dbname="${DB_NAME}" \
-            -c "SELECT version();" 2>&1 || echo "psql test falhou (ver acima)"
+          echo "Backup OK: ${BACKUP_DIR}"
 
-          echo "=== Iniciando dump ==="
-          pg_dump \
-            --host="${DB_HOST}" \
-            --port=5432 \
-            --username="${DB_USER}" \
-            --dbname="${DB_NAME}" \
-            --no-owner \
-            --no-acl \
-            --format=plain \
-            --file="dump_raw.sql" 2>&1
-          DUMP_EXIT=$?
+      # ── 4. Comprimir ────────────────────────────────────────────────
+      - name: Comprimir backup
+        run: |
+          FILENAME="sync-mood-backup-${TIMESTAMP}.tar.gz"
+          tar -czf "${FILENAME}" "${BACKUP_DIR}/"
+          echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
+          echo "Arquivo: $(ls -lh ${FILENAME})"
 
-          echo "pg_dump exit: ${DUMP_EXIT}"
-          echo "Linhas: $(wc -l < dump_raw.sql 2>/dev/null || echo 0)"
-
-          if [ "${DUMP_EXIT}" -ne 0 ]; then
-            echo "ERRO: pg_dump falhou com exit ${DUMP_EXIT}"
-            exit 1
-          fi
-
-          gzip -c dump_raw.sql > "${FILENAME}"
-          echo "Dump comprimido: $(ls -lh ${FILENAME})"
-
-          echo "Tamanho do dump:"
-          ls -lh "${FILENAME}"
-
-      # ── 3. Upload como artifact (7 dias de retenção) ───────────
+      # ── 5. Upload como artifact (7 dias de retenção) ───────────────
       - name: Salvar como artifact
         uses: actions/upload-artifact@v4
         with:
-          name: backup-${{ env.FILENAME }}
+          name: backup-${{ env.TIMESTAMP }}
           path: ${{ env.FILENAME }}
           retention-days: 7
 
-      # ── 4. Verifica integridade mínima ─────────────────────────
-      - name: Verificar dump
+      # ── 6. Verifica integridade ────────────────────────────────────
+      - name: Verificar backup
         run: |
           SIZE=$(stat -c%s "${{ env.FILENAME }}")
           echo "Tamanho: ${SIZE} bytes"
-          # Descomprime 1 linha para checar que é SQL válido
-          FIRST=$(zcat "${{ env.FILENAME }}" | head -1 || true)
-          echo "Primeira linha: ${FIRST}"
-          if [ "${SIZE}" -lt 50 ]; then
-            echo "ERRO: dump muito pequeno (${SIZE} bytes), possível falha."
+          if [ "${SIZE}" -lt 200 ]; then
+            echo "ERRO: backup muito pequeno (${SIZE} bytes)"
             exit 1
           fi
-          echo "Backup OK: ${{ env.FILENAME }}"
+          echo "Backup salvo: ${{ env.FILENAME }} (${SIZE} bytes)"
 
-# ── CONFIGURAÇÃO NECESSÁRIA (Secrets no GitHub) ─────────────────
+# ── SECRETS NECESSÁRIOS (GitHub → Settings → Secrets → Actions) ─────
 #
-# Settings → Secrets and variables → Actions → New repository secret:
+#   SUPABASE_URL             → https://tigubwxotanaznqqxogf.supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY → chave service_role (Supabase → Settings → API)
 #
-#   SUPABASE_DB_HOST     → db.<project-ref>.supabase.co
-#   SUPABASE_DB_PASSWORD → senha do usuário postgres
-#                          (Supabase Dashboard → Settings → Database → Database password)
-#
-# COMO OBTER O HOST:
-#   Supabase Dashboard → Settings → Database → Connection string
-#   Exemplo: db.abcdefghijklmnop.supabase.co
-#
-# RECOMENDADO — backup externo adicional no Cloudflare R2 ou AWS S3:
-#   Adicionar step com aws-cli ou rclone após o step 2.
-#   Exemplo (R2):
-#     rclone copy "${FILENAME}" r2:sync-mood-backups/
+# NOTA: O backup pg_dump direto não funciona porque db.*.supabase.co
+# tem apenas endereço IPv6 e o runner GitHub Actions (Azure) não tem
+# rota IPv6 para a faixa AWS usada. Solução: habilitar IPv4 add-on
+# no Supabase (Settings → Add-ons) e atualizar para pg_dump novamente.
