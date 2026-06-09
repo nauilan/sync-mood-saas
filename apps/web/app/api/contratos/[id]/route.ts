@@ -96,7 +96,13 @@ export async function GET(
     renovacao_automatica: raw.renovacao_automatica  ?? false,
     // Arrays vazios para abas (rascunho ainda não tem joins formais)
     _partes:      [],
-    _direitos:    Array.isArray(raw.splits_direitos) ? raw.splits_direitos : [],
+    _direitos:    Array.isArray(raw.splits_direitos)
+      ? raw.splits_direitos.map((d: Record<string, unknown>) => ({
+          ...d,
+          // pct_titular derivado quando não salvo explicitamente (cessao: titular = 100 - editora)
+          pct_titular: d.pct_titular ?? (typeof d.pct_editora === 'number' ? 100 - d.pct_editora : null),
+        }))
+      : [],
     _obras:       [],
     _assinaturas: [],
     _recoupment:  [],
