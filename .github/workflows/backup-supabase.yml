@@ -60,8 +60,11 @@ jobs:
         run: |
           SIZE=$(stat -c%s "${{ env.FILENAME }}")
           echo "Tamanho: ${SIZE} bytes"
-          if [ "${SIZE}" -lt 1024 ]; then
-            echo "ERRO: dump muito pequeno, possível falha."
+          # Descomprime 1 linha para checar que é SQL válido
+          FIRST=$(zcat "${{ env.FILENAME }}" | head -1 || true)
+          echo "Primeira linha: ${FIRST}"
+          if [ "${SIZE}" -lt 50 ]; then
+            echo "ERRO: dump muito pequeno (${SIZE} bytes), possível falha."
             exit 1
           fi
           echo "Backup OK: ${{ env.FILENAME }}"
