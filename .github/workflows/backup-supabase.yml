@@ -23,13 +23,19 @@ jobs:
       - name: Fazer pg_dump
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PGSSLMODE: require
         run: |
           TIMESTAMP=$(date +%Y%m%d_%H%M%S)
           FILENAME="sync-mood-backup-${TIMESTAMP}.sql.gz"
           echo "FILENAME=${FILENAME}" >> $GITHUB_ENV
 
+          # Resolve hostname para IPv4 explicitamente (evita IPv6 unreachable)
+          DB_HOST="${{ secrets.SUPABASE_DB_HOST }}"
+          DB_IP=$(getent ahostsv4 "${DB_HOST}" | awk '{print $1; exit}')
+          echo "Conectando em ${DB_HOST} via ${DB_IP}:5432"
+
           pg_dump \
-            --host="${{ secrets.SUPABASE_DB_HOST }}" \
+            --host="${DB_IP}" \
             --port=5432 \
             --username=postgres \
             --dbname=postgres \
