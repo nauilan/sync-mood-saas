@@ -140,6 +140,7 @@ export async function POST(
   }
 
   // ── 4. Gerar PDF ──────────────────────────────────────────────────────────
+  // (sempre gerar para ter o buffer atualizado, mesmo se reutilizando UUID)
   let pdfBuffer: Buffer
   try {
     pdfBuffer = await generateContractPDF(contrato as ContratoV2)
@@ -151,18 +152,31 @@ export async function POST(
     )
   }
 
-  // ── 5. Upload para D4Sign ──────────────────────────────────────────────────
+  // ── 5. Upload para D4Sign (ou reutilizar UUID existente) ──────────────────
+  // Se d4sign_uuid já está preenchido, o PDF foi enviado anteriormente mas
+  // os signatários podem não ter sido adicionados (falha de endpoint anterior).
+  // Nesse caso, reutilizamos o UUID para evitar duplicidade e rate-limit.
   let d4signUuid: string
-  try {
-    const filename = `${contrato.numero.replace(/[^a-z0-9]/gi, '_')}.pdf`
-    d4signUuid = await uploadDocument(pdfBuffer, filename)
-  } catch (err) {
-    console.error('[enviar-assinatura] D4Sign upload error:', err)
-    return NextResponse.json(
-      { error: `Falha ao enviar para D4Sign: ${err instanceof Error ? err.message : 'erro desconhecido'}` },
-      { status: 502 }
-    )
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const existingUuid = (contrato as any).d4sign_uuid as string | null
+  if (existingUuid) {
+    d4signUuid = existingUuid
+    console.log(`[enviar-assinatura] reutilizando d4sign_uuid=${d4signUuid} — pulando upload`)
+  } else {
+    try {
+      const filename = `${contrato.numero.replace(/[^a-z0-9]/gi, '_')}.pdf`
+      d4signUuid = await uploadDocument(pdfBuffer, filename)
+    } catch (err) {
+      console.error('[enviar-assinatura] D4Sign upload error:', err)
+      return NextResponse.json(
+        { error: `Falha ao enviar para D4Sign: ${err instanceof Error ? err.message : 'erro desconhecido'}` },
+        { status: 502 }
+      )
+    }
   }
+  // Suprimir warning de variável não-usada quando UUID é reutilizado
+  void pdfBuffer
 
   // ── 6. Adicionar signatários (um por um — D4Sign não aceita batch) ─────────
   const signers: D4SignSigner[] = assinantes.map(ass => ({
