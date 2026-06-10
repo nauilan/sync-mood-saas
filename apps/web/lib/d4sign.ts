@@ -100,9 +100,9 @@ export async function uploadDocument(
 // ── Adicionar signatários ────────────────────────────────────────────────────
 
 /**
- * Adiciona signatários ao documento.
- * D4Sign exige UMA chamada POST separada por signatário (não aceita batch/array).
- * Inclui delay fixo após upload para aguardar processamento do PDF.
+ * Adiciona signatários ao documento via POST /documents/{uuid}/createlist.
+ * Endpoint correto da API D4Sign v1 — aceita array de signatários em uma única chamada.
+ * Aguarda 3s antes de adicionar para garantir que o PDF foi processado pelo D4Sign.
  */
 export async function addSigners(
   docUuid: string,
@@ -111,46 +111,55 @@ export async function addSigners(
   const { tokenAPI, cryptKey } = getCredentials()
 
   // D4Sign processa o PDF de forma assíncrona após o upload.
-  // Aguardar 3s é suficiente para a maioria dos documentos ficarem prontos.
+  // Aguardar 3s garante que o documento está pronto para receber signatários.
   await new Promise(r => setTimeout(r, 3000))
 
-  // D4Sign exige credenciais na query string
-  const url = `${BASE_URL}/documents/${docUuid}/signers?tokenAPI=${encodeURIComponent(tokenAPI)}&cryptKey=${encodeURIComponent(cryptKey)}`
+  // Endpoint correto: /documents/{uuid}/createlist (não /signers)
+  const url = `${BASE_URL}/documents/${docUuid}/createlist?tokenAPI=${encodeURIComponent(tokenAPI)}&cryptKey=${encodeURIComponent(cryptKey)}`
 
-  // Uma requisição por signatário — comportamento correto da API D4Sign
-  for (const signer of signers) {
-    const body: Record<string, string> = {
-      email:                 signer.email,
-      act:                   signer.act,
-      foreign:               signer.foreign ?? '0',
+  // createlist aceita array completo de signatários em uma única chamada
+  const body = {
+    signers: signers.map(s => ({
+      email:                 s.email,
+      act:                   s.act,
+      foreign:               s.foreign ?? '0',
       certificadoicpbr:      '0',
       assinatura_presencial: '0',
-      login:                 '0',
+      docauth:               '0',
+      docauthandselfie:      '0',
+      embed_methodauth:      'email',
+      embed_smsnumber:       '',
       upload_allow:          '0',
-    }
+      upload_obs:            '',
+    }))
+  }
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
 
-    const text = await res.text()
-    let json: { message?: string; uuid_signer?: string } = {}
-    try { json = text ? JSON.parse(text) : {} } catch { /* ignore */ }
+  const text = await res.text()
+  console.log(`[d4sign] createlist ${docUuid} → HTTP ${res.status} | ${text.substring(0, 500)}`)
 
-    console.log(`[d4sign] addSigner ${signer.email} act=${signer.act} → HTTP ${res.status} | ${text.substring(0, 300)}`)
+  if (!res.ok) {
+    throw new Error(
+      `D4Sign createlist HTTP ${res.status}: ${text.substring(0, 300)}`
+    )
+  }
 
-    if (!res.ok) {
-      throw new Error(
-        `D4Sign addSigner HTTP ${res.status} para ${signer.email}: ${json.message ?? text.substring(0, 200)}`
-      )
-    }
+  // Verificar se cada signatário recebeu key_signer
+  let json: Array<{ key_signer?: string; email?: string; message?: string }> | { message?: string } = []
+  try { json = text ? JSON.parse(text) : [] } catch { /* ignore */ }
 
-    // D4Sign retorna uuid_signer na resposta de sucesso.
-    // Se não vier, pode ser erro silencioso — registrar mas não bloquear.
-    if (!json.uuid_signer) {
-      console.warn(`[d4sign] addSigner ${signer.email}: sem uuid_signer na resposta — ${text.substring(0, 200)}`)
+  if (Array.isArray(json)) {
+    for (const item of json) {
+      if (!item.key_signer) {
+        console.warn(`[d4sign] createlist: signatário ${item.email ?? '?'} sem key_signer — ${JSON.stringify(item)}`)
+      } else {
+        console.log(`[d4sign] createlist: signatário ${item.email} key_signer=${item.key_signer}`)
+      }
     }
   }
 }
@@ -177,6 +186,7 @@ export async function getDocumentSigners(docUuid: string): Promise<unknown[]> {
 
 /**
  * Envia o documento para os signatários assinarem.
+ * Endpoint correto: /documents/{uuid}/sendtosigner (não /send).
  * Após esse passo, o status muda para "Aguardando Assinaturas".
  */
 export async function sendDocument(
@@ -185,14 +195,14 @@ export async function sendDocument(
 ): Promise<void> {
   const { tokenAPI, cryptKey } = getCredentials()
 
-  // D4Sign exige credenciais na query string
-  const url = `${BASE_URL}/documents/${docUuid}/send?tokenAPI=${encodeURIComponent(tokenAPI)}&cryptKey=${encodeURIComponent(cryptKey)}`
+  // Endpoint correto: /sendtosigner (não /send)
+  const url = `${BASE_URL}/documents/${docUuid}/sendtosigner?tokenAPI=${encodeURIComponent(tokenAPI)}&cryptKey=${encodeURIComponent(cryptKey)}`
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       message,
-      workflow: '0',
+      workflow:   '0',
       skip_email: '0',
     }),
   })
@@ -202,11 +212,11 @@ export async function sendDocument(
   let json: { message?: string } = {}
   try { json = text ? JSON.parse(text) : {} } catch { /* ignore */ }
 
-  console.log(`[d4sign] sendDocument ${docUuid} → HTTP ${res.status} body=${text.substring(0, 200)}`)
+  console.log(`[d4sign] sendtosigner ${docUuid} → HTTP ${res.status} body=${text.substring(0, 200)}`)
 
   if (!res.ok) {
     throw new Error(
-      `D4Sign send falhou (${res.status}): ${json.message ?? text}`
+      `D4Sign sendtosigner falhou (${res.status}): ${json.message ?? text}`
     )
   }
 }
