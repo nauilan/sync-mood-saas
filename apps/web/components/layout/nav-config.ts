@@ -32,7 +32,7 @@ export const MASTER_NAV: NavSection[] = [
   { title: 'M4 Autorizacoes', items: [
     { label: 'Autorizacoes', href: '/master/autorizacoes', iconName: 'Shield' },
     { label: 'Orcamentos', href: '/master/autorizacoes/orcamentos', iconName: 'FileEdit' },
-    { label: 'Cobrancas', href: '/master/autorizacoes/cobrancas', iconName: 'Receipt' },
+    { label: 'Cobranças', href: '/master/cobracas', iconName: 'Receipt' },
     { label: 'Tipos de Uso', href: '/master/autorizacoes/tipos-uso', iconName: 'Tags' },
     { label: 'Precificacao', href: '/master/autorizacoes/precificacao', iconName: 'DollarSign' },
     { label: 'Nova Autorizacao', href: '/master/autorizacoes/nova', iconName: 'FilePlus' },

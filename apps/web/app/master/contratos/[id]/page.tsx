@@ -7,6 +7,7 @@ import {
   FileText, ChevronLeft, Users, ShieldCheck, Music, Pen,
   TrendingDown, GitBranch, Clock, Info, Building2, User,
   CheckCircle2, AlertCircle, Download, Plus, RefreshCw,
+  ThumbsUp, ThumbsDown, ArrowUpCircle, BadgeCheck,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import {
@@ -47,6 +48,8 @@ export default function ContratoDetailPage() {
   const [loading, setLoading] = useState(true)
   const [sendLoading, setSendLoading] = useState(false)
   const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [wfLoading, setWfLoading] = useState(false)
+  const [wfResult, setWfResult] = useState<{ ok: boolean; message: string } | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -78,6 +81,34 @@ export default function ContratoDetailPage() {
       setSendResult({ ok: false, message: 'Erro de conexão ao enviar para assinatura.' })
     } finally {
       setSendLoading(false)
+    }
+  }
+
+  // ── Workflow aprovação administrada/admin ────────────────────────────────
+  async function handleWorkflow(action: string, motivo?: string) {
+    if (!id || wfLoading) return
+    setWfLoading(true)
+    setWfResult(null)
+    try {
+      const body: Record<string, string> = { action }
+      if (motivo) body.motivo_rejeicao = motivo
+      const res = await authFetch(`/api/contratos/${id}/aprovar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setWfResult({ ok: false, message: json.error ?? 'Erro na ação de aprovação.' })
+      } else {
+        setWfResult({ ok: true, message: json.message ?? 'Ação executada com sucesso.' })
+        const updated = await authFetch(`/api/contratos/${id}`).then(r => r.json())
+        setContrato((updated.contrato ?? null) as ContratoV2 | null)
+      }
+    } catch {
+      setWfResult({ ok: false, message: 'Erro de conexão.' })
+    } finally {
+      setWfLoading(false)
     }
   }
 
@@ -735,6 +766,102 @@ export default function ContratoDetailPage() {
               }
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Workflow: Contrato Assinado — administrada pode validar */}
+      {contrato.status === 'assinado' && (
+        <div className="bg-sky-500/[0.07] border border-sky-500/20 rounded-xl px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-sky-300">Contrato Assinado</p>
+            <p className="text-xs text-sky-400/60 mt-0.5">O contrato foi assinado. A editora administrada pode validar internamente antes de solicitar aprovação do administrador.</p>
+          </div>
+          <button
+            onClick={() => handleWorkflow('validar_administrada')}
+            disabled={wfLoading}
+            className="flex items-center gap-1.5 h-8 px-3 text-xs bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/30 text-sky-300 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <BadgeCheck className="w-3.5 h-3.5" /> Validar (Administrada)
+          </button>
+        </div>
+      )}
+
+      {/* Workflow: Validado pela administrada — pode solicitar aprovação admin */}
+      {contrato.status === 'validado_administrada' && (
+        <div className="bg-indigo-500/[0.07] border border-indigo-500/20 rounded-xl px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-indigo-300">Validado pela Administrada</p>
+            <p className="text-xs text-indigo-400/60 mt-0.5">Contrato validado internamente. Solicite a aprovação do administrador (Top Show Music) para que a obra entre no catálogo oficial.</p>
+          </div>
+          <button
+            onClick={() => handleWorkflow('solicitar_admin')}
+            disabled={wfLoading}
+            className="flex items-center gap-1.5 h-8 px-3 text-xs bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 text-indigo-300 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <ArrowUpCircle className="w-3.5 h-3.5" /> Solicitar Aprovação Admin
+          </button>
+        </div>
+      )}
+
+      {/* Workflow: Aguardando validação do admin */}
+      {contrato.status === 'aguardando_validacao_admin' && (
+        <div className="bg-amber-500/[0.07] border border-amber-500/20 rounded-xl px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-300">Aguardando Aprovação do Administrador</p>
+            <p className="text-xs text-amber-400/60 mt-0.5">O contrato aguarda revisão e aprovação do administrador (Top Show Music). Após aprovação, a obra entra no catálogo ativo.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleWorkflow('aprovar_admin')}
+              disabled={wfLoading}
+              className="flex items-center gap-1.5 h-8 px-3 text-xs bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-300 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <ThumbsUp className="w-3.5 h-3.5" /> Aprovar
+            </button>
+            <button
+              onClick={() => {
+                const motivo = prompt('Motivo da rejeição (obrigatório):')
+                if (motivo) handleWorkflow('rejeitar_admin', motivo)
+              }}
+              disabled={wfLoading}
+              className="flex items-center gap-1.5 h-8 px-3 text-xs bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 text-rose-300 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <ThumbsDown className="w-3.5 h-3.5" /> Rejeitar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Workflow: Aprovado pelo admin */}
+      {contrato.status === 'aprovado_admin' && (
+        <div className="bg-emerald-500/[0.07] border border-emerald-500/20 rounded-xl px-5 py-4">
+          <p className="text-sm font-semibold text-emerald-300 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4" /> Aprovado pelo Administrador
+          </p>
+          <p className="text-xs text-emerald-400/60 mt-0.5">O contrato foi aprovado. A obra vinculada foi ativada no catálogo oficial.</p>
+        </div>
+      )}
+
+      {/* Workflow: Rejeitado pelo admin */}
+      {contrato.status === 'rejeitado_admin' && (
+        <div className="bg-rose-500/[0.07] border border-rose-500/20 rounded-xl px-5 py-4">
+          <p className="text-sm font-semibold text-rose-300 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" /> Rejeitado pelo Administrador
+          </p>
+          <p className="text-xs text-rose-400/60 mt-0.5">O contrato foi rejeitado. Revise os dados e edite o rascunho para reenviar.</p>
+          <button
+            onClick={() => router.push(`/master/contratos/novo/obras?edit=${contrato.id}`)}
+            className="mt-3 flex items-center gap-1.5 h-8 px-3 text-xs bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/20 text-violet-300 rounded-lg transition-colors"
+          >
+            <Pen className="w-3.5 h-3.5" /> Editar e Reenviar
+          </button>
+        </div>
+      )}
+
+      {/* Feedback workflow */}
+      {wfResult && (
+        <div className={`px-4 py-3 rounded-xl border text-sm ${wfResult.ok ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 'bg-rose-500/10 border-rose-500/20 text-rose-300'}`}>
+          {wfResult.message}
         </div>
       )}
 
