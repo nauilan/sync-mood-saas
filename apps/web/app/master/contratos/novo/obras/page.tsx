@@ -1746,15 +1746,6 @@ export default function NovoContratoObrasPage() {
         ))}
       </div>
 
-      <div className="bg-emerald-500/[0.04] border border-emerald-500/20 rounded-xl p-4 space-y-1">
-        <p className="text-xs font-semibold text-emerald-400">Após criar o contrato:</p>
-        <p className="text-xs text-emerald-400/70">
-          O sistema irá iniciar automaticamente a montagem do cadastro das obras vinculadas
-          a este contrato. Os dados preenchidos aqui (título, letra, % participações) serão
-          pré-carregados no formulário de cadastro de obra.
-        </p>
-      </div>
-
       {/* Download rascunho */}
       <button
         onClick={() => gerarDownloadContrato(form, 'rascunho')}
@@ -1768,28 +1759,16 @@ export default function NovoContratoObrasPage() {
         onClick={async () => {
           const contrato = await salvarContrato()
           if (!contrato) return
-          router.push('/master/obras?origem=contrato&contrato_id=' + contrato.id)
+          router.push('/master/contratos/' + contrato.id)
         }}
         className="w-full h-11 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-colors"
       >
-        {salvando ? 'Salvando...' : 'Criar Contrato e Iniciar Cadastro de Obras'}
+        {salvando ? 'Salvando...' : 'Criar Contrato em Rascunho'}
       </button>
 
       {saveError && (
         <p className="text-xs text-rose-400 text-center">{saveError}</p>
       )}
-
-      <button
-        disabled={obraInvalidas.length > 0 || errosAssinantes.length > 0 || !form.titular_id || !form.tipo || salvando}
-        onClick={async () => {
-          const contrato = await salvarContrato()
-          if (!contrato) return
-          router.push('/master/contratos')
-        }}
-        className="w-full h-9 border border-white/[0.08] text-white/50 hover:text-white/70 text-sm rounded-xl transition-colors disabled:opacity-40"
-      >
-        Criar Contrato (apenas — montar obras depois)
-      </button>
     </div>
   )
 

@@ -101,7 +101,8 @@ export async function uploadDocument(
 
 /**
  * Adiciona signatários ao documento.
- * Deve ser chamado após uploadDocument, antes de sendDocument.
+ * D4Sign exige UMA chamada POST separada por signatário (não aceita batch/array).
+ * Cedente (act='8') recebe autenticação reforçada: selfie em vídeo.
  */
 export async function addSigners(
   docUuid: string,
@@ -111,30 +112,55 @@ export async function addSigners(
 
   // D4Sign exige credenciais na query string
   const url = `${BASE_URL}/documents/${docUuid}/signers?tokenAPI=${encodeURIComponent(tokenAPI)}&cryptKey=${encodeURIComponent(cryptKey)}`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      signers: signers.map(s => ({
-        email:                s.email,
-        act:                  s.act,
-        foreign:              s.foreign ?? '0',
-        certificadoicpbr:     '0',
-        assinatura_presencial:'0',
-        login:                '0',
-        upload_allow:         '0',
-      })),
-    }),
-  })
 
-  // D4Sign retorna 200 com body vazio quando bem-sucedido
-  const text = await res.text()
-  const json = text ? (JSON.parse(text) as { message?: string }) : {}
-  if (!res.ok) {
-    throw new Error(
-      `D4Sign addSigners falhou (${res.status}): ${(json as { message?: string }).message ?? text}`
-    )
+  // Uma requisição por signatário — comportamento correto da API D4Sign
+  for (const signer of signers) {
+    const body: Record<string, string> = {
+      email:                 signer.email,
+      act:                   signer.act,
+      foreign:               signer.foreign ?? '0',
+      certificadoicpbr:      '0',
+      assinatura_presencial: '0',
+      login:                 '0',
+      upload_allow:          '0',
+    }
+    // Cedente (Outorgante, act='8'): autenticação reforçada com selfie em vídeo
+    if (signer.act === '8') {
+      body.selfie = '1'
+    }
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+
+    const text = await res.text()
+    const json = text ? (JSON.parse(text) as { message?: string }) : {}
+    if (!res.ok) {
+      throw new Error(
+        `D4Sign addSigner falhou para ${signer.email} (${res.status}): ${json.message ?? text}`
+      )
+    }
   }
+}
+
+/**
+ * Retorna a lista de signatários do documento.
+ * Usado para verificar se os signatários foram inseridos antes de enviar.
+ */
+export async function getDocumentSigners(docUuid: string): Promise<unknown[]> {
+  const { tokenAPI, cryptKey } = getCredentials()
+  const res = await fetch(
+    `${BASE_URL}/documents/${docUuid}/signers?tokenAPI=${encodeURIComponent(tokenAPI)}&cryptKey=${encodeURIComponent(cryptKey)}`
+  )
+  if (!res.ok) return []
+  const json = await res.json() as { signatarios?: unknown[] } | unknown[]
+  if (Array.isArray(json)) return json
+  if (json && typeof json === 'object' && 'signatarios' in json) {
+    return (json as { signatarios?: unknown[] }).signatarios ?? []
+  }
+  return []
 }
 
 // ── Enviar para assinatura ────────────────────────────────────────────────────

@@ -19,6 +19,7 @@ import {
   uploadDocument,
   addSigners,
   sendDocument,
+  getDocumentSigners,
   papelToAct,
   type D4SignSigner,
 } from '@/lib/d4sign'
@@ -78,10 +79,10 @@ export async function POST(
   const sb = getAdminClient()
   if (!sb) return NextResponse.json({ error: 'Admin client indisponível' }, { status: 500 })
 
-  // ── 2. Buscar contrato ────────────────────────────────────────────────────
+  // ── 2. Buscar contrato com editora ───────────────────────────────────────
   const { data: raw, error: fetchErr } = await sb
     .from('contratos')
-    .select('*')
+    .select('*, editora:editora_id(id, nome, cnpj, cidade, estado)')
     .eq('id', contratoId)
     .is('deleted_at', null)
     .single()
@@ -90,7 +91,12 @@ export async function POST(
     return NextResponse.json({ error: 'Contrato não encontrado' }, { status: 404 })
   }
 
-  const contrato = raw as ContratoV2 & { tenant_id: string }
+  // Resolve editora_nome para o gerador de PDF
+  const editoraJoin = raw.editora as { nome?: string } | null
+  const contrato = {
+    ...raw,
+    editora_nome: editoraJoin?.nome ?? raw.editora_nome ?? 'Editora',
+  } as ContratoV2 & { tenant_id: string; editora_nome: string }
 
   // ── 3. Validações ─────────────────────────────────────────────────────────
   if (contrato.status !== 'rascunho') {
@@ -141,18 +147,37 @@ export async function POST(
     )
   }
 
-  // ── 6. Adicionar signatários ───────────────────────────────────────────────
+  // ── 6. Adicionar signatários (um por um — D4Sign não aceita batch) ─────────
+  const signers: D4SignSigner[] = assinantes.map(ass => ({
+    email: ass.email!,
+    act:   papelToAct(ass.papel),
+    nome:  ass.nome,
+  }))
   try {
-    const signers: D4SignSigner[] = assinantes.map(ass => ({
-      email: ass.email!,
-      act:   papelToAct(ass.papel),
-      nome:  ass.nome,
-    }))
     await addSigners(d4signUuid, signers)
   } catch (err) {
     console.error('[enviar-assinatura] D4Sign addSigners error:', err)
     return NextResponse.json(
       { error: `Falha ao adicionar signatários: ${err instanceof Error ? err.message : 'erro desconhecido'}` },
+      { status: 502 }
+    )
+  }
+
+  // ── 6b. Verificar que os signatários foram confirmados na D4Sign ───────────
+  let signersConfirmados: unknown[]
+  try {
+    signersConfirmados = await getDocumentSigners(d4signUuid)
+  } catch {
+    signersConfirmados = []
+  }
+  if (signersConfirmados.length < assinantes.length) {
+    console.error(
+      `[enviar-assinatura] Signatários confirmados insuficientes: esperado ${assinantes.length}, obtido ${signersConfirmados.length}`
+    )
+    return NextResponse.json(
+      {
+        error: `Não foi possível confirmar todos os signatários na D4Sign. Esperados: ${assinantes.length}, confirmados: ${signersConfirmados.length}. O documento NÃO foi enviado. Tente novamente.`,
+      },
       { status: 502 }
     )
   }
