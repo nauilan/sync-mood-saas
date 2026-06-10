@@ -112,6 +112,9 @@ export async function GET(
     _obras_count:           Array.isArray(raw.obras_json) ? raw.obras_json.length : 0,
     _assinaturas_pendentes: Array.isArray(raw.assinantes_d4sign) ? raw.assinantes_d4sign.length : 0,
     _recoupment_aberto:     0,
+    // D4Sign
+    d4sign_uuid:   raw.d4sign_uuid   ?? null,
+    d4sign_status: raw.d4sign_status ?? null,
   }
 
   return NextResponse.json({ contrato })

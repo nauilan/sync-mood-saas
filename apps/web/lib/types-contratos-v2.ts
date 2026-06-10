@@ -310,6 +310,9 @@ export interface ContratoV2 {
   assinantes_d4sign?: AssinanteD4Sign[] | null
   obras_json?: ObraJson[] | null
   provedor_assinatura?: string | null
+  // campos migration 048 — D4Sign
+  d4sign_uuid?: string | null
+  d4sign_status?: string | null
   // joins opcionais
   _partes?: ParteContratoV2[]
   _direitos?: DireitoContratoV2[]

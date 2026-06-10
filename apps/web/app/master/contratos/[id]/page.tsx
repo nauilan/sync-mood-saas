@@ -45,6 +45,8 @@ export default function ContratoDetailPage() {
   const [tab, setTab] = useState('resumo')
   const [contrato, setContrato] = useState<ContratoV2 | null>(null)
   const [loading, setLoading] = useState(true)
+  const [sendLoading, setSendLoading] = useState(false)
+  const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -55,6 +57,29 @@ export default function ContratoDetailPage() {
       .catch(() => setContrato(null))
       .finally(() => setLoading(false))
   }, [id])
+
+  // ── Enviar para assinatura D4Sign ────────────────────────────────────────
+  async function handleEnviarAssinatura() {
+    if (!id || sendLoading) return
+    setSendLoading(true)
+    setSendResult(null)
+    try {
+      const res = await authFetch(`/api/contratos/${id}/enviar-assinatura`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) {
+        setSendResult({ ok: false, message: json.error ?? 'Erro ao enviar para assinatura.' })
+      } else {
+        setSendResult({ ok: true, message: json.message ?? 'Enviado para assinatura com sucesso.' })
+        // Recarregar contrato para mostrar novo status
+        const updated = await authFetch(`/api/contratos/${id}`).then(r => r.json())
+        setContrato((updated.contrato ?? null) as ContratoV2 | null)
+      }
+    } catch {
+      setSendResult({ ok: false, message: 'Erro de conexão ao enviar para assinatura.' })
+    } finally {
+      setSendLoading(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -360,7 +385,9 @@ export default function ContratoDetailPage() {
   const tabAssinaturas = () => {
     const assinaturas = contrato._assinaturas ?? []
     const d4sign: AssinanteD4Sign[] = contrato.assinantes_d4sign ?? []
-    const provedor = contrato.provedor_assinatura ?? 'd4sign'
+    const provedor     = contrato.provedor_assinatura ?? 'd4sign'
+    const d4signStatus = contrato.d4sign_status
+    const d4signUuid   = contrato.d4sign_uuid
 
     const papelLabel: Record<string, string> = {
       cedente:            'Cedente (Autor)',
@@ -369,59 +396,106 @@ export default function ContratoDetailPage() {
       testemunha_2:       'Testemunha 2',
     }
 
-    if (assinaturas.length === 0 && d4sign.length > 0) {
-      return (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs text-amber-400/70">Assinantes definidos no rascunho — contrato aguarda envio para assinatura.</p>
-            <span className="text-xs bg-slate-500/15 text-slate-400 px-2 py-0.5 rounded-full">
-              {provedor.toUpperCase()}
-            </span>
-          </div>
-          {d4sign.map((a, i) => (
-            <div key={i} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 flex items-center gap-4">
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-white/90">{a.nome || '—'}</p>
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap text-xs text-white/40">
-                  <span>{papelLabel[a.papel] ?? a.papel}</span>
-                  {a.cpf && <><span>·</span><span>CPF {a.cpf}</span></>}
-                  {a.email && <><span>·</span><span>{a.email}</span></>}
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400">
-                <AlertCircle className="w-4 h-4" />
-                Pendente
-              </div>
-            </div>
-          ))}
-        </div>
-      )
+    const statusD4SignLabel: Record<string, { label: string; color: string }> = {
+      processando:            { label: 'Processando', color: 'text-blue-400' },
+      aguardando_signatarios: { label: 'Aguardando Signatários', color: 'text-amber-400' },
+      aguardando_assinaturas: { label: 'Aguardando Assinaturas', color: 'text-amber-400' },
+      finalizado:             { label: 'Finalizado — Todos Assinaram', color: 'text-emerald-400' },
+      arquivado:              { label: 'Arquivado', color: 'text-white/40' },
+      cancelado:              { label: 'Cancelado', color: 'text-rose-400' },
     }
 
+    const d4Info = d4signStatus ? statusD4SignLabel[d4signStatus] : null
+
     return (
-      <div className="space-y-3">
-        {assinaturas.map(a => {
-          const statusColor = a.status === 'assinado' ? 'text-emerald-400' :
-            a.status === 'pendente' ? 'text-amber-400' :
-            a.status === 'recusado' ? 'text-rose-400' : 'text-white/40'
-          return (
-            <div key={a.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 flex items-center gap-4">
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-white/90">{a.nome_parte}</p>
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap text-xs text-white/40">
-                  <span>{PAPEL_PARTE_LABELS[a.tipo_parte]}</span>
-                  <span>·</span>
-                  <span>{PROVEDOR_ASSINATURA_LABELS[a.provedor]}</span>
-                  {a.data_assinatura && <span>· Ass: {formatDate(a.data_assinatura)}</span>}
+      <div className="space-y-4">
+        {/* Status D4Sign se já enviado */}
+        {d4signUuid && (
+          <div className="bg-blue-500/5 border border-blue-500/15 rounded-xl p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs text-white/40 mb-1">Documento D4Sign</p>
+                <p className={`text-sm font-semibold ${d4Info?.color ?? 'text-white/60'}`}>
+                  {d4Info?.label ?? d4signStatus}
+                </p>
+                <p className="text-[10px] font-mono text-white/25 mt-1 break-all">{d4signUuid}</p>
+              </div>
+              <span className="text-xs bg-slate-500/15 text-slate-400 px-2 py-0.5 rounded-full shrink-0">
+                {provedor.toUpperCase()}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Feedback do envio */}
+        {sendResult && (
+          <div className={`rounded-xl p-3 text-sm ${sendResult.ok ? 'bg-emerald-500/10 text-emerald-300' : 'bg-rose-500/10 text-rose-300'}`}>
+            {sendResult.message}
+          </div>
+        )}
+
+        {/* Lista de assinantes */}
+        {d4sign.length > 0 && (
+          <div className="space-y-2">
+            {!d4signUuid && (
+              <p className="text-xs text-amber-400/70 mb-2">
+                Assinantes definidos — contrato aguarda envio para assinatura.
+              </p>
+            )}
+            {d4sign.map((a, i) => (
+              <div key={i} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 flex items-center gap-4">
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-white/90">{a.nome || '—'}</p>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap text-xs text-white/40">
+                    <span>{papelLabel[a.papel] ?? a.papel}</span>
+                    {a.cpf   && <><span>·</span><span>CPF {a.cpf}</span></>}
+                    {a.email && <><span>·</span><span>{a.email}</span></>}
+                  </div>
+                </div>
+                <div className={`flex items-center gap-1.5 text-xs font-semibold ${d4signStatus === 'finalizado' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {d4signStatus === 'finalizado'
+                    ? <><CheckCircle2 className="w-4 h-4" /> Assinado</>
+                    : <><AlertCircle className="w-4 h-4" /> {d4signUuid ? 'Aguardando' : 'Pendente'}</>
+                  }
                 </div>
               </div>
-              <div className={`flex items-center gap-1.5 text-xs font-semibold ${statusColor}`}>
-                {a.status === 'assinado' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                {a.status.charAt(0).toUpperCase() + a.status.slice(1)}
-              </div>
-            </div>
-          )
-        })}
+            ))}
+          </div>
+        )}
+
+        {/* Assinaturas formais do banco (_assinaturas) */}
+        {assinaturas.length > 0 && d4sign.length === 0 && (
+          <div className="space-y-2">
+            {assinaturas.map(a => {
+              const statusColor = a.status === 'assinado' ? 'text-emerald-400' :
+                a.status === 'pendente' ? 'text-amber-400' :
+                a.status === 'recusado' ? 'text-rose-400' : 'text-white/40'
+              return (
+                <div key={a.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 flex items-center gap-4">
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-white/90">{a.nome_parte}</p>
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap text-xs text-white/40">
+                      <span>{PAPEL_PARTE_LABELS[a.tipo_parte]}</span>
+                      <span>·</span>
+                      <span>{PROVEDOR_ASSINATURA_LABELS[a.provedor]}</span>
+                      {a.data_assinatura && <span>· Ass: {formatDate(a.data_assinatura)}</span>}
+                    </div>
+                  </div>
+                  <div className={`flex items-center gap-1.5 text-xs font-semibold ${statusColor}`}>
+                    {a.status === 'assinado' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                    {a.status.charAt(0).toUpperCase() + a.status.slice(1)}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {d4sign.length === 0 && assinaturas.length === 0 && (
+          <div className="text-center py-12 text-white/30 text-sm">
+            Nenhum assinante definido para este contrato.
+          </div>
+        )}
       </div>
     )
   }
@@ -646,11 +720,19 @@ export default function ContratoDetailPage() {
               <Pen className="w-3.5 h-3.5" /> Editar Rascunho
             </button>
             <button
-              disabled
-              title="Integração D4Sign em implantação"
+              onClick={handleEnviarAssinatura}
+              disabled={sendLoading || contrato.status !== 'rascunho'}
+              title={
+                contrato.status !== 'rascunho'
+                  ? `Contrato já está em status: ${contrato.status}`
+                  : 'Enviar contrato para assinatura digital via D4Sign'
+              }
               className="flex items-center gap-1.5 h-8 px-3 text-xs bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <CheckCircle2 className="w-3.5 h-3.5" /> Enviar para Assinatura
+              {sendLoading
+                ? <><span className="w-3.5 h-3.5 border-2 border-amber-300/40 border-t-amber-300 rounded-full animate-spin" /> Enviando...</>
+                : <><CheckCircle2 className="w-3.5 h-3.5" /> Enviar para Assinatura</>
+              }
             </button>
           </div>
         </div>
