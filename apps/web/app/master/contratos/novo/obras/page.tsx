@@ -428,6 +428,7 @@ export default function NovoContratoObrasPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   // Detecção de obra duplicada
   const [obrasExistentes, setObrasExistentes] = useState<{ id: string; titulo: string }[]>([])
+  const [duplicataAcknowledged, setDuplicataAcknowledged] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Reset/carrega ao montar — garante wizard limpo ou pré-preenchido em modo edição
@@ -570,13 +571,21 @@ export default function NovoContratoObrasPage() {
         const r = await authFetch(`/api/obras?search=${encodeURIComponent(titulo)}&per_page=5`)
         if (r.ok) {
           const d = await r.json()
-          setObrasExistentes(d.data ?? d.obras ?? [])
+          const found = d.data ?? d.obras ?? []
+          setObrasExistentes(found)
+          if (found.length > 0) setDuplicataAcknowledged(false)
         }
       } catch { /* silencioso */ }
     }, 600)
   }, [])
 
   function upd(patch: Partial<FormState>) { setForm(f => ({ ...f, ...patch })) }
+  const obraAtivaTitulo = (form.obras[obraAtiva]?.titulo ?? '').trim().toUpperCase()
+  const temDuplicata = obraAtivaTitulo.length >= 3 && obrasExistentes.some(o =>
+    (o.titulo?.toUpperCase().includes(obraAtivaTitulo) ?? false) ||
+    obraAtivaTitulo.includes((o.titulo ?? '').toUpperCase())
+  )
+
   function next() { if (step < TOTAL_STEPS - 1) setStep(s => s + 1) }
   function prev() { if (step > 0) setStep(s => s - 1) }
 
@@ -1071,7 +1080,7 @@ export default function NovoContratoObrasPage() {
             />
             {/* Alerta de possível obra duplicada */}
             {coincidentes.length > 0 && obra.titulo.trim().length >= 3 && (
-              <div className="mt-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-xs text-amber-300 space-y-1">
+              <div className="mt-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-xs text-amber-300 space-y-2">
                 <p className="font-semibold flex items-center gap-1.5">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                   Possível obra já existente no banco:
@@ -1079,9 +1088,36 @@ export default function NovoContratoObrasPage() {
                 {coincidentes.map(o => (
                   <p key={o.id} className="text-amber-300/70 pl-5">· {o.titulo}</p>
                 ))}
-                <p className="text-amber-300/50 pl-5 mt-1">
-                  Confira antes de criar para evitar duplicidade. O sistema não consolida automaticamente.
+                <p className="text-amber-300/50 pl-5">
+                  O sistema não consolida automaticamente. Você decide como prosseguir.
                 </p>
+                {!duplicataAcknowledged ? (
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const alvo = coincidentes[0]
+                        updateObra(obraAtiva, { contrato_origem_id: alvo.id } as any)
+                        setDuplicataAcknowledged(true)
+                      }}
+                      className="flex items-center gap-1 h-7 px-3 rounded-lg text-[10px] font-semibold bg-amber-500/25 hover:bg-amber-500/40 border border-amber-500/40 text-amber-200 transition-colors"
+                    >
+                      Vincular à existente
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDuplicataAcknowledged(true)}
+                      className="flex items-center gap-1 h-7 px-3 rounded-lg text-[10px] font-semibold bg-white/5 hover:bg-white/10 border border-white/10 text-white/40 hover:text-white/70 transition-colors"
+                    >
+                      Criar nova mesmo assim
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-emerald-400/70 pt-0.5 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3 h-3 shrink-0" />
+                    Confirmado — você pode avançar.
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -1834,6 +1870,7 @@ export default function NovoContratoObrasPage() {
             disabled={
               (step === 0 && !form.tipo) ||
               (step === 1 && !form.titular_id) ||
+              (step === 2 && temDuplicata && !duplicataAcknowledged) ||
               (step === 6 && errosAssinantes.length > 0)
             }
             className="flex items-center gap-1.5 h-9 px-5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-sm text-white font-semibold transition-colors focus:ring-2 focus:ring-violet-400/50 focus:outline-none"
