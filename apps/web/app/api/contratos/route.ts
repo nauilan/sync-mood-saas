@@ -104,15 +104,26 @@ export async function GET(req: NextRequest) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers para geração do número de contrato
-// Formato: CTO-A0001-nomedotitular-DD-MM-YY
+// Formato: CTO-A0001 - Nauilan - DD-MM-YY
 // ─────────────────────────────────────────────────────────────────────────────
-function normalizarParaNumero(texto: string): string {
-  return texto
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')  // remove acentos
-    .replace(/[^a-z0-9]/g, '')        // só alfanumérico
-    .substring(0, 30)                 // no máximo 30 chars
+
+/** Extrai pseudônimo artístico ou primeiro nome do titular, capitalizado. */
+function extrairPseudonimoOuPrimeiroNome(
+  nomeCompleto: string | null | undefined,
+  pseudonimos: unknown
+): string {
+  // Tenta o primeiro pseudônimo registrado
+  if (Array.isArray(pseudonimos) && pseudonimos.length > 0) {
+    const p = pseudonimos[0]
+    const val = typeof p === 'string' ? p : (p as Record<string, string>)?.nome ?? (p as Record<string, string>)?.pseudonimo ?? ''
+    const clean = val.trim()
+    if (clean) return clean.charAt(0).toUpperCase() + clean.slice(1)
+  }
+  // Fallback: primeiro nome de nome_completo
+  const nome = (nomeCompleto ?? '').trim()
+  if (!nome) return 'Titular'
+  const primeiro = nome.split(/\s+/)[0]
+  return primeiro.charAt(0).toUpperCase() + primeiro.slice(1).toLowerCase()
 }
 
 async function gerarNumeroContrato(
@@ -130,15 +141,20 @@ async function gerarNumeroContrato(
   const seq = (count ?? 0) + 1
   const seqStr = `A${String(seq).padStart(4, '0')}`
 
-  // Nome do titular cedente
-  let nomeTitular = 'titular'
+  // Pseudônimo artístico ou primeiro nome do titular cedente
+  let pseudonimo = 'Titular'
   if (titular_id) {
     const { data: tit } = await sb
       .from('titulares')
-      .select('nome_completo, nome')
+      .select('nome_completo, nome, pseudonimos')
       .eq('id', titular_id)
       .single()
-    if (tit) nomeTitular = (tit.nome_completo ?? tit.nome ?? 'titular') as string
+    if (tit) {
+      pseudonimo = extrairPseudonimoOuPrimeiroNome(
+        tit.nome_completo ?? tit.nome,
+        tit.pseudonimos
+      )
+    }
   }
 
   // Data do contrato: data_inicio ou hoje
@@ -147,7 +163,8 @@ async function gerarNumeroContrato(
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const yy = String(d.getFullYear()).slice(2)
 
-  return `CTO-${seqStr}-${normalizarParaNumero(nomeTitular)}-${dd}-${mm}-${yy}`
+  // Formato: CTO-A0001 - Nauilan - 10-06-26
+  return `CTO-${seqStr} - ${pseudonimo} - ${dd}-${mm}-${yy}`
 }
 
 export async function POST(req: NextRequest) {
