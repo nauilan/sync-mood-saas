@@ -91,15 +91,20 @@ export async function POST(
     return NextResponse.json({ error: 'Contrato não encontrado' }, { status: 404 })
   }
 
-  // Resolve editora_nome: tenta buscar via FK, senão usa campo direto
+  // Resolve editora_nome: busca nome_fantasia (ou nome) da editora
   let editoraNome: string = raw.editora_nome ?? 'Editora'
   if (raw.editora_id) {
     const { data: editoraRow } = await sb
       .from('editoras')
-      .select('nome')
+      .select('nome_fantasia, nome')
       .eq('id', raw.editora_id)
       .single()
-    if (editoraRow?.nome) editoraNome = editoraRow.nome
+    if (editoraRow) {
+      editoraNome = editoraRow.nome_fantasia || editoraRow.nome || editoraNome
+    }
+    console.log(`[enviar-assinatura] editora_id=${raw.editora_id} → nome=${editoraNome}`)
+  } else {
+    console.warn('[enviar-assinatura] editora_id é null — usando fallback "Editora"')
   }
 
   const contrato = {
