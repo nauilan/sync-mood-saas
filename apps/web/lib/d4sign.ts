@@ -127,10 +127,12 @@ export async function addSigners(
     }),
   })
 
-  const json = await res.json() as { message?: string }
+  // D4Sign retorna 200 com body vazio quando bem-sucedido
+  const text = await res.text()
+  const json = text ? (JSON.parse(text) as { message?: string }) : {}
   if (!res.ok) {
     throw new Error(
-      `D4Sign addSigners falhou (${res.status}): ${json.message ?? JSON.stringify(json)}`
+      `D4Sign addSigners falhou (${res.status}): ${(json as { message?: string }).message ?? text}`
     )
   }
 }
@@ -159,10 +161,12 @@ export async function sendDocument(
     }),
   })
 
-  const json = await res.json() as { message?: string }
+  // D4Sign pode retornar body vazio no 200
+  const text = await res.text()
+  const json = text ? (JSON.parse(text) as { message?: string }) : {}
   if (!res.ok) {
     throw new Error(
-      `D4Sign send falhou (${res.status}): ${json.message ?? JSON.stringify(json)}`
+      `D4Sign send falhou (${res.status}): ${(json as { message?: string }).message ?? text}`
     )
   }
 }
