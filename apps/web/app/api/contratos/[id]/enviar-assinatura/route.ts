@@ -19,7 +19,6 @@ import {
   uploadDocument,
   addSigners,
   sendDocument,
-  getDocumentSigners,
   papelToAct,
   type D4SignSigner,
 } from '@/lib/d4sign'
@@ -173,24 +172,7 @@ export async function POST(
     )
   }
 
-  // ── 6b. Verificar que os signatários foram confirmados na D4Sign ───────────
-  let signersConfirmados: unknown[]
-  try {
-    signersConfirmados = await getDocumentSigners(d4signUuid)
-  } catch {
-    signersConfirmados = []
-  }
-  if (signersConfirmados.length < assinantes.length) {
-    console.error(
-      `[enviar-assinatura] Signatários confirmados insuficientes: esperado ${assinantes.length}, obtido ${signersConfirmados.length}`
-    )
-    return NextResponse.json(
-      {
-        error: `Não foi possível confirmar todos os signatários na D4Sign. Esperados: ${assinantes.length}, confirmados: ${signersConfirmados.length}. O documento NÃO foi enviado. Tente novamente.`,
-      },
-      { status: 502 }
-    )
-  }
+  // ── 6b. (verificação removida — addSigners já lança exceção por signatário) ──
 
   // ── 7. Enviar para assinatura ──────────────────────────────────────────────
   try {
