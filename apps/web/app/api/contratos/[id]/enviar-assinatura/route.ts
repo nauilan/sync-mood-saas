@@ -170,21 +170,26 @@ export async function POST(
   }
 
   // ── 8. Atualizar contrato no banco ─────────────────────────────────────────
-  const { error: updErr } = await sb
-    .from('contratos')
-    .update({
-      status:          'aguardando_assinatura',
-      d4sign_uuid:     d4signUuid,
-      d4sign_status:   'aguardando_assinaturas',
-      provedor_assinatura: 'd4sign',
-      updated_at:      new Date().toISOString(),
-    })
-    .eq('id', contratoId)
+  // Tenta status 'aguardando_assinatura' (migration 049); fallback para 'ativo'
+  let updErr
+  for (const novoStatus of ['aguardando_assinatura', 'ativo']) {
+    const { error } = await sb
+      .from('contratos')
+      .update({
+        status:              novoStatus,
+        d4sign_uuid:         d4signUuid,
+        d4sign_status:       'aguardando_assinaturas',
+        provedor_assinatura: 'd4sign',
+      })
+      .eq('id', contratoId)
+    updErr = error
+    if (!error) break
+    console.warn(`[enviar-assinatura] status='${novoStatus}' falhou:`, error.message)
+  }
 
   if (updErr) {
-    console.error('[enviar-assinatura] DB update error:', updErr)
-    // Contrato foi enviado mas não atualizamos o banco — log de aviso
-    console.warn(`[enviar-assinatura] Contrato ${contratoId} enviado (D4Sign ${d4signUuid}) mas falhou ao atualizar status no banco.`)
+    console.error('[enviar-assinatura] DB update error após fallbacks:', updErr)
+    console.warn(`[enviar-assinatura] Contrato ${contratoId} enviado para D4Sign (${d4signUuid}) mas status não foi atualizado no banco.`)
   }
 
   // ── 9. Audit log ───────────────────────────────────────────────────────────
