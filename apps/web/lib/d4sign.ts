@@ -72,16 +72,16 @@ export async function uploadDocument(
 ): Promise<string> {
   const { tokenAPI, cryptKey, safeUUID } = getCredentials()
 
+  // D4Sign exige tokenAPI e cryptKey na query string para o endpoint de upload
   const form = new FormData()
-  form.append('tokenAPI', tokenAPI)
-  form.append('cryptKey', cryptKey)
   form.append(
     'file',
     new Blob([pdfBuffer.buffer as ArrayBuffer], { type: 'application/pdf' }),
     filename
   )
 
-  const res = await fetch(`${BASE_URL}/documents/${safeUUID}/upload`, {
+  const url = `${BASE_URL}/documents/${safeUUID}/upload?tokenAPI=${encodeURIComponent(tokenAPI)}&cryptKey=${encodeURIComponent(cryptKey)}`
+  const res = await fetch(url, {
     method: 'POST',
     body: form,
   })
@@ -109,12 +109,12 @@ export async function addSigners(
 ): Promise<void> {
   const { tokenAPI, cryptKey } = getCredentials()
 
-  const res = await fetch(`${BASE_URL}/documents/${docUuid}/signers`, {
+  // D4Sign exige credenciais na query string
+  const url = `${BASE_URL}/documents/${docUuid}/signers?tokenAPI=${encodeURIComponent(tokenAPI)}&cryptKey=${encodeURIComponent(cryptKey)}`
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      tokenAPI,
-      cryptKey,
       signers: signers.map(s => ({
         email:                s.email,
         act:                  s.act,
@@ -147,12 +147,12 @@ export async function sendDocument(
 ): Promise<void> {
   const { tokenAPI, cryptKey } = getCredentials()
 
-  const res = await fetch(`${BASE_URL}/documents/${docUuid}/send`, {
+  // D4Sign exige credenciais na query string
+  const url = `${BASE_URL}/documents/${docUuid}/send?tokenAPI=${encodeURIComponent(tokenAPI)}&cryptKey=${encodeURIComponent(cryptKey)}`
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      tokenAPI,
-      cryptKey,
       message,
       workflow: '0',
       skip_email: '0',
@@ -195,10 +195,12 @@ export async function getDocumentStatus(docUuid: string): Promise<D4SignDocument
 export async function cancelDocument(docUuid: string): Promise<void> {
   const { tokenAPI, cryptKey } = getCredentials()
 
-  const res = await fetch(`${BASE_URL}/documents/${docUuid}/cancel`, {
+  // D4Sign exige credenciais na query string
+  const url = `${BASE_URL}/documents/${docUuid}/cancel?tokenAPI=${encodeURIComponent(tokenAPI)}&cryptKey=${encodeURIComponent(cryptKey)}`
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tokenAPI, cryptKey }),
+    body: JSON.stringify({}),
   })
 
   if (!res.ok) {
