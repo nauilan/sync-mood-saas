@@ -102,6 +102,54 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ data: data ?? [], total: count ?? 0, kpis: totais })
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers para geração do número de contrato
+// Formato: CTO-A0001-nomedotitular-DD-MM-YY
+// ─────────────────────────────────────────────────────────────────────────────
+function normalizarParaNumero(texto: string): string {
+  return texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')  // remove acentos
+    .replace(/[^a-z0-9]/g, '')        // só alfanumérico
+    .substring(0, 30)                 // no máximo 30 chars
+}
+
+async function gerarNumeroContrato(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sb: any,
+  tenant_id: string,
+  titular_id: string | undefined,
+  data_inicio?: string
+): Promise<string> {
+  // Sequencial baseado em quantos contratos o tenant já tem
+  const { count } = await sb
+    .from('contratos')
+    .select('*', { count: 'exact', head: true })
+    .eq('tenant_id', tenant_id)
+  const seq = (count ?? 0) + 1
+  const seqStr = `A${String(seq).padStart(4, '0')}`
+
+  // Nome do titular cedente
+  let nomeTitular = 'titular'
+  if (titular_id) {
+    const { data: tit } = await sb
+      .from('titulares')
+      .select('nome_completo, nome')
+      .eq('id', titular_id)
+      .single()
+    if (tit) nomeTitular = (tit.nome_completo ?? tit.nome ?? 'titular') as string
+  }
+
+  // Data do contrato: data_inicio ou hoje
+  const d = data_inicio ? new Date(data_inicio + 'T12:00:00') : new Date()
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const yy = String(d.getFullYear()).slice(2)
+
+  return `CTO-${seqStr}-${normalizarParaNumero(nomeTitular)}-${dd}-${mm}-${yy}`
+}
+
 export async function POST(req: NextRequest) {
   const sb = getAdminClient()
   if (!sb) return NextResponse.json({ error: 'Config inválida' }, { status: 500 })
@@ -141,11 +189,13 @@ export async function POST(req: NextRequest) {
     resolvedEditoraId = editoraTenant?.id ?? null
   }
 
+  const numeroGerado = numero ?? await gerarNumeroContrato(sb, tenant_id, titular_id, data_inicio)
+
   const payload: Record<string, unknown> = {
     tenant_id,
     tipo:                tipoDb,
     status:              status ?? 'rascunho',
-    numero:              numero ?? `CTO-${Date.now()}`,
+    numero:              numeroGerado,
     editora_id:          resolvedEditoraId,
   }
   if (editora_id != null)                 payload.editora_id           = editora_id
