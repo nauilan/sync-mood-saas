@@ -79,23 +79,33 @@ export async function POST(
   const sb = getAdminClient()
   if (!sb) return NextResponse.json({ error: 'Admin client indisponível' }, { status: 500 })
 
-  // ── 2. Buscar contrato com editora ───────────────────────────────────────
+  // ── 2. Buscar contrato ───────────────────────────────────────────────────
   const { data: raw, error: fetchErr } = await sb
     .from('contratos')
-    .select('*, editora:editora_id(id, nome, cnpj, cidade, estado)')
+    .select('*')
     .eq('id', contratoId)
     .is('deleted_at', null)
     .single()
 
   if (fetchErr || !raw) {
+    console.error('[enviar-assinatura] fetchErr:', fetchErr?.message, '| raw:', raw)
     return NextResponse.json({ error: 'Contrato não encontrado' }, { status: 404 })
   }
 
-  // Resolve editora_nome para o gerador de PDF
-  const editoraJoin = raw.editora as { nome?: string } | null
+  // Resolve editora_nome: tenta buscar via FK, senão usa campo direto
+  let editoraNome: string = raw.editora_nome ?? 'Editora'
+  if (raw.editora_id) {
+    const { data: editoraRow } = await sb
+      .from('editoras')
+      .select('nome')
+      .eq('id', raw.editora_id)
+      .single()
+    if (editoraRow?.nome) editoraNome = editoraRow.nome
+  }
+
   const contrato = {
     ...raw,
-    editora_nome: editoraJoin?.nome ?? raw.editora_nome ?? 'Editora',
+    editora_nome: editoraNome,
   } as ContratoV2 & { tenant_id: string; editora_nome: string }
 
   // ── 3. Validações ─────────────────────────────────────────────────────────
