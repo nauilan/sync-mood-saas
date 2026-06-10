@@ -25,6 +25,9 @@ import {
 import { generateContractPDF }       from '@/lib/pdf-generator'
 import type { ContratoV2, AssinanteD4Sign } from '@/lib/types-contratos-v2'
 
+// Estender timeout da Vercel para 60s (PDF generation + D4Sign calls)
+export const maxDuration = 60
+
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
   const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()

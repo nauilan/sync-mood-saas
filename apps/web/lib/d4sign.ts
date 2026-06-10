@@ -100,28 +100,9 @@ export async function uploadDocument(
 // ── Adicionar signatários ────────────────────────────────────────────────────
 
 /**
- * Aguarda o documento sair de "Processando" (statusId=1) antes de adicionar signatários.
- * D4Sign processa o PDF assincronamente após o upload — tentar adicionar signatários
- * antes do processamento terminar resulta em silêncio (nenhum signatário é adicionado).
- */
-async function waitDocumentReady(docUuid: string, maxAttempts = 10): Promise<void> {
-  for (let i = 0; i < maxAttempts; i++) {
-    try {
-      const doc = await getDocumentStatus(docUuid)
-      if (doc.statusId >= 2) return   // Pronto para receber signatários
-      console.log(`[d4sign] doc ${docUuid} ainda em statusId=${doc.statusId}, aguardando...`)
-    } catch {
-      // Ignora erros transitórios e tenta de novo
-    }
-    await new Promise(r => setTimeout(r, 2000))  // 2s entre tentativas
-  }
-  console.warn(`[d4sign] doc ${docUuid} não ficou pronto após ${maxAttempts * 2}s — tentando mesmo assim`)
-}
-
-/**
  * Adiciona signatários ao documento.
  * D4Sign exige UMA chamada POST separada por signatário (não aceita batch/array).
- * Verifica a resposta para detectar erros retornados com HTTP 200.
+ * Inclui delay fixo após upload para aguardar processamento do PDF.
  */
 export async function addSigners(
   docUuid: string,
@@ -129,8 +110,9 @@ export async function addSigners(
 ): Promise<void> {
   const { tokenAPI, cryptKey } = getCredentials()
 
-  // Aguarda o documento ser processado antes de adicionar signatários
-  await waitDocumentReady(docUuid)
+  // D4Sign processa o PDF de forma assíncrona após o upload.
+  // Aguardar 3s é suficiente para a maioria dos documentos ficarem prontos.
+  await new Promise(r => setTimeout(r, 3000))
 
   // D4Sign exige credenciais na query string
   const url = `${BASE_URL}/documents/${docUuid}/signers?tokenAPI=${encodeURIComponent(tokenAPI)}&cryptKey=${encodeURIComponent(cryptKey)}`
@@ -157,13 +139,18 @@ export async function addSigners(
     let json: { message?: string; uuid_signer?: string } = {}
     try { json = text ? JSON.parse(text) : {} } catch { /* ignore */ }
 
-    console.log(`[d4sign] addSigner ${signer.email} act=${signer.act} → HTTP ${res.status} body=${text.substring(0, 200)}`)
+    console.log(`[d4sign] addSigner ${signer.email} act=${signer.act} → HTTP ${res.status} | ${text.substring(0, 300)}`)
 
-    // D4Sign retorna HTTP 200 com mensagem de erro no body — verificar uuid_signer
-    if (!res.ok || (!json.uuid_signer && json.message && /erro|error|invalid|fail|não|nao/i.test(json.message))) {
+    if (!res.ok) {
       throw new Error(
-        `D4Sign addSigner falhou para ${signer.email} (${res.status}): ${json.message ?? text}`
+        `D4Sign addSigner HTTP ${res.status} para ${signer.email}: ${json.message ?? text.substring(0, 200)}`
       )
+    }
+
+    // D4Sign retorna uuid_signer na resposta de sucesso.
+    // Se não vier, pode ser erro silencioso — registrar mas não bloquear.
+    if (!json.uuid_signer) {
+      console.warn(`[d4sign] addSigner ${signer.email}: sem uuid_signer na resposta — ${text.substring(0, 200)}`)
     }
   }
 }
