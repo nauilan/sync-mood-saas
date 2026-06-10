@@ -145,6 +145,23 @@ export async function PATCH(
   if ('vigencia_fim' in body && !('data_fim' in body)) body.data_fim = body.vigencia_fim
   if ('territorio_principal' in body && !('territorio' in body)) body.territorio = body.territorio_principal
 
+  // Whitelist de campos editáveis — impede sobrescrita de campos protegidos
+  const ALLOWED_PATCH = new Set([
+    'tipo', 'status', 'numero', 'editora_id', 'titular_id',
+    'percentual_editora', 'percentual_autor', 'splits_direitos',
+    'data_inicio', 'data_fim', 'prazo_indeterminado', 'territorio',
+    'exclusividade', 'observacoes', 'titulo_obra', 'descricao',
+    'tipo_direito', 'abrangencia', 'obras_json', 'assinantes_d4sign',
+    'provedor_assinatura', 'modelo_juridico_id', 'clausula_reversao',
+    'prazo_reversao_anos', 'renovacao_automatica', 'updated_at',
+    // aliases aceitos (já normalizados acima)
+    'vigencia_inicio', 'vigencia_fim', 'territorio_principal',
+  ])
+  const safeBody: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(body)) {
+    if (ALLOWED_PATCH.has(k)) safeBody[k] = v
+  }
+
   // Buscar registro anterior para audit
   const { data: anterior } = await sb
     .from('contratos')
@@ -157,7 +174,7 @@ export async function PATCH(
 
   const { data, error } = await sb
     .from('contratos')
-    .update({ ...body, updated_at: new Date().toISOString() })
+    .update({ ...safeBody, updated_at: new Date().toISOString() })
     .eq('id', id)
     .eq('tenant_id', tenant_id)
     .select()

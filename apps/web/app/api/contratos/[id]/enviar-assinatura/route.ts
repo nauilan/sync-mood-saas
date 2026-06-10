@@ -189,7 +189,14 @@ export async function POST(
 
   if (updErr) {
     console.error('[enviar-assinatura] DB update error após fallbacks:', updErr)
-    console.warn(`[enviar-assinatura] Contrato ${contratoId} enviado para D4Sign (${d4signUuid}) mas status não foi atualizado no banco.`)
+    // Documento já foi enviado ao D4Sign — retorna aviso em vez de sucesso silencioso
+    return NextResponse.json({
+      ok:          true,
+      d4sign_uuid: d4signUuid,
+      status:      'aguardando_assinatura',
+      message:     'Contrato enviado para D4Sign mas status não foi atualizado no banco. Atualize manualmente ou entre em contato com o suporte.',
+      db_warning:  updErr.message,
+    })
   }
 
   // ── 9. Audit log ───────────────────────────────────────────────────────────

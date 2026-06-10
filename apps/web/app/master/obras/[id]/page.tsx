@@ -374,9 +374,15 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
       {activeTab === 'letra' && (
         <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-4">Letra da Obra</h3>
-          <div className="text-white/40 text-sm italic py-8 text-center">
-            Letra nao cadastrada para esta obra.
-          </div>
+          {obra?.letra ? (
+            <pre className="text-sm text-white/80 whitespace-pre-wrap font-sans leading-relaxed">
+              {obra.letra}
+            </pre>
+          ) : (
+            <div className="text-white/40 text-sm italic py-8 text-center">
+              Letra não cadastrada para esta obra.
+            </div>
+          )}
         </div>
       )}
 

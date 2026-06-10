@@ -561,6 +561,8 @@ export default function NovaObraPage() {
         status: 'validada',
         links,
         fonogramas,
+        // vínculo com contrato de origem — obrigatório para rastreabilidade
+        contrato_origem_id: contratoOrigemId || null,
       }
       const res = await authFetch('/api/obras', {
         method: 'POST',
