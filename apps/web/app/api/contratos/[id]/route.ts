@@ -154,6 +154,8 @@ export async function PATCH(
     'tipo_direito', 'abrangencia', 'obras_json', 'assinantes_d4sign',
     'provedor_assinatura', 'modelo_juridico_id', 'clausula_reversao',
     'prazo_reversao_anos', 'renovacao_automatica', 'updated_at',
+    // D4Sign — permite limpar/resetar manualmente
+    'd4sign_uuid', 'd4sign_status',
     // aliases aceitos (já normalizados acima)
     'vigencia_inicio', 'vigencia_fim', 'territorio_principal',
   ])
