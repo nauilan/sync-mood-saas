@@ -869,20 +869,49 @@ export default function ContratoDetailPage() {
         </div>
       )}
 
-      {/* Workflow: Contrato Assinado — administrada pode validar */}
+      {/* Workflow: Contrato Assinado — fluxo direto (Admin) ou fluxo administrada */}
       {contrato.status === 'assinado' && (
         <div className="bg-sky-500/[0.07] border border-sky-500/20 rounded-xl px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="flex-1">
             <p className="text-sm font-semibold text-sky-300">Contrato Assinado</p>
-            <p className="text-xs text-sky-400/60 mt-0.5">O contrato foi assinado. A editora administrada pode validar internamente antes de solicitar aprovação do administrador.</p>
+            <p className="text-xs text-sky-400/60 mt-0.5">
+              O contrato foi assinado. Admin pode validar diretamente (fluxo Top Show Music) ou a editora administrada pode validar internamente antes de solicitar aprovação.
+            </p>
           </div>
-          <button
-            onClick={() => handleWorkflow('validar_administrada')}
-            disabled={wfLoading}
-            className="flex items-center gap-1.5 h-8 px-3 text-xs bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/30 text-sky-300 rounded-lg transition-colors disabled:opacity-50"
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => handleWorkflow('validar')}
+              disabled={wfLoading}
+              className="flex items-center gap-1.5 h-8 px-3 text-xs bg-teal-500/20 hover:bg-teal-500/30 border border-teal-500/30 text-teal-300 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <BadgeCheck className="w-3.5 h-3.5" /> Validar Contrato
+            </button>
+            <button
+              onClick={() => handleWorkflow('validar_administrada')}
+              disabled={wfLoading}
+              className="flex items-center gap-1.5 h-8 px-3 text-xs bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/30 text-sky-300 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <BadgeCheck className="w-3.5 h-3.5" /> Validar (Administrada)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Workflow: Validado (fluxo direto TSM) — libera Iniciar Cadastro */}
+      {contrato.status === 'validado' && (
+        <div className="bg-teal-500/[0.07] border border-teal-500/20 rounded-xl px-5 py-4">
+          <p className="text-sm font-semibold text-teal-300 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4" /> Contrato Validado
+          </p>
+          <p className="text-xs text-teal-400/60 mt-0.5">
+            Contrato validado. As obras mencionadas podem agora ser cadastradas no catálogo.
+          </p>
+          <Link
+            href={`/master/obras/nova?contrato_id=${contrato.id}`}
+            className="mt-3 inline-flex items-center gap-1.5 h-8 px-3 text-xs bg-teal-600/20 hover:bg-teal-600/30 border border-teal-500/20 text-teal-300 rounded-lg transition-colors"
           >
-            <BadgeCheck className="w-3.5 h-3.5" /> Validar (Administrada)
-          </button>
+            <Plus className="w-3.5 h-3.5" /> Iniciar Cadastro da Obra
+          </Link>
         </div>
       )}
 

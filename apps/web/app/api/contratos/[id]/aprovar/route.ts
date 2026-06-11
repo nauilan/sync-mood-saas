@@ -1,16 +1,24 @@
 /**
  * POST /api/contratos/[id]/aprovar
  *
- * Workflow de aprovação em 2 níveis:
- * - action = 'validar_administrada'   → Administrada valida contrato assinado
- * - action = 'solicitar_admin'        → Administrada solicita revisão do administrador
- * - action = 'aprovar_admin'          → Administrador aprova → libera pré-cadastro da obra
- * - action = 'rejeitar_admin'         → Administrador rejeita com motivo
+ * Workflow de aprovação — 2 fluxos:
  *
- * REGRA CENTRAL: aprovado_admin NÃO cria nem ativa obra automaticamente.
- * Contrato aprovado apenas libera o botão "Iniciar Cadastro da Obra".
+ * FLUXO DIRETO (Top Show Music como editora original):
+ *   action = 'validar'              → Admin valida contrato assinado
+ *                                     assinado → validado → [Iniciar Cadastro da Obra]
+ *
+ * FLUXO ADMINISTRADA (EDI Music, LR, P3, etc.):
+ *   action = 'validar_administrada' → Administrada valida contrato assinado
+ *   action = 'solicitar_admin'      → Administrada solicita revisão do administrador
+ *   action = 'aprovar_admin'        → Administrador aprova → [Iniciar Cadastro da Obra]
+ *   action = 'rejeitar_admin'       → Administrador rejeita com motivo
+ *
+ * REGRA CENTRAL: nenhuma ação cria nem ativa obra automaticamente.
+ * Contrato validado/aprovado apenas libera o botão "Iniciar Cadastro da Obra".
  * A obra nasce como 'pre_cadastro' e só vira 'catalogo_ativo' após revisão
  * e ativação manual pelo Admin.
+ *
+ * Ambos os status 'validado' e 'aprovado_admin' desbloqueiam criação de obra.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient }              from '@supabase/supabase-js'
@@ -40,6 +48,7 @@ function getToken(req: NextRequest): string {
   return ''
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function autenticar(sb: any, req: NextRequest) {
   const token = getToken(req)
   if (!token) return null
@@ -49,6 +58,9 @@ async function autenticar(sb: any, req: NextRequest) {
     .from('usuarios').select('id, tenant_id, role').eq('auth_user_id', user.id).single()
   return usuario as { id: string; tenant_id: string; role: string } | null
 }
+
+// Status que liberam criação de obra (pré-cadastro)
+const STATUS_LIBERA_OBRA = ['validado', 'aprovado_admin']
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -65,7 +77,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Buscar contrato atual
   const { data: contrato, error: errContrato } = await sb
     .from('contratos')
-    .select('id, status, obras_json, tenant_id')
+    .select('id, status, obras_json, tenant_id, numero')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
@@ -78,16 +90,46 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   let updatePayload: Record<string, unknown> = {}
 
   switch (action) {
+
+    // ── Fluxo direto TSM ─────────────────────────────────────────────────────
+    case 'validar':
+      if (!isAdmin) {
+        return NextResponse.json({ error: 'Apenas Admin/Master pode validar diretamente' }, { status: 403 })
+      }
+      if (contrato.status !== 'assinado') {
+        return NextResponse.json({
+          error: `Contrato deve estar 'assinado' para validar (atual: ${contrato.status})`,
+        }, { status: 422 })
+      }
+      novoStatus = 'validado'
+      updatePayload = {
+        status:        novoStatus,
+        validado_em:   new Date().toISOString(),
+        validado_por:  usuario.id,
+      }
+      break
+
+    // ── Fluxo administrada ───────────────────────────────────────────────────
     case 'validar_administrada':
+      if (contrato.status !== 'assinado') {
+        return NextResponse.json({
+          error: `Contrato deve estar 'assinado' (atual: ${contrato.status})`,
+        }, { status: 422 })
+      }
       novoStatus = 'validado_administrada'
       updatePayload = {
-        status: novoStatus,
+        status:                    novoStatus,
         validado_administrada_em:  new Date().toISOString(),
         validado_administrada_por: usuario.id,
       }
       break
 
     case 'solicitar_admin':
+      if (contrato.status !== 'validado_administrada') {
+        return NextResponse.json({
+          error: `Contrato deve estar 'validado_administrada' (atual: ${contrato.status})`,
+        }, { status: 422 })
+      }
       novoStatus = 'aguardando_validacao_admin'
       updatePayload = { status: novoStatus }
       break
@@ -96,9 +138,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (!isAdmin) {
         return NextResponse.json({ error: 'Apenas Admin/Master pode aprovar' }, { status: 403 })
       }
+      if (contrato.status !== 'aguardando_validacao_admin') {
+        return NextResponse.json({
+          error: `Contrato deve estar 'aguardando_validacao_admin' (atual: ${contrato.status})`,
+        }, { status: 422 })
+      }
       novoStatus = 'aprovado_admin'
       updatePayload = {
-        status: novoStatus,
+        status:             novoStatus,
         aprovado_admin_em:  new Date().toISOString(),
         aprovado_admin_por: usuario.id,
       }
@@ -111,9 +158,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (!motivo) {
         return NextResponse.json({ error: 'Motivo de rejeição obrigatório' }, { status: 400 })
       }
+      if (contrato.status !== 'aguardando_validacao_admin') {
+        return NextResponse.json({
+          error: `Contrato deve estar 'aguardando_validacao_admin' (atual: ${contrato.status})`,
+        }, { status: 422 })
+      }
       novoStatus = 'rejeitado_admin'
       updatePayload = {
-        status: novoStatus,
+        status:                novoStatus,
         motivo_rejeicao_admin: motivo,
         aprovado_admin_em:     new Date().toISOString(),
         aprovado_admin_por:    usuario.id,
@@ -137,17 +189,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: errUpdate.message }, { status: 500 })
   }
 
-  // Se aprovado_admin → marcar cedente como 'controlado' em obras já existentes
-  // REGRA: aprovado_admin NÃO cria nem ativa obras automaticamente.
-  // A obra nasce como 'pre_cadastro' apenas quando o usuário clicar em
-  // "Iniciar Cadastro da Obra" no espelho do contrato.
-  if (action === 'aprovar_admin') {
-    const obrasJson = (contrato as any).obras_json as Array<{ id?: string; participantes?: Array<{ titular_id?: string; papel?: string }> }> | null
+  // Após validação/aprovação → marcar cedente como 'controlado' em obras já existentes
+  // REGRA: nunca cria nem ativa obra automaticamente.
+  if (STATUS_LIBERA_OBRA.includes(novoStatus)) {
+    const obrasJson = (contrato as any).obras_json as Array<{
+      id?: string
+      participantes?: Array<{ titular_id?: string; papel?: string }>
+    }> | null
 
     if (Array.isArray(obrasJson)) {
       for (const obra of obrasJson) {
         if (!obra.id) continue
-        // Apenas atualiza status_editorial do cedente se a obra já foi cadastrada
         const cedente = obra.participantes?.find(p =>
           ['A', 'CA', 'autor', 'compositor', 'compositor_letrista', 'letrista'].includes(p.papel ?? '')
         )
@@ -181,6 +233,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     ok:     true,
     action,
     status: novoStatus,
-    data:   contratoAtualizado,
+    contrato: contratoAtualizado,
   })
 }

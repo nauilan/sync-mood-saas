@@ -103,8 +103,9 @@ export async function POST(req: NextRequest) {
   const { titulo, links, fonogramas, ...rest } = body as any
   if (!titulo) return NextResponse.json({ error: 'Campo "titulo" obrigatório' }, { status: 400 })
 
-  // ── Regra: contrato de origem deve estar aprovado pelo administrador ──────
+  // ── Regra: contrato de origem deve estar validado (TSM direto) ou aprovado_admin (administrada) ──
   const contratoOrigemId = rest.contrato_origem_id as string | undefined | null
+  const STATUS_LIBERA_OBRA = ['validado', 'aprovado_admin']
   if (contratoOrigemId) {
     const { data: cRef } = await sb
       .from('contratos')
@@ -115,9 +116,9 @@ export async function POST(req: NextRequest) {
     if (!cRef) {
       return NextResponse.json({ error: 'Contrato de origem não encontrado' }, { status: 404 })
     }
-    if (cRef.status !== 'aprovado_admin') {
+    if (!STATUS_LIBERA_OBRA.includes(cRef.status)) {
       return NextResponse.json({
-        error: `O contrato de origem está com status "${cRef.status}". Obras só podem ser cadastradas após aprovação do administrador (status: aprovado_admin).`,
+        error: `O contrato está com status "${cRef.status}". Obras só podem ser cadastradas após validação (TSM direto: 'validado') ou aprovação do administrador (administrada: 'aprovado_admin').`,
         contrato_status: cRef.status,
       }, { status: 422 })
     }

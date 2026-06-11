@@ -126,12 +126,14 @@ export type StatusContratoV2 =
   | 'rascunho'
   | 'aguardando_assinatura'
   | 'assinado'
+  | 'validado'
   | 'em_vigor'
   | 'suspenso'
   | 'vencendo'          // <= 90 dias para vencer
   | 'vencido'
   | 'rescindido'
   | 'revogado'
+  | 'arquivado'
   | 'validado_administrada'
   | 'aguardando_validacao_admin'
   | 'aprovado_admin'
@@ -390,12 +392,14 @@ export const STATUS_CONTRATO_V2_LABELS: Record<StatusContratoV2, string> = {
   rascunho:                   'Rascunho',
   aguardando_assinatura:      'Ag. Assinatura',
   assinado:                   'Assinado',
+  validado:                   'Validado',
   em_vigor:                   'Em Vigor',
   suspenso:                   'Suspenso',
   vencendo:                   'Vencendo',
   vencido:                    'Vencido',
   rescindido:                 'Rescindido',
   revogado:                   'Revogado',
+  arquivado:                  'Arquivado',
   validado_administrada:      'Validado (Administrada)',
   aguardando_validacao_admin: 'Aguardando Validação Admin',
   aprovado_admin:             'Aprovado (Admin)',
@@ -406,12 +410,14 @@ export const STATUS_CONTRATO_V2_COLORS: Record<StatusContratoV2, string> = {
   rascunho:                   'bg-slate-500/15 text-slate-400',
   aguardando_assinatura:      'bg-amber-500/15 text-amber-400',
   assinado:                   'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  validado:                   'bg-teal-500/20 text-teal-300 border-teal-500/30',
   em_vigor:                   'bg-emerald-500/20 text-emerald-300',
   suspenso:                   'bg-orange-500/15 text-orange-400',
   vencendo:                   'bg-yellow-500/15 text-yellow-400',
   vencido:                    'bg-rose-500/15 text-rose-400',
   rescindido:                 'bg-rose-500/20 text-rose-300',
   revogado:                   'bg-slate-600/20 text-slate-400',
+  arquivado:                  'bg-slate-700/20 text-slate-500',
   validado_administrada:      'bg-sky-500/20 text-sky-300 border-sky-500/30',
   aguardando_validacao_admin: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
   aprovado_admin:             'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
