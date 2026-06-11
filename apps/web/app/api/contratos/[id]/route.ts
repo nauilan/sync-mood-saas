@@ -63,7 +63,7 @@ export async function GET(
   // ── Joins paralelos ──────────────────────────────────────────
   const [titularRes, editoraRes, editoraFallbackRes] = await Promise.all([
     raw.titular_id
-      ? sb.from('titulares').select('nome_completo, pessoa').eq('id', raw.titular_id).single()
+      ? sb.from('titulares').select('nome_completo, pessoa, pseudonimos').eq('id', raw.titular_id).single()
       : Promise.resolve({ data: null }),
     raw.editora_id
       ? sb.from('editoras').select('nome_fantasia, razao_social').eq('id', raw.editora_id).single()
@@ -73,8 +73,12 @@ export async function GET(
       : Promise.resolve({ data: null }),
   ])
 
-  const titular = titularRes.data as { nome_completo: string; pessoa?: string } | null
+  const titular = titularRes.data as { nome_completo: string; pessoa?: string; pseudonimos?: Array<{ nome: string; principal?: boolean }> } | null
   const editora = (editoraRes.data ?? editoraFallbackRes.data) as { nome_fantasia?: string; razao_social?: string } | null
+
+  // Pseudônimo principal do titular (primeiro da lista ou primeiro nome como fallback)
+  const titularPseudo = (titular?.pseudonimos ?? []).find((p) => p.principal)?.nome
+    ?? (titular?.pseudonimos?.[0]?.nome ?? null)
 
   // ── Mapeamento de campos: DB → ContratoV2 ────────────────────
   const contrato = {
@@ -86,7 +90,9 @@ export async function GET(
     // Joins
     titular_principal:    titular?.nome_completo ?? null,
     titular_tipo_pessoa:  titular?.pessoa === 'PJ' ? 'PJ' : 'PF',
+    titular_pseudonimo:   titularPseudo,
     editora_nome:         editora?.nome_fantasia ?? editora?.razao_social ?? '—',
+    editora_razao_social: editora?.razao_social ?? null,
     editora_id:           raw.editora_id ?? editoraFallbackRes.data?.id ?? null,
     // Booleans com default seguro
     prazo_indeterminado:  raw.prazo_indeterminado  ?? false,

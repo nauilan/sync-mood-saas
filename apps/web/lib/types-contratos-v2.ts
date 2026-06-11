@@ -334,6 +334,8 @@ export interface ContratoV2 {
   // Dados denormalizados para lista
   titular_principal?: string
   titular_tipo_pessoa?: 'PF' | 'PJ'
+  titular_pseudonimo?: string | null
+  editora_razao_social?: string | null
   _dias_para_vencer?: number | null
 }
 

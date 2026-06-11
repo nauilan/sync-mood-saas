@@ -343,53 +343,153 @@ export default function ContratoDetailPage() {
     const obras = contrato._obras ?? []
     const obrasJson: ObraJson[] = contrato.obras_json ?? []
 
+    // Mapeia papel do autor → código de função (CWR / cadastro)
+    function papelToTipo(papel: string): string {
+      const map: Record<string, string> = {
+        compositor:           'CA',
+        letrista:             'CA',
+        compositor_letrista:  'CA',
+        arranjador:           'AR',
+        adaptador:            'AD',
+        autor:                'CA',
+      }
+      return map[(papel ?? '').toLowerCase()] ?? 'CA'
+    }
+
+    // Primeiro nome como pseudônimo de fallback
+    function primNome(nome: string): string {
+      return (nome?.split(' ')[0] ?? nome).toLowerCase()
+    }
+
+    // Linhas de participantes para uma obra no formato de cadastro
+    function buildLinks(o: ObraJson, linkNum: number, c: NonNullable<typeof contrato>) {
+      const editoraNome   = c.editora_nome ?? '—'
+      const editoraRazao  = c.editora_razao_social ?? editoraNome
+      const editoraPct    = typeof (c as { percentual_editora?: number }).percentual_editora === 'number'
+        ? (c as { percentual_editora?: number }).percentual_editora!
+        : 100 - (o.pct_autor ?? 0)
+
+      const rows = [
+        // ── Cedente (autor)
+        {
+          link: linkNum,
+          nomeCompleto: (c.titular_principal ?? 'Cedente'),
+          pseudo:       c.titular_pseudonimo ?? primNome(c.titular_principal ?? 'Cedente'),
+          tipo:         papelToTipo(o.papel_autor),
+          doc:          c.titular_tipo_pessoa === 'PJ' ? 'CNPJ' : 'CPF',
+          pct:          o.pct_autor ?? 0,
+          cor:          'violet' as const,
+          controlado:   true,
+        },
+        // ── Editora
+        {
+          link: linkNum,
+          nomeCompleto: editoraRazao,
+          pseudo:       editoraNome,
+          tipo:         'E',
+          doc:          'CNPJ',
+          pct:          editoraPct,
+          cor:          'emerald' as const,
+          controlado:   true,
+        },
+        // ── Co-autores
+        ...(o.co_autores ?? []).map(co => ({
+          link:         linkNum,
+          nomeCompleto: co.nome,
+          pseudo:       primNome(co.nome),
+          tipo:         papelToTipo(co.papel),
+          doc:          'CPF',
+          pct:          co.pct ?? 0,
+          cor:          'sky' as const,
+          controlado:   false,
+        })),
+      ]
+      return rows
+    }
+
     if (obras.length === 0 && obrasJson.length > 0) {
+      if (!contrato) return null
+      const c = contrato
       return (
-        <div className="space-y-3">
-          <p className="text-xs text-amber-400/70 mb-1">Obras conforme rascunho — links formais gerados após assinatura.</p>
-          {obrasJson.map((o, i) => (
-            <div key={i} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 space-y-3">
-              <div className="flex items-start justify-between">
-                <div>
+        <div className="space-y-4">
+          <p className="text-xs text-amber-400/70">Obras conforme rascunho — links formais gerados após assinatura.</p>
+
+          {obrasJson.map((o, obraIdx) => {
+            const rows = buildLinks(o, obraIdx + 1, c)
+            return (
+              <div key={obraIdx} className="bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-hidden">
+                {/* Cabeçalho da obra */}
+                <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
                   <p className="text-sm font-semibold text-white/90">{o.titulo}</p>
-                  {o.titulo_alternativo && <p className="text-xs text-white/40 mt-0.5">Alt: {o.titulo_alternativo}</p>}
-                  {o.subtitulo && <p className="text-xs text-white/30 mt-0.5">Sub: {o.subtitulo}</p>}
+                  <div className="flex items-center gap-2">
+                    {o.titulo_alternativo && (
+                      <span className="text-xs text-white/30">Alt: {o.titulo_alternativo}</span>
+                    )}
+                  </div>
                 </div>
-                <span className="text-xs bg-violet-500/20 text-violet-300 font-semibold px-2 py-0.5 rounded-full">{o.pct_autor}% autor cedido</span>
-              </div>
 
-              {/* Editora */}
-              {contrato.editora_nome && (
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider">Editora</span>
-                  <span className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded">
-                    {contrato.editora_nome} — Controladora
-                  </span>
-                </div>
-              )}
-
-              {/* Autores */}
-              <div>
-                <span className="text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-1.5 block">Autores</span>
-                <div className="flex flex-wrap gap-1.5">
-                  <span className="text-xs bg-violet-500/10 text-violet-400 border border-violet-500/20 px-1.5 py-0.5 rounded flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-violet-400 rounded-full" />
-                    {contrato.titular_principal ?? 'Cedente'}: {o.pct_autor}% ({o.papel_autor}) — Controlado
-                  </span>
-                  {(o.co_autores ?? []).map((c, ci) => (
-                    <span key={ci} className="text-xs bg-sky-500/10 text-sky-400 border border-sky-500/20 px-1.5 py-0.5 rounded flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 bg-sky-500/50 rounded-full" />
-                      {c.nome}: {c.pct ?? 0}% — Sem controle
-                    </span>
+                {/* Cabeçalho da tabela */}
+                <div className="grid grid-cols-[56px_1fr_140px_52px_52px_52px] gap-x-3 px-4 py-1.5 border-b border-white/[0.04] bg-white/[0.02]">
+                  {['Link', 'Nome Completo', 'Pseudônimo / Nome Fantasia', 'Tipo', 'Doc', '%'].map((h, i) => (
+                    <span key={i} className="text-[10px] font-semibold text-white/30 uppercase tracking-wider">{h}</span>
                   ))}
                 </div>
+
+                {/* Linhas de participantes */}
+                <div className="divide-y divide-white/[0.03]">
+                  {rows.map((row, ri) => {
+                    const tipoColor = row.tipo === 'E'
+                      ? 'text-emerald-400'
+                      : row.cor === 'sky' ? 'text-sky-400' : 'text-violet-400'
+                    return (
+                      <div
+                        key={ri}
+                        className="grid grid-cols-[56px_1fr_140px_52px_52px_52px] gap-x-3 items-center px-4 py-2.5 text-xs hover:bg-white/[0.02] transition-colors"
+                      >
+                        {/* Link N */}
+                        <span className="text-white/30 font-mono text-[11px]">Link {row.link}</span>
+
+                        {/* Nome completo */}
+                        <span className="text-white/80 truncate">
+                          {row.nomeCompleto.toLowerCase()}
+                        </span>
+
+                        {/* Pseudônimo */}
+                        <span className="text-white/50 truncate text-[11px]">
+                          {row.pseudo.toLowerCase()}
+                        </span>
+
+                        {/* Tipo (CA / E / AR) */}
+                        <span className={`font-mono font-bold text-[11px] ${tipoColor}`}>
+                          {row.tipo}
+                        </span>
+
+                        {/* Doc (CPF / CNPJ) */}
+                        <span className="text-white/35 text-[10px] font-mono uppercase">
+                          {row.doc}
+                        </span>
+
+                        {/* Percentual */}
+                        <div className="flex items-center gap-1">
+                          <span className={`font-semibold tabular-nums ${tipoColor}`}>
+                            {row.pct}%
+                          </span>
+                          {!row.controlado && (
+                            <span className="text-[9px] text-white/25 font-medium">(nc)</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )
     }
 
+    // ── Links formais (após assinatura / obras reais vinculadas)
     return (
       <div className="space-y-3">
         {obras.map(o => (
@@ -693,7 +793,7 @@ export default function ContratoDetailPage() {
     )
   }
 
-  const tabContent: Record<string, () => React.ReactElement> = {
+  const tabContent: Record<string, () => React.ReactElement | null> = {
     resumo: tabResumo,
     partes: tabPartes,
     direitos: tabDireitos,
