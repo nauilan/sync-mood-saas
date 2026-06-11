@@ -137,6 +137,15 @@ export async function POST(req: NextRequest) {
   if (rest.genero !== undefined && rest.genero !== null && rest.genero !== '' && !obraPayload.genero_musical) {
     obraPayload.genero_musical = rest.genero
   }
+  // Auto-gerar codigo_obra se não fornecido (NOT NULL constraint no banco)
+  if (!obraPayload.codigo_obra) {
+    const { count } = await sb
+      .from('obras')
+      .select('*', { count: 'exact', head: true })
+      .eq('tenant_id', usuario.tenant_id)
+    const seq = String((count ?? 0) + 1).padStart(4, '0')
+    obraPayload.codigo_obra = `OBR-${seq}`
+  }
 
   const { data: obra, error: obraErr } = await sb
     .from('obras')
