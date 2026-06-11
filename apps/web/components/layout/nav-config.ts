@@ -28,6 +28,7 @@ export const MASTER_NAV: NavSection[] = [
   { title: 'M3 Obras', items: [
     { label: 'Obras', href: '/master/obras', iconName: 'Music' },
     { label: 'Catalogo (Nova Obra)', href: '/master/obras/nova', iconName: 'ListMusic' },
+    { label: 'Exportacoes', href: '/master/exportacoes', iconName: 'Download' },
   ]},
   { title: 'M4 Autorizacoes', items: [
     { label: 'Autorizacoes', href: '/master/autorizacoes', iconName: 'Shield' },

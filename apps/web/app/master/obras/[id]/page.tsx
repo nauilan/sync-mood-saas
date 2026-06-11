@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import {
   Edit, AlignLeft, Mic2, FileText, Link2, Activity, AlertTriangle,
   CheckCircle2, ChevronRight, ExternalLink, Music, Users2, Globe2, DollarSign, Users,
-  BookOpen, Loader2,
+  BookOpen, Loader2, BarChart3, Clock, Plus,
 } from 'lucide-react'
 import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, PAPEL_TITULAR_LABELS, PAPEL_TITULAR_COLORS, normalizarLinksObra, type StatusObra } from '@/lib/types-obras'
 import { formatarPercentual } from '@/lib/percentual'
@@ -16,11 +16,13 @@ import { fmtBRL, fmtDate } from '@/lib/mock-cc'
 const TABS = [
   { id: 'resumo',         label: 'Resumo',              icon: Music },
   { id: 'integrantes',    label: 'Integrantes da Obra',  icon: Users2 },
+  { id: 'completude',     label: 'Completude',           icon: BarChart3 },
   { id: 'conta_corrente', label: 'Conta Corrente',       icon: DollarSign },
   { id: 'letra',          label: 'Letra',               icon: AlignLeft },
   { id: 'fonogramas',     label: 'Fonogramas',           icon: Mic2 },
   { id: 'contratos',      label: 'Contratos',            icon: FileText },
   { id: 'exportacoes',    label: 'Exportações',          icon: Activity },
+  { id: 'historico',      label: 'Histórico',            icon: Clock },
   { id: 'divergencias',   label: 'Divergências',         icon: AlertTriangle },
 ]
 
@@ -109,6 +111,66 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('resumo')
   const [ativando, setAtivando] = useState(false)
+
+  // ── Completude ──────────────────────────────────────────────────────────────
+  const [completude, setCompletude] = useState<any>(null)
+  const [completudeLoading, setCompletudeLdg] = useState(false)
+
+  // ── Histórico ───────────────────────────────────────────────────────────────
+  const [historico, setHistorico] = useState<any[]>([])
+  const [historicoLoading, setHistoricoLdg] = useState(false)
+
+  // ── Exportações por obra ────────────────────────────────────────────────────
+  const [exportacoesObra, setExportacoesObra] = useState<any[]>([])
+  const [exportacoesLdg, setExportacoesLdg] = useState(false)
+  const [exportacoesCarregado, setExportacoesCarregado] = useState(false)
+
+  // Lazy loaders por tab
+  useEffect(() => {
+    if (!obra) return
+    if (activeTab === 'completude' && !completude && !completudeLoading) {
+      loadCompletude()
+    }
+    if (activeTab === 'historico' && historico.length === 0 && !historicoLoading) {
+      loadHistorico()
+    }
+    if (activeTab === 'exportacoes' && !exportacoesCarregado && !exportacoesLdg) {
+      loadExportacoes()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, obra])
+
+  async function loadCompletude() {
+    setCompletudeLdg(true)
+    try {
+      const res = await authFetch(`/api/obras/${params.id}/completude`)
+      if (res.ok) {
+        const d = await res.json()
+        setCompletude(d.data)
+        if (d.data?.score !== undefined) setObra((prev: any) => ({ ...prev, completude_score: d.data.score }))
+      }
+    } catch (e) { console.error('[completude]', e) }
+    finally { setCompletudeLdg(false) }
+  }
+
+  async function loadHistorico() {
+    setHistoricoLdg(true)
+    try {
+      const res = await authFetch(`/api/obras/${params.id}/historico`)
+      if (res.ok) { const d = await res.json(); setHistorico(d.data ?? []) }
+    } catch (e) { console.error('[historico]', e) }
+    finally { setHistoricoLdg(false) }
+  }
+
+  async function loadExportacoes() {
+    setExportacoesLdg(true)
+    try {
+      const res = await authFetch(`/api/exportacoes?obra_id=${params.id}`)
+      if (res.ok) { const d = await res.json(); setExportacoesObra(d.data ?? []) }
+      setExportacoesCarregado(true)
+    } catch (e) { console.error('[exportacoes]', e) }
+    finally { setExportacoesLdg(false) }
+  }
 
   // Ativar obra no catálogo (pre_cadastro → catalogo_ativo)
   async function ativarNoCatalogo() {
@@ -519,11 +581,201 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      {/* Tab: Exportacoes */}
+      {/* Tab: Completude */}
+      {activeTab === 'completude' && (
+        <div className="space-y-4">
+          {completudeLoading ? (
+            <div className="flex items-center justify-center py-10 gap-2 text-white/30 text-sm">
+              <Loader2 className="w-4 h-4 animate-spin" /> Calculando completude...
+            </div>
+          ) : completude ? (
+            <>
+              {/* Card score */}
+              <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-violet-400" /> Completude Editorial
+                  </h3>
+                  <span className={`text-2xl font-bold tabular-nums ${completude.score === 100 ? 'text-emerald-400' : completude.score >= 70 ? 'text-amber-400' : 'text-rose-400'}`}>
+                    {completude.score}%
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-white/[0.06] rounded-full overflow-hidden mb-4">
+                  <div
+                    className={`h-full rounded-full transition-all ${completude.score === 100 ? 'bg-emerald-500' : completude.score >= 70 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                    style={{ width: `${completude.score}%` }}
+                  />
+                </div>
+                <p className="text-xs text-white/30 mb-4">{completude.checks_ok} de {completude.total_checks} verificações aprovadas</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {(['cwr', 'socinpro', 'backoffice'] as const).map(d => (
+                    <div key={d} className={`p-3 rounded-lg border ${completude.por_destino[d].ok ? 'border-emerald-500/20 bg-emerald-500/[0.05]' : 'border-rose-500/20 bg-rose-500/[0.05]'}`}>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        {completude.por_destino[d].ok
+                          ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          : <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />}
+                        <span className="text-xs font-semibold text-white/70 uppercase">{d === 'backoffice' ? 'BackOffice' : d.toUpperCase()}</span>
+                      </div>
+                      <p className="text-[11px] text-white/40">
+                        {completude.por_destino[d].ok ? 'Pronto' : `${completude.por_destino[d].pendencias.length} pendência${completude.por_destino[d].pendencias.length !== 1 ? 's' : ''}`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Pendências */}
+              {completude.pendencias.length > 0 && (
+                <div className="bg-[#0d1526] border border-rose-500/20 rounded-xl p-5">
+                  <h4 className="text-sm font-semibold text-rose-300 mb-3 flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4" />
+                    {completude.pendencias.length} Pendência{completude.pendencias.length !== 1 ? 's' : ''} para Resolver
+                  </h4>
+                  <div className="space-y-2">
+                    {completude.pendencias.map((p: any, i: number) => (
+                      <div key={i} className="flex items-start gap-3 p-2.5 bg-rose-500/[0.04] rounded-lg border border-rose-500/10">
+                        <span className="text-rose-400/60 text-[10px] font-mono mt-0.5 shrink-0 w-28 truncate">{p.campo}</span>
+                        <span className="text-xs text-white/60 flex-1">{p.mensagem}</span>
+                        <div className="flex gap-1 shrink-0">
+                          {p.destinos.map((d: string) => (
+                            <span key={d} className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.04] text-white/30 font-semibold uppercase">{d}</span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {completude.score === 100 && (
+                <div className="bg-emerald-500/[0.07] border border-emerald-500/20 rounded-xl p-6 text-center">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-emerald-300">Obra completa</p>
+                  <p className="text-xs text-emerald-400/60 mt-1">Todos os campos obrigatórios preenchidos. Obra pronta para exportação.</p>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-10 text-center">
+              <BarChart3 className="w-8 h-8 text-white/20 mx-auto mb-2" />
+              <p className="text-xs text-white/30">Completude não calculada ainda.</p>
+              <button onClick={loadCompletude} className="mt-3 text-xs text-violet-400 hover:text-violet-300 transition-colors">
+                Calcular agora
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Exportacoes (wired) */}
       {activeTab === 'exportacoes' && (
-        <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6">
-          <h3 className="text-sm font-semibold text-white mb-4">Historico de Exportacoes</h3>
-          <div className="py-8 text-center text-xs text-white/30">Nenhuma exportacao registrada.</div>
+        <div className="space-y-4">
+          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+              <h3 className="text-sm font-semibold text-white">Histórico de Exportações</h3>
+              <a href="/master/exportacoes" className="text-xs text-violet-400 hover:text-violet-300 transition-colors">
+                Ver todas <ChevronRight className="inline w-3 h-3" />
+              </a>
+            </div>
+            {exportacoesLdg ? (
+              <div className="flex items-center justify-center py-8 gap-2 text-white/30 text-xs">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando...
+              </div>
+            ) : exportacoesObra.length === 0 ? (
+              <div className="py-8 text-center text-xs text-white/30">Nenhuma exportação registrada para esta obra.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-white/[0.04]">
+                      <th className="text-left px-5 py-2.5 text-white/30 font-semibold">Exportação</th>
+                      <th className="text-center px-4 py-2.5 text-white/30 font-semibold">Destino</th>
+                      <th className="text-center px-4 py-2.5 text-white/30 font-semibold">Formato</th>
+                      <th className="text-center px-4 py-2.5 text-white/30 font-semibold">Status Obra</th>
+                      <th className="text-right px-5 py-2.5 text-white/30 font-semibold">Data</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.03]">
+                    {exportacoesObra.map((e: any) => (
+                      <tr key={e.id} className="hover:bg-white/[0.02]">
+                        <td className="px-5 py-3">
+                          <a href={`/master/exportacoes/${e.exportacao_id}`} className="font-mono text-violet-400 hover:text-violet-300">
+                            {e.codigo ?? e.exportacao_id?.slice(0, 8)}
+                          </a>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="bg-sky-500/10 text-sky-300 px-1.5 py-0.5 rounded text-[11px] font-semibold uppercase">{e.destino ?? '—'}</span>
+                        </td>
+                        <td className="px-4 py-3 text-center text-white/40">{e.formato ?? '—'}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                            e.status_obra === 'aceita' ? 'bg-emerald-500/10 text-emerald-400' :
+                            e.status_obra === 'rejeitada' ? 'bg-rose-500/10 text-rose-400' :
+                            'bg-white/5 text-white/40'
+                          }`}>{e.status_obra ?? 'incluída'}</span>
+                        </td>
+                        <td className="px-5 py-3 text-right text-white/30">
+                          {e.criado_em ? new Date(e.criado_em).toLocaleDateString('pt-BR') : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Historico */}
+      {activeTab === 'historico' && (
+        <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <Clock className="w-4 h-4 text-white/40" /> Histórico de Alterações
+            </h3>
+            <span className="text-xs text-white/30">{historico.length} registro{historico.length !== 1 ? 's' : ''}</span>
+          </div>
+          {historicoLoading ? (
+            <div className="flex items-center justify-center py-8 gap-2 text-white/30 text-xs">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando...
+            </div>
+          ) : historico.length === 0 ? (
+            <div className="py-8 text-center text-xs text-white/30">Nenhuma alteração registrada ainda.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-white/[0.04]">
+                    <th className="text-left px-5 py-2.5 text-white/30 font-semibold">Campo</th>
+                    <th className="text-left px-4 py-2.5 text-white/30 font-semibold">Anterior</th>
+                    <th className="text-left px-4 py-2.5 text-white/30 font-semibold">Novo</th>
+                    <th className="text-center px-4 py-2.5 text-white/30 font-semibold">Origem</th>
+                    <th className="text-right px-5 py-2.5 text-white/30 font-semibold">Data</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.03]">
+                  {historico.map((h: any) => (
+                    <tr key={h.id} className="hover:bg-white/[0.02]">
+                      <td className="px-5 py-3">
+                        <span className="font-mono text-[11px] text-violet-300/70 bg-violet-500/10 px-1.5 py-0.5 rounded">{h.campo}</span>
+                      </td>
+                      <td className="px-4 py-3 text-white/35 max-w-[180px] truncate">{h.valor_anterior ?? '—'}</td>
+                      <td className="px-4 py-3 text-white/70 max-w-[180px] truncate font-medium">{h.valor_novo ?? '—'}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${h.origem === 'sistema' ? 'bg-sky-500/10 text-sky-400' : 'bg-white/[0.04] text-white/30'}`}>
+                          {h.origem}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-right text-white/30 tabular-nums whitespace-nowrap">
+                        {h.created_at ? new Date(h.created_at).toLocaleString('pt-BR') : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

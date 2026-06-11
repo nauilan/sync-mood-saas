@@ -31,13 +31,13 @@ function getToken(req: NextRequest): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function autenticar(req: NextRequest, sb: any): Promise<{ tenant_id: string; role: string } | null> {
+async function autenticar(req: NextRequest, sb: any): Promise<{ id: string; tenant_id: string; role: string } | null> {
   const token = getToken(req)
   if (!token) return null
   const { data: { user }, error } = await sb.auth.getUser(token)
   if (error || !user) return null
-  const { data } = await sb.from('usuarios').select('tenant_id, role').eq('auth_user_id', user.id).single()
-  return data as { tenant_id: string; role: string } | null
+  const { data } = await sb.from('usuarios').select('id, tenant_id, role').eq('auth_user_id', user.id).single()
+  return data as { id: string; tenant_id: string; role: string } | null
 }
 
 // ── GET /api/obras/[id] ─────────────────────────────────────────────────────
@@ -98,6 +98,9 @@ export async function PATCH(
     'ano_criacao', 'duracao_segundos', 'letra', 'status', 'iswc', 'codigo_obra',
     'observacoes', 'contrato_origem_id', 'interprete_referencia', 'editora_id',
     'status_catalogo', 'origem_editora_id',
+    // Migration 059 — CWR/Socinpro/BackOffice
+    'titulo_original', 'cwr_work_id', 'socinpro_obra_id', 'socinpro_status',
+    'exportacao_bloqueada', 'exportacao_bloqueio_motivo',
   ]
 
   const update: Record<string, unknown> = {}
@@ -130,6 +133,30 @@ export async function PATCH(
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // ── Auto-registrar alterações em obras_historico ──────────────────────────
+  const CAMPOS_RASTREAR = [
+    'titulo', 'titulo_alternativo', 'subtitulo', 'idioma', 'genero_musical',
+    'ano_criacao', 'letra', 'iswc', 'codigo_obra', 'status', 'status_catalogo',
+    'interprete_referencia', 'editora_id', 'contrato_origem_id', 'observacoes',
+    'titulo_original', 'cwr_work_id', 'socinpro_obra_id', 'socinpro_status',
+    'exportacao_bloqueada',
+  ]
+  const historico = CAMPOS_RASTREAR
+    .filter(campo => campo in update && String(anterior[campo] ?? '') !== String(update[campo] ?? ''))
+    .map(campo => ({
+      obra_id:        id,
+      tenant_id:      usuario.tenant_id,
+      usuario_id:     usuario.id ?? null,
+      campo,
+      valor_anterior: anterior[campo] != null ? String(anterior[campo]) : null,
+      valor_novo:     update[campo] != null ? String(update[campo]) : null,
+      origem:         'usuario',
+    }))
+  if (historico.length > 0) {
+    await sb.from('obras_historico').insert(historico)
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   await logAudit({
     tenant_id: usuario.tenant_id,
