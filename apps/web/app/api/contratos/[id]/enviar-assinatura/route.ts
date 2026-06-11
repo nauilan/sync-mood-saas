@@ -178,11 +178,14 @@ export async function POST(
   // Suprimir warning de variável não-usada quando UUID é reutilizado
   void pdfBuffer
 
-  // ── 6. Adicionar signatários (um por um — D4Sign não aceita batch) ─────────
+  // ── 6. Adicionar signatários ───────────────────────────────────────────────
+  // act="1" (Assinar) para todos.
+  // Cedente recebe videoselfie="1" (autenticação por vídeo selfie + reconhecimento facial).
   const signers: D4SignSigner[] = assinantes.map(ass => ({
-    email: ass.email!,
-    act:   papelToAct(ass.papel),
-    nome:  ass.nome,
+    email:       ass.email!,
+    act:         papelToAct(ass.papel),
+    nome:        ass.nome,
+    videoselfie: ass.papel === 'cedente' ? '1' : '0',
   }))
   try {
     await addSigners(d4signUuid, signers)

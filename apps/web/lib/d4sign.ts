@@ -27,16 +27,22 @@ function getCredentials() {
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
 export type D4SignAct =
-  | '1'   // Assinar
-  | '5'   // Assinar como Testemunha
-  | '8'   // Assinar como Outorgante (cedente)
-  | '9'   // Assinar como Outorgado  (cessionário / responsável)
+  | '1'   // Assinar (padrão — usado para todos os papéis)
+  | '2'   // Aprovar
+  | '3'   // Reconhecer
+  | '4'   // Assinar como parte
+  | '5'   // Assinar como testemunha
+  | '6'   // Assinar como interveniente
+  | '7'   // Acusar recebimento
+  | '8'   // Assinar como Emissor, Endossante e Avalista
 
 export interface D4SignSigner {
   email: string
   act: D4SignAct
-  nome?: string     // exibido no D4Sign apenas se informado
+  nome?: string          // exibido no D4Sign apenas se informado
   foreign?: '0' | '1'
+  /** Exigir autenticação por vídeo selfie com reconhecimento facial */
+  videoselfie?: '0' | '1'
 }
 
 export interface D4SignDocument {
@@ -50,14 +56,13 @@ export interface D4SignDocument {
 
 // ── Mapeamento de papéis → act D4Sign ────────────────────────────────────────
 
-export function papelToAct(papel: string): D4SignAct {
-  switch (papel) {
-    case 'cedente':             return '8'  // Outorgante
-    case 'responsavel_editora': return '9'  // Outorgado
-    case 'testemunha_1':        return '5'  // Testemunha
-    case 'testemunha_2':        return '5'  // Testemunha
-    default:                    return '1'  // Assinar
-  }
+/**
+ * Todos os papéis usam act="1" (Assinar).
+ * A diferença entre cedente e demais é feita pela autenticação extra
+ * (cedente recebe videoselfie="1" no enviar-assinatura/route.ts).
+ */
+export function papelToAct(_papel: string): D4SignAct {
+  return '1'
 }
 
 // ── Upload do documento ──────────────────────────────────────────────────────
@@ -127,6 +132,8 @@ export async function addSigners(
       assinatura_presencial: '0',
       docauth:               '0',
       docauthandselfie:      '0',
+      // videoselfie: "1" ativa autenticação por vídeo selfie com reconhecimento facial
+      videoselfie:           s.videoselfie ?? '0',
       embed_methodauth:      'email',
       embed_smsnumber:       '',
       upload_allow:          '0',
