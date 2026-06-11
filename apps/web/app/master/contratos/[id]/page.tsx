@@ -938,7 +938,15 @@ export default function ContratoDetailPage() {
           <p className="text-sm font-semibold text-emerald-300 flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4" /> Aprovado pelo Administrador
           </p>
-          <p className="text-xs text-emerald-400/60 mt-0.5">O contrato foi aprovado. A obra vinculada foi ativada no catálogo oficial.</p>
+          <p className="text-xs text-emerald-400/60 mt-0.5">
+            Contrato aprovado. As obras mencionadas podem agora ser cadastradas no catálogo oficial.
+          </p>
+          <Link
+            href={`/master/obras/nova?contrato_id=${contrato.id}`}
+            className="mt-3 inline-flex items-center gap-1.5 h-8 px-3 text-xs bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/20 text-emerald-300 rounded-lg transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> Iniciar Cadastro da Obra
+          </Link>
         </div>
       )}
 

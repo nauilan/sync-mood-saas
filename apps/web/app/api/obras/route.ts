@@ -63,6 +63,12 @@ export async function GET(req: NextRequest) {
   if (status) query = query.eq('status', status)
   if (search) query = query.ilike('titulo', `%${search}%`)
 
+  // titulo_similar: busca obras com título parecido (usado para detecção de duplicidade)
+  const tituloSimilar = searchParams.get('titulo_similar')
+  if (tituloSimilar && tituloSimilar.trim().length >= 2 && !search) {
+    query = query.ilike('titulo', `%${tituloSimilar.trim()}%`)
+  }
+
   const { data, error, count } = await query
 
   if (error) {
@@ -96,6 +102,26 @@ export async function POST(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { titulo, links, fonogramas, ...rest } = body as any
   if (!titulo) return NextResponse.json({ error: 'Campo "titulo" obrigatório' }, { status: 400 })
+
+  // ── Regra: contrato de origem deve estar aprovado pelo administrador ──────
+  const contratoOrigemId = rest.contrato_origem_id as string | undefined | null
+  if (contratoOrigemId) {
+    const { data: cRef } = await sb
+      .from('contratos')
+      .select('status')
+      .eq('id', contratoOrigemId)
+      .eq('tenant_id', usuario.tenant_id)
+      .single()
+    if (!cRef) {
+      return NextResponse.json({ error: 'Contrato de origem não encontrado' }, { status: 404 })
+    }
+    if (cRef.status !== 'aprovado_admin') {
+      return NextResponse.json({
+        error: `O contrato de origem está com status "${cRef.status}". Obras só podem ser cadastradas após aprovação do administrador (status: aprovado_admin).`,
+        contrato_status: cRef.status,
+      }, { status: 422 })
+    }
+  }
 
   // 1. Inserir obra
   const allowedFields = [

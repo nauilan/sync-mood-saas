@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { PageHeader } from '@/components/ui/page-header'
 import {
   ChevronRight, Plus, Trash2, CheckCircle2, AlertCircle,
@@ -275,6 +275,7 @@ function TitularRow({
 
 export default function NovaObraPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [step, setStep] = useState(0)
   const [highestStep, setHighestStep] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -293,16 +294,33 @@ export default function NovaObraPage() {
   const [duracao, setDuracao] = useState('')
 
   // Contrato de origem (selecionado no step 0 para importar dados)
-  const [contratoOrigemId, setContratoOrigemId] = useState('')
+  const [contratoOrigemId, setContratoOrigemId] = useState(() => searchParams?.get('contrato_id') ?? '')
   const [importado, setImportado] = useState(false)
-  const [contratos, setContratos] = useState<{ id: string; numero: string; tipo: string; titulo_obra?: string }[]>([])
+  const [contratos, setContratos] = useState<{ id: string; numero: string; tipo: string; status?: string; titulo_obra?: string }[]>([])
 
   useEffect(() => {
-    authFetch('/api/contratos?per_page=200')
+    authFetch('/api/contratos?per_page=200&status=aprovado_admin')
       .then(r => r.json())
       .then(json => setContratos(json.data ?? []))
       .catch(() => {})
   }, [])
+
+  // ── Detecção de obra duplicada ───────────────────────────────────────────
+  const [obrasSimilares, setObrasSimilares] = useState<Array<{ id: string; titulo: string; codigo_obra?: string }>>([])
+  const [duplicataConfirmada, setDuplicataConfirmada] = useState(false)
+
+  useEffect(() => {
+    setDuplicataConfirmada(false)
+    if (titulo.trim().length < 3) { setObrasSimilares([]); return }
+    const t = setTimeout(async () => {
+      try {
+        const res = await authFetch(`/api/obras?titulo_similar=${encodeURIComponent(titulo.trim())}&per_page=5`)
+        const data = await res.json()
+        setObrasSimilares((data.obras ?? data.data ?? []) as Array<{ id: string; titulo: string; codigo_obra?: string }>)
+      } catch { setObrasSimilares([]) }
+    }, 600)
+    return () => clearTimeout(t)
+  }, [titulo])
 
   // Step 1 — links
   const [links, setLinks] = useState<ObraLink[]>([
@@ -535,7 +553,8 @@ export default function NovaObraPage() {
   }))
   const todosLinksValidos = somasPorLink.every(l => Math.abs(l.soma - 100) < 0.02)
 
-  const canStep0 = titulo.trim().length >= 2
+  // Próximo só libera se título ≥ 2 chars E não há duplicata pendente de confirmação
+  const canStep0 = titulo.trim().length >= 2 && (obrasSimilares.length === 0 || duplicataConfirmada)
   const canStep1 = links.length > 0 && links.every(l => l.titulares.length > 0) && todosLinksValidos
   const canStep4 = contratoFile !== null
 
@@ -750,6 +769,57 @@ export default function NovaObraPage() {
               <label className="text-xs font-medium text-white/50">Título da Obra *</label>
               <input type="text" value={titulo} onChange={e => setTitulo(e.target.value)}
                 placeholder="Ex: Amo Noite e Dia" className={inputCls} autoFocus />
+
+              {/* ── Alerta de obra duplicada ─────────────────────────────── */}
+              {obrasSimilares.length > 0 && !duplicataConfirmada && (
+                <div className="mt-2 bg-amber-500/10 border border-amber-500/25 rounded-xl p-3 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-semibold text-amber-300">
+                        Já existe uma obra com título similar no catálogo
+                      </p>
+                      <p className="text-[11px] text-amber-400/60 mt-0.5">
+                        Verifique se é a mesma obra antes de criar um novo cadastro.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-1 ml-6">
+                    {obrasSimilares.map(o => (
+                      <a
+                        key={o.id}
+                        href={`/master/obras/${o.id}`}
+                        target="_blank"
+                        className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-amber-500/5 hover:bg-amber-500/15 border border-amber-500/10 transition-colors group"
+                      >
+                        <span className="text-xs text-white/70 group-hover:text-white">{o.titulo}</span>
+                        {o.codigo_obra && <span className="text-[10px] text-white/30">{o.codigo_obra}</span>}
+                      </a>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 ml-6 pt-1">
+                    <button
+                      onClick={() => router.push(`/master/obras/${obrasSimilares[0].id}`)}
+                      className="h-7 px-3 text-xs rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/20 text-amber-300 transition-colors"
+                    >
+                      Ir para obra existente
+                    </button>
+                    <button
+                      onClick={() => setDuplicataConfirmada(true)}
+                      className="h-7 px-3 text-xs rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 transition-colors"
+                    >
+                      Criar nova mesmo assim (confirmar)
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {obrasSimilares.length > 0 && duplicataConfirmada && (
+                <p className="text-[11px] text-white/35 flex items-center gap-1 mt-1">
+                  <CheckCircle2 className="w-3 h-3 text-white/30" />
+                  Criação de nova obra confirmada (título similar existe no catálogo)
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-white/50">Título Alternativo</label>
