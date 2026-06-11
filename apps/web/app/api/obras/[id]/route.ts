@@ -97,6 +97,7 @@ export async function PATCH(
     'titulo', 'titulo_alternativo', 'subtitulo', 'idioma', 'genero_musical',
     'ano_criacao', 'duracao_segundos', 'letra', 'status', 'iswc', 'codigo_obra',
     'observacoes', 'contrato_origem_id', 'interprete_referencia', 'editora_id',
+    'status_catalogo', 'origem_editora_id',
   ]
 
   const update: Record<string, unknown> = {}

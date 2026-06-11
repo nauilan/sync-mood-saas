@@ -11,6 +11,14 @@
  *   type_post  — evento: 'signed_all' | 'signed' | 'unsigned' | 'cancel' | 'addSigners' | ...
  *   uuid       — UUID do documento D4Sign
  *   ...        — demais campos variáveis por evento
+ *
+ * Fluxo de status do contrato:
+ *   rascunho → aguardando_assinatura → assinado → validado_administrada
+ *   → aguardando_validacao_admin → aprovado_admin | rejeitado_admin
+ *
+ * IMPORTANTE: signed_all → status = 'assinado' (não 'em_vigor')
+ * Contrato assinado ≠ obra ativa. A obra só entra no catálogo após aprovação
+ * explícita do administrador e pré-cadastro manual.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -27,17 +35,40 @@ function getAdminClient() {
 // ── Mapeamento de eventos D4Sign ─────────────────────────────────────────────
 
 type D4SignEvent =
-  | 'signed_all'     // todos assinaram → contrato em vigor
-  | 'signed'         // um signatário assinou
-  | 'unsigned'       // signatário recusou
-  | 'cancel'         // documento cancelado
-  | 'addSigners'     // signatários adicionados
+  | 'signed_all'   // todos assinaram → contrato assinado, inicia fluxo de aprovação
+  | 'signed'       // um signatário assinou
+  | 'unsigned'     // signatário recusou
+  | 'cancel'       // documento cancelado
+  | 'addSigners'   // signatários adicionados
   | string
 
 interface D4SignWebhookPayload {
   type_post?: D4SignEvent
   uuid?: string
   [key: string]: unknown
+}
+
+// ── Buscar URL de download do PDF assinado ───────────────────────────────────
+async function fetchD4SignPdfUrl(uuid: string): Promise<string | null> {
+  try {
+    const token    = (process.env.D4SIGN_API_TOKEN  ?? '').trim()
+    const cryptKey = (process.env.D4SIGN_CRYPT_KEY  ?? '').trim()
+    const baseUrl  = (process.env.D4SIGN_BASE_URL   ?? 'https://secure.d4sign.com.br/api/v1').trim()
+    if (!token) return null
+
+    const params = new URLSearchParams({ tokenAPI: token })
+    if (cryptKey) params.set('cryptKey', cryptKey)
+
+    const res = await fetch(
+      `${baseUrl}/documents/${uuid}/download?${params}`,
+      { method: 'GET', headers: { Accept: 'application/json' } }
+    )
+    if (!res.ok) return null
+    const json = await res.json() as { url?: string; download_url?: string }
+    return json.url ?? json.download_url ?? null
+  } catch {
+    return null
+  }
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -90,14 +121,21 @@ export async function POST(req: NextRequest) {
   let novoStatus: string | null = null
   let novoD4signStatus: string | null = null
   let acao = 'd4sign_evento'
+  let dataSig: string | null = null
+  let pdfUrl: string | null = null
 
   switch (type_post) {
     case 'signed_all':
-      // Todos assinaram → contrato em vigor
-      if (contrato.status !== 'em_vigor') {
-        novoStatus      = 'em_vigor'
+      // Todos assinaram → contrato passa para 'assinado'
+      // REGRA: assinado ≠ ativo. Obra só entra no catálogo após aprovação do Admin.
+      if (contrato.status !== 'assinado') {
+        novoStatus       = 'assinado'
         novoD4signStatus = 'finalizado'
         acao             = 'assinatura_concluida'
+        dataSig          = new Date().toISOString()
+
+        // Tentar obter URL do PDF assinado (não-bloqueante)
+        pdfUrl = await fetchD4SignPdfUrl(d4signUuid)
       }
       break
 
@@ -126,10 +164,12 @@ export async function POST(req: NextRequest) {
   }
 
   // Atualizar contrato se necessário
-  if (novoStatus !== null || novoD4signStatus !== null) {
+  if (novoStatus !== null || novoD4signStatus !== null || dataSig !== null) {
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
-    if (novoStatus      !== null) updates.status         = novoStatus
+    if (novoStatus       !== null) updates.status         = novoStatus
     if (novoD4signStatus !== null) updates.d4sign_status  = novoD4signStatus
+    if (dataSig          !== null) updates.data_assinatura = dataSig
+    if (pdfUrl           !== null) updates.d4sign_pdf_url  = pdfUrl
 
     const { error: updErr } = await sb
       .from('contratos')
@@ -139,25 +179,32 @@ export async function POST(req: NextRequest) {
     if (updErr) {
       console.error('[d4sign/webhook] Falha ao atualizar contrato:', updErr)
     } else {
-      console.log(`[d4sign/webhook] Contrato ${contrato.numero} → status: ${novoStatus ?? '(sem alteração)'}`)
+      console.log(
+        `[d4sign/webhook] Contrato ${contrato.numero}` +
+        ` → status: ${novoStatus ?? '(sem alteração)'}` +
+        (dataSig ? ` | data_assinatura: ${dataSig}` : '') +
+        (pdfUrl  ? ' | pdf_url: salvo'              : '')
+      )
     }
   }
 
   // Audit log
   await logAudit({
-    tenant_id:       contrato.tenant_id,
-    usuario_id:      null,
-    origem_execucao: 'api',
+    tenant_id:        contrato.tenant_id,
+    usuario_id:       null,
+    origem_execucao:  'api',
     acao,
-    modulo:          'contratos',
-    tabela_afetada:  'contratos',
-    registro_id:     contrato.id,
-    dados_anteriores:{ status: contrato.status },
-    dados_novos:     {
+    modulo:           'contratos',
+    tabela_afetada:   'contratos',
+    registro_id:      contrato.id,
+    dados_anteriores: { status: contrato.status },
+    dados_novos: {
       type_post,
-      d4sign_uuid:   d4signUuid,
-      novo_status:   novoStatus,
-      d4sign_status: novoD4signStatus,
+      d4sign_uuid:    d4signUuid,
+      novo_status:    novoStatus,
+      d4sign_status:  novoD4signStatus,
+      data_assinatura: dataSig,
+      d4sign_pdf_url: pdfUrl,
     },
   })
 

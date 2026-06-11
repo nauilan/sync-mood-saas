@@ -577,7 +577,8 @@ export default function NovaObraPage() {
         ano_criacao: anoSriacao || null,
         duracao_segundos: duracao ? parseInt(duracao) : null,
         letra: letra || null,
-        status: 'validada',
+        // Regra: com contrato de origem → pré-cadastro; sem contrato → catálogo ativo direto
+        status_catalogo: contratoOrigemId ? 'pre_cadastro' : 'catalogo_ativo',
         links,
         fonogramas,
         // vínculo com contrato de origem — obrigatório para rastreabilidade

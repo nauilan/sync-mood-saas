@@ -128,6 +128,7 @@ export async function POST(req: NextRequest) {
     'titulo_alternativo', 'subtitulo', 'idioma', 'genero_musical',
     'ano_criacao', 'duracao_segundos', 'letra', 'status', 'iswc', 'codigo_obra',
     'observacoes', 'contrato_origem_id', 'interprete_referencia', 'editora_id',
+    'status_catalogo', 'origem_editora_id',
   ]
   const obraPayload: Record<string, unknown> = { titulo, tenant_id: usuario.tenant_id }
   for (const k of allowedFields) {
@@ -136,6 +137,11 @@ export async function POST(req: NextRequest) {
   // Compatibilidade: form pode enviar 'genero' mas o banco usa 'genero_musical'
   if (rest.genero !== undefined && rest.genero !== null && rest.genero !== '' && !obraPayload.genero_musical) {
     obraPayload.genero_musical = rest.genero
+  }
+  // Regra: obra criada com contrato de origem → pré-cadastro até revisão do Admin
+  //        obra criada diretamente pelo Admin sem contrato → catálogo ativo
+  if (!obraPayload.status_catalogo) {
+    obraPayload.status_catalogo = contratoOrigemId ? 'pre_cadastro' : 'catalogo_ativo'
   }
   // Auto-gerar codigo_obra se não fornecido (NOT NULL constraint no banco)
   if (!obraPayload.codigo_obra) {

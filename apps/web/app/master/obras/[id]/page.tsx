@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import {
   Edit, AlignLeft, Mic2, FileText, Link2, Activity, AlertTriangle,
   CheckCircle2, ChevronRight, ExternalLink, Music, Users2, Globe2, DollarSign, Users,
+  BookOpen, Loader2,
 } from 'lucide-react'
 import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, PAPEL_TITULAR_LABELS, PAPEL_TITULAR_COLORS, normalizarLinksObra, type StatusObra } from '@/lib/types-obras'
 import { formatarPercentual } from '@/lib/percentual'
@@ -34,6 +35,27 @@ function parseDescricao(desc?: string) {
     if (i > -1) fields.push({ label: part.slice(0, i).trim(), value: part.slice(i + 1).trim() })
   }
   return { header, fields }
+}
+
+// Badge de status de catálogo da obra
+const STATUS_CATALOGO_CONFIG: Record<string, { label: string; cls: string }> = {
+  pre_cadastro:            { label: 'Pré-cadastro',       cls: 'bg-amber-500/15 text-amber-300 border border-amber-500/30' },
+  aguardando_contrato:     { label: 'Ag. Contrato',       cls: 'bg-white/5 text-white/40 border border-white/10' },
+  aguardando_validacao_admin: { label: 'Ag. Aprovação',   cls: 'bg-orange-500/15 text-orange-300 border border-orange-500/30' },
+  catalogo_ativo:          { label: 'Catálogo Ativo',     cls: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' },
+  pendente_ajuste:         { label: 'Pendente Ajuste',    cls: 'bg-orange-500/15 text-orange-300 border border-orange-500/30' },
+  rejeitada:               { label: 'Rejeitada',          cls: 'bg-red-500/15 text-red-300 border border-red-500/30' },
+  inativa:                 { label: 'Inativa',            cls: 'bg-white/5 text-white/30 border border-white/10' },
+}
+
+function StatusCatalogoBadge({ status }: { status?: string }) {
+  if (!status) return null
+  const cfg = STATUS_CATALOGO_CONFIG[status] ?? { label: status, cls: 'bg-white/5 text-white/40 border border-white/10' }
+  return (
+    <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${cfg.cls}`}>
+      {cfg.label}
+    </span>
+  )
 }
 
 // Siglas de categoria → badge color
@@ -86,6 +108,28 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
   const [fonogramas, setFonogramas] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('resumo')
+  const [ativando, setAtivando] = useState(false)
+
+  // Ativar obra no catálogo (pre_cadastro → catalogo_ativo)
+  async function ativarNoCatalogo() {
+    if (ativando) return
+    const ok = window.confirm('Confirmar ativação da obra no catálogo? Esta ação indica que os dados foram revisados e a obra está pronta para exportação.')
+    if (!ok) return
+    setAtivando(true)
+    try {
+      const res = await authFetch(`/api/obras/${params.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status_catalogo: 'catalogo_ativo' }),
+      })
+      const d = await res.json()
+      if (!res.ok) throw new Error(d.error || 'Erro ao ativar obra')
+      setObra((prev: any) => ({ ...prev, status_catalogo: 'catalogo_ativo' }))
+    } catch (err) {
+      alert('Erro ao ativar obra: ' + String(err))
+    } finally {
+      setAtivando(false)
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -186,6 +230,8 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
           <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_OBRA_COLORS[obra.status as StatusObra] ?? 'bg-white/10 text-white/50'}`}>
             {STATUS_OBRA_LABELS[obra.status as StatusObra] ?? obra.status}
           </span>
+          {/* Badge de status do catálogo */}
+          <StatusCatalogoBadge status={obra.status_catalogo} />
           {obra.genero && <span className="text-xs px-2 py-1 rounded-full bg-white/5 text-white/50">{obra.genero}</span>}
           <span className="text-xs text-white/30">|</span>
           <span className="text-xs text-white/40">{obra.idioma}</span>
@@ -222,6 +268,27 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
           <ControleBadge pct={0} label="Autorizacoes (0)" color="bg-emerald-500/10 border-emerald-500/20 text-emerald-300" />
         </div>
       </div>
+
+      {/* Bloco de ação: pré-cadastro aguardando ativação */}
+      {obra.status_catalogo === 'pre_cadastro' && (
+        <div className="bg-amber-500/[0.07] border border-amber-500/20 rounded-xl px-5 py-4 flex items-start gap-4">
+          <BookOpen className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-300">Esta obra está em pré-cadastro</p>
+            <p className="text-xs text-amber-300/60 mt-0.5">
+              Revise os dados abaixo — participantes, fonogramas, ISWC — e ative quando estiver pronta para o catálogo oficial.
+            </p>
+          </div>
+          <button
+            onClick={ativarNoCatalogo}
+            disabled={ativando}
+            className="flex items-center gap-1.5 h-8 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs text-white font-semibold transition-colors shrink-0"
+          >
+            {ativando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+            {ativando ? 'Ativando...' : 'Ativar no Catálogo'}
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex items-center gap-0.5 border-b border-white/[0.06] overflow-x-auto">
@@ -396,26 +463,32 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
             <div className="py-8 text-center text-xs text-white/30">Nenhum fonograma cadastrado.</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs min-w-[600px]">
+              <table className="w-full text-xs min-w-[700px]">
                 <thead>
                   <tr className="border-b border-white/[0.04]">
-                    <th className="text-left px-5 py-2 text-white/30 font-semibold">Titulo</th>
-                    <th className="text-left px-4 py-2 text-white/30 font-semibold">Interprete</th>
-                    <th className="text-center px-4 py-2 text-white/30 font-semibold">ISRC</th>
-                    <th className="text-center px-4 py-2 text-white/30 font-semibold">Plataformas</th>
-                    <th className="text-center px-4 py-2 text-white/30 font-semibold">Lancamento</th>
+                    <th className="text-left px-5 py-2.5 text-white/30 font-semibold">Título Fonograma</th>
+                    <th className="text-left px-4 py-2.5 text-white/30 font-semibold">Intérprete</th>
+                    <th className="text-center px-4 py-2.5 text-white/30 font-semibold">ISRC</th>
+                    <th className="text-center px-4 py-2.5 text-white/30 font-semibold">Versão</th>
+                    <th className="text-center px-4 py-2.5 text-white/30 font-semibold">Ano</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.03]">
                   {fonogramas.map((f: any) => (
                     <tr key={f.id} className="hover:bg-white/[0.02]">
-                      <td className="px-5 py-3 font-medium text-white/70">{f.titulo_fonograma}</td>
-                      <td className="px-4 py-3 text-white/50">{f.interprete}</td>
-                      <td className="px-4 py-3 text-center font-mono text-white/40">{f.isrc ?? <span className="text-amber-400/60 italic">Pendente</span>}</td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="text-white/40">{f.plataformas?.length ?? 0} plataformas</span>
+                      <td className="px-5 py-3 font-medium text-white/70">{f.titulo_fonograma || '—'}</td>
+                      <td className="px-4 py-3 text-white/55">
+                        {f.interprete
+                          ? <span className="bg-sky-500/10 text-sky-300 px-2 py-0.5 rounded-full text-[11px] font-medium">{f.interprete}</span>
+                          : <span className="text-white/25 italic">Não informado</span>}
                       </td>
-                      <td className="px-4 py-3 text-center text-white/40">{f.data_lancamento ?? '—'}</td>
+                      <td className="px-4 py-3 text-center">
+                        {f.isrc
+                          ? <span className="font-mono text-violet-300/80 text-[11px] bg-violet-500/10 px-2 py-0.5 rounded">{f.isrc}</span>
+                          : <span className="text-amber-400/60 italic">Pendente</span>}
+                      </td>
+                      <td className="px-4 py-3 text-center text-white/40">{f.versao ?? '—'}</td>
+                      <td className="px-4 py-3 text-center text-white/40">{f.ano_gravacao ?? f.data_lancamento?.substring(0, 4) ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>

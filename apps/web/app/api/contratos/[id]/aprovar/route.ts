@@ -4,8 +4,13 @@
  * Workflow de aprovação em 2 níveis:
  * - action = 'validar_administrada'   → Administrada valida contrato assinado
  * - action = 'solicitar_admin'        → Administrada solicita revisão do administrador
- * - action = 'aprovar_admin'          → Administrador aprova → obra entra no catálogo
+ * - action = 'aprovar_admin'          → Administrador aprova → libera pré-cadastro da obra
  * - action = 'rejeitar_admin'         → Administrador rejeita com motivo
+ *
+ * REGRA CENTRAL: aprovado_admin NÃO cria nem ativa obra automaticamente.
+ * Contrato aprovado apenas libera o botão "Iniciar Cadastro da Obra".
+ * A obra nasce como 'pre_cadastro' e só vira 'catalogo_ativo' após revisão
+ * e ativação manual pelo Admin.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient }              from '@supabase/supabase-js'
@@ -132,35 +137,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: errUpdate.message }, { status: 500 })
   }
 
-  // Se aprovado_admin → ativar obras do contrato no catálogo
+  // Se aprovado_admin → marcar cedente como 'controlado' em obras já existentes
+  // REGRA: aprovado_admin NÃO cria nem ativa obras automaticamente.
+  // A obra nasce como 'pre_cadastro' apenas quando o usuário clicar em
+  // "Iniciar Cadastro da Obra" no espelho do contrato.
   if (action === 'aprovar_admin') {
-    const obrasJson = (contrato as any).obras_json as Array<{ id?: string; titulo?: string; participantes?: Array<{ titular_id?: string; papel?: string }> }> | null
+    const obrasJson = (contrato as any).obras_json as Array<{ id?: string; participantes?: Array<{ titular_id?: string; papel?: string }> }> | null
 
     if (Array.isArray(obrasJson)) {
       for (const obra of obrasJson) {
         if (!obra.id) continue
-
-        // Ativar obra no catálogo
-        await sb.from('obras')
-          .update({
-            status_catalogo:     'catalogo_ativo',
-            aprovado_catalogo_em: new Date().toISOString(),
-            aprovado_catalogo_por: usuario.id,
-          })
-          .eq('id', obra.id)
-          .eq('tenant_id', usuario.tenant_id)
-
-        // Marcar cedente (primeiro autor) como controlado
-        const cedente = obra.participantes?.find(p => ['A', 'CA', 'autor', 'compositor'].includes(p.papel ?? ''))
+        // Apenas atualiza status_editorial do cedente se a obra já foi cadastrada
+        const cedente = obra.participantes?.find(p =>
+          ['A', 'CA', 'autor', 'compositor', 'compositor_letrista', 'letrista'].includes(p.papel ?? '')
+        )
         if (cedente?.titular_id) {
           await sb.from('obras_participantes')
             .update({
-              status_editorial:      'controlado',
-              contrato_controle_id:  id,
-              data_controle:         new Date().toISOString(),
+              status_editorial:     'controlado',
+              contrato_controle_id: id,
+              data_controle:        new Date().toISOString(),
             })
             .eq('obra_id', obra.id)
             .eq('titular_id', cedente.titular_id)
+            .eq('tenant_id', usuario.tenant_id)
         }
       }
     }
