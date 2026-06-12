@@ -70,10 +70,11 @@ export async function authFetch(url: string, opts?: RequestInit): Promise<Respon
   const supabase = createClient()
   const { data } = await supabase.auth.getSession()
   const token = data?.session?.access_token ?? ''
+  const isFormData = opts?.body instanceof FormData
   return fetch(url, {
     ...opts,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(opts?.headers ?? {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
