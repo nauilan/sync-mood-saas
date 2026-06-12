@@ -67,9 +67,18 @@ export function getAccessToken(): string {
  * Substitui o padrão: const token = getAccessToken(); fetch(..., { headers: { Authorization: `Bearer ${token}` } })
  */
 export async function authFetch(url: string, opts?: RequestInit): Promise<Response> {
-  const supabase = createClient()
-  const { data } = await supabase.auth.getSession()
-  const token = data?.session?.access_token ?? ''
+  // 1. Tenta ler diretamente dos cookies (funciona mesmo antes do browser client inicializar)
+  let token = getAccessToken()
+
+  // 2. Fallback: getSession() do browser client (necessário em alguns fluxos OAuth)
+  if (!token) {
+    try {
+      const supabase = createClient()
+      const { data } = await supabase.auth.getSession()
+      token = data?.session?.access_token ?? ''
+    } catch { /* noop */ }
+  }
+
   const isFormData = opts?.body instanceof FormData
   return fetch(url, {
     ...opts,
