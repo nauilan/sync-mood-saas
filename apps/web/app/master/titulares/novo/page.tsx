@@ -726,9 +726,9 @@ export default function NovoTitularWizardPage() {
             <p className="text-sm text-white/50">Adicione os contatos do titular. Marque o principal de cada tipo.</p>
             <div className="space-y-3">
               {form.contatos.map((c, idx) => (
-                <div key={idx} className="flex items-center gap-2 bg-white/[0.02] rounded-xl px-3 py-2.5 border border-white/[0.06]">
+                <div key={idx} className="flex items-center gap-2">
                   <select
-                    className="bg-transparent text-xs text-white/60 outline-none border-r border-white/[0.08] pr-2 mr-1"
+                    className={inputCls + ' w-36 shrink-0'}
                     value={c.tipo}
                     onChange={e => setForm(prev => ({ ...prev, contatos: prev.contatos.map((x, i) => i === idx ? { ...x, tipo: e.target.value as typeof c.tipo } : x) }))}
                   >
@@ -745,8 +745,9 @@ export default function NovoTitularWizardPage() {
                     </div>
                   ) : (
                     <input
-                      className="flex-1 bg-transparent text-sm text-white outline-none placeholder-white/25"
-                      placeholder={c.tipo === 'email' ? 'email@dominio.com' : c.valor}
+                      className={inputCls + ' flex-1'}
+                      type="email"
+                      placeholder="email@dominio.com"
                       value={c.valor}
                       onChange={e => setForm(prev => ({ ...prev, contatos: prev.contatos.map((x, i) => i === idx ? { ...x, valor: e.target.value } : x) }))}
                     />
