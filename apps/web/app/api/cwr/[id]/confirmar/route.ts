@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+const sanitize = (v: string | undefined) =>
+  (v ?? '').replace(/[\uFEFF\u200B\u200C\u200D]/g, '').trim()
+
 function sb() {
   return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY),
     { auth: { persistSession: false } }
   )
 }
 
 async function getUser(req: NextRequest) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '').trim()
+  const raw = req.headers.get('authorization')?.replace('Bearer ', '') ?? ''
+  const token = raw.replace(/[\uFEFF\u200B\u200C\u200D]/g, '').trim()
   if (!token) return null
   const client = sb()
   const { data: { user } } = await client.auth.getUser(token)
