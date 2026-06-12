@@ -1,0 +1,13 @@
+HTTP/1.1 200 OK
+Cache-Control: no-cache, no-store, must-revalidate
+Content-Type: application/json
+Date: Fri, 12 Jun 2026 04:03:21 GMT
+Expires: 0
+Pragma: no-cache
+Server: Vercel
+Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+X-Matched-Path: /api/d4sign/webhook
+X-Vercel-Cache: MISS
+X-Vercel-Id: gru1::iad1::5nxl5-1781237000222-a0a0b9ac42cd
+Transfer-Encoding: chunked
+

@@ -50,7 +50,7 @@ export const MASTER_NAV: NavSection[] = [
     { label: 'Dashboard',                 href: '/master/backoffice',                      iconName: 'Database'      },
     { label: 'Catalogo BackOffice',       href: '/master/backoffice/catalogo',             iconName: 'BookOpen'      },
     { label: 'Importacao de Arquivos',    href: '/master/backoffice/importacao',           iconName: 'FileInput'     },
-    { label: 'Importacao CWR',            href: '/master/backoffice/importacao-cwr',       iconName: 'FileCode2'     },
+    { label: 'Importacao CWR',            href: '/master/cwr',                             iconName: 'FileCode2'     },
     { label: 'Exportacoes CWR',           href: '/master/backoffice/exportacoes',          iconName: 'Upload'        },
     { label: 'Analise de Lancamentos',    href: '/master/backoffice/matching',             iconName: 'Shuffle'       },
     { label: 'ONI — Obras Nao Id.',       href: '/master/backoffice/match-lista-oni',      iconName: 'Target'        },
