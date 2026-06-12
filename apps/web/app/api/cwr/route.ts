@@ -13,19 +13,22 @@ function sb() {
 
 async function getUser(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '').trim()
-  if (!token) return null
+  if (!token) return { error: 'sem_token' } as const
   const client = sb()
-  const { data: { user } } = await client.auth.getUser(token)
-  if (!user) return null
-  const { data } = await client.from('usuarios').select('id,tenant_id,role').eq('auth_user_id', user.id).single()
-  return data ? { userId: data.id as string, tenantId: data.tenant_id as string, role: data.role as string } : null
+  const { data: { user }, error: authErr } = await client.auth.getUser(token)
+  if (!user) return { error: 'token_invalido', detail: authErr?.message } as const
+  const { data, error: dbErr } = await client.from('usuarios').select('id,tenant_id,role').eq('auth_user_id', user.id).single()
+  if (!data) return { error: 'usuario_nao_encontrado', detail: dbErr?.message } as const
+  return { userId: data.id as string, tenantId: data.tenant_id as string, role: data.role as string }
 }
 
 // ── GET /api/cwr — lista importações ─────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
   const usuario = await getUser(req)
-  if (!usuario) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+  if (!usuario || 'error' in usuario) {
+    return NextResponse.json({ error: 'Não autenticado', debug: usuario }, { status: 401 })
+  }
 
   const client = sb()
   const { data, error } = await client

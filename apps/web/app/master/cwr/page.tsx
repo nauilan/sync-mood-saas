@@ -45,7 +45,7 @@ export default function CwrPage() {
     try {
       const res = await authFetch('/api/cwr')
       const d = await res.json().catch(() => ({}))
-      if (!res.ok) { setErro(`Erro ${res.status}: ${d.error ?? 'Falha na API'}`); return }
+      if (!res.ok) { setErro(`Erro ${res.status}: ${d.error ?? 'Falha na API'} | debug: ${JSON.stringify(d.debug ?? {})}`); return }
       setItems(d.importacoes ?? [])
     } catch (e: unknown) { setErro(`Falha na requisição: ${e instanceof Error ? e.message : String(e)}`) }
     finally { setLoading(false) }
