@@ -198,20 +198,25 @@ export async function getDocumentSigners(docUuid: string): Promise<unknown[]> {
  */
 export async function sendDocument(
   docUuid: string,
-  message = 'Por favor, assine o contrato em anexo.'
+  message = 'Por favor, assine o contrato em anexo.',
+  webhookUrl?: string
 ): Promise<void> {
   const { tokenAPI, cryptKey } = getCredentials()
 
   // Endpoint correto: /sendtosigner (não /send)
   const url = `${BASE_URL}/documents/${docUuid}/sendtosigner?tokenAPI=${encodeURIComponent(tokenAPI)}&cryptKey=${encodeURIComponent(cryptKey)}`
+
+  const body: Record<string, string> = {
+    message,
+    workflow:   '0',
+    skip_email: '0',
+  }
+  if (webhookUrl) body.webhook = webhookUrl
+
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message,
-      workflow:   '0',
-      skip_email: '0',
-    }),
+    body: JSON.stringify(body),
   })
 
   // D4Sign pode retornar body vazio no 200

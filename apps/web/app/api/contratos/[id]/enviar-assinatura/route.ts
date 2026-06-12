@@ -202,7 +202,8 @@ export async function POST(
   // ── 7. Enviar para assinatura ──────────────────────────────────────────────
   try {
     const mensagem = `Prezado(a), solicitamos sua assinatura no contrato ${contrato.numero}. Acesse o link abaixo para assinar digitalmente.`
-    await sendDocument(d4signUuid, mensagem)
+    const webhookUrl = process.env.D4SIGN_WEBHOOK_URL ?? ''
+    await sendDocument(d4signUuid, mensagem, webhookUrl || undefined)
   } catch (err) {
     console.error('[enviar-assinatura] D4Sign send error:', err)
     return NextResponse.json(
