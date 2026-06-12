@@ -3,10 +3,13 @@ import { createClient } from '@supabase/supabase-js'
 import { parseCwr } from '@/lib/cwr-parser'
 import { matchObra, matchAutor, matchEditora } from '@/lib/cwr-matching'
 
+const sanitize = (v: string | undefined) =>
+  (v ?? '').replace(/[\uFEFF\u200B\u200C\u200D]/g, '').trim()
+
 function sb() {
   return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY),
     { auth: { persistSession: false } }
   )
 }
