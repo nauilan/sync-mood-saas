@@ -44,10 +44,10 @@ export default function CwrPage() {
     setErro('')
     try {
       const res = await authFetch('/api/cwr')
-      if (!res.ok) { setErro('Erro ao carregar importações.'); return }
-      const d = await res.json()
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setErro(`Erro ${res.status}: ${d.error ?? 'Falha na API'}`); return }
       setItems(d.importacoes ?? [])
-    } catch { setErro('Falha na requisição.') }
+    } catch (e: unknown) { setErro(`Falha na requisição: ${e instanceof Error ? e.message : String(e)}`) }
     finally { setLoading(false) }
   }
 
