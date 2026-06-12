@@ -81,7 +81,7 @@ export default function CwrPage() {
             <input
               ref={fileRef}
               type="file"
-              accept=".cwr,.txt"
+              accept=".cwr,.txt,.V21,.v21,.V22,.v22,text/plain,*/*"
               className="hidden"
               onChange={handleUpload}
             />
