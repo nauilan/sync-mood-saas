@@ -9,8 +9,26 @@ export function createClient() {
 }
 
 /**
+ * Decodifica o valor de cookie do @supabase/ssr v0.10+.
+ * Formato: "base64-<base64url>" (novo) ou JSON puro (antigo).
+ */
+function decodeCookieValue(raw: string): string {
+  const decoded = decodeURIComponent(raw)
+  const BASE64_PREFIX = 'base64-'
+  if (decoded.startsWith(BASE64_PREFIX)) {
+    try {
+      const b64 = decoded.slice(BASE64_PREFIX.length)
+        .replace(/-/g, '+').replace(/_/g, '/') // base64url → base64
+      const pad = b64.length % 4 ? '='.repeat(4 - b64.length % 4) : ''
+      return atob(b64 + pad)
+    } catch { /* continua */ }
+  }
+  return decoded
+}
+
+/**
  * Extrai o access_token da sessão Supabase lendo diretamente os cookies do browser.
- * Suporta cookie único (sb-xxx-auth-token) e cookies em chunks (sb-xxx-auth-token.0, .1, ...).
+ * Compatível com @supabase/ssr v0.10+ (base64url) e versões anteriores (JSON puro).
  */
 export function getAccessToken(): string {
   if (typeof document === 'undefined') return ''
@@ -28,16 +46,12 @@ export function getAccessToken(): string {
   // Encontrar o projectRef a partir dos cookies existentes
   const baseKeys = Object.keys(cookieMap).filter(k => /^sb-[a-z0-9]+-auth-token(\.0)?$/.test(k))
   for (const baseKey of baseKeys) {
-    // Extrair o nome base sem índice
     const base = baseKey.replace(/\.\d+$/, '')
 
     // Tentar ler como cookie único primeiro
     if (cookieMap[base]) {
       try {
-        const decoded = decodeURIComponent(cookieMap[base])
-        const parsed = JSON.parse(decoded)
-        // @supabase/ssr v0.10+ armazena como { currentSession: { access_token } }
-        // versões anteriores armazenavam como { access_token }
+        const parsed = JSON.parse(decodeCookieValue(cookieMap[base]))
         const token = parsed?.access_token ?? parsed?.currentSession?.access_token
         if (token) return token
       } catch { /* continua */ }
@@ -48,11 +62,11 @@ export function getAccessToken(): string {
     for (let i = 0; i < 10; i++) {
       const chunk = cookieMap[`${base}.${i}`]
       if (!chunk) break
-      assembled += decodeURIComponent(chunk)
+      assembled += chunk  // chunks já são partes do base64 — concatenar raw
     }
     if (assembled) {
       try {
-        const parsed = JSON.parse(assembled)
+        const parsed = JSON.parse(decodeCookieValue(assembled))
         const token = parsed?.access_token ?? parsed?.currentSession?.access_token
         if (token) return token
       } catch { /* continua */ }
