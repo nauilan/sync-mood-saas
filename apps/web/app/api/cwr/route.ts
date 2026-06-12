@@ -12,7 +12,8 @@ function sb() {
 }
 
 async function getUser(req: NextRequest) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '').trim()
+  const raw = req.headers.get('authorization')?.replace('Bearer ', '') ?? ''
+  const token = raw.replace(/[\uFEFF\u200B\u200C\u200D]/g, '').trim()
   if (!token) return { error: 'sem_token' } as const
   const client = sb()
   const { data: { user }, error: authErr } = await client.auth.getUser(token)
