@@ -47,6 +47,11 @@ export function LoginForm() {
         return
       }
 
+      // Guardar token no localStorage para authFetch poder ler sem depender do cookie encoding
+      if (json.access_token) {
+        try { localStorage.setItem('sm_access_token', json.access_token) } catch { /* noop */ }
+      }
+
       const redirectTo = params.get('redirectTo') ?? json.redirectTo ?? '/master/dashboard'
       window.location.href = redirectTo
 

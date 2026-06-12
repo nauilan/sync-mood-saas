@@ -113,13 +113,16 @@ export function Topbar({
                   <User className="w-3.5 h-3.5" />
                   Meu Perfil
                 </a>
-                <a
-                  href="/auth/signout"
-                  className="flex items-center gap-2.5 px-4 py-2.5 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/[0.08] transition-colors"
+                <button
+                  onClick={() => {
+                    try { localStorage.removeItem('sm_access_token') } catch { /* noop */ }
+                    window.location.href = '/auth/signout'
+                  }}
+                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-500/[0.08] transition-colors"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                   Sair
-                </a>
+                </button>
               </div>
             </div>
           )}

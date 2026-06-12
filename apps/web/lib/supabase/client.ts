@@ -81,17 +81,24 @@ export function getAccessToken(): string {
  * Substitui o padrão: const token = getAccessToken(); fetch(..., { headers: { Authorization: `Bearer ${token}` } })
  */
 export async function authFetch(url: string, opts?: RequestInit): Promise<Response> {
-  // 1. Tenta ler diretamente dos cookies (funciona mesmo antes do browser client inicializar)
-  let token = getAccessToken()
+  // 1. localStorage — salvo no login, mais confiável que cookie encoding
+  let token = ''
+  try { token = localStorage.getItem('sm_access_token') ?? '' } catch { /* noop */ }
 
-  // 2. Fallback: getSession() do browser client (necessário em alguns fluxos OAuth)
+  // 2. Fallback: getSession() do browser client
   if (!token) {
     try {
       const supabase = createClient()
       const { data } = await supabase.auth.getSession()
       token = data?.session?.access_token ?? ''
+      if (token) {
+        try { localStorage.setItem('sm_access_token', token) } catch { /* noop */ }
+      }
     } catch { /* noop */ }
   }
+
+  // 3. Fallback: leitura direta dos cookies (compatibilidade)
+  if (!token) token = getAccessToken()
 
   const isFormData = opts?.body instanceof FormData
   return fetch(url, {
