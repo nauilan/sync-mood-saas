@@ -63,24 +63,42 @@ function swr(ipNameNo: string, lastName: string, firstName: string, designation:
   return `SWR${seqs}${ip9}${ln45}${fn30}${unk}${des2}${tax9}${ipi11}${soc3}${pr5}${soc3}${mr5}${soc3}${sr5}${flags4}${ipiPad}`
 }
 
-function spu(seq: string, ipNameNo: string, nome: string, tipo: string, prShare = '000000', mrShare = '000000', srShare = '000000', ipiBase = ''): string {
-  // SPU offsets:
-  //   0-2:  SPU
-  //   3-18: seqs
+function spu(seq: string, ipNameNo: string, nome: string, tipo: string, prShare = '00000', mrShare = '00000', srShare = '00000', ipiBase = ''): string {
+  // SPU CWR 2.2 offsets reais (confirmados via diagnóstico no arquivo V21):
+  //   0-2:   SPU
+  //   3-18:  seqs (16 zeros)
   //   19-20: Pub Seq # (2 chars)
   //   21-29: IP Name # (9 chars)
   //   30-74: Publisher Name (45 chars)
-  //   75:   Unknown (1)
-  //   76-77: Pub Type (2 chars)
-  //   87-92: PR Share (6 chars) — best-effort position
-  const seq2   = seq.padEnd(2, ' ').substring(0, 2)
-  const ip9    = ipNameNo.padEnd(9, ' ').substring(0, 9)
-  const nome45 = nome.padEnd(45, ' ').substring(0, 45)
-  const unk    = ' '
-  const tipo2  = tipo.padEnd(2, ' ').substring(0, 2)
-  const seqs   = '0'.repeat(16)
-  const ipiSuffix = ipiBase ? `          ${ipiBase}` : ''
-  return `SPU${seqs}${seq2}${ip9}${nome45}${unk}${tipo2}     ${prShare}${mrShare}${srShare}${ipiSuffix}`
+  //   75:    Unknown Indicator (1 char)
+  //   76-77: Publisher Type (2 chars)
+  //   78-86: Tax ID (9 chars, blanks)
+  //   87-99: Publisher IPI Name # (13 chars, blanks)
+  //   100-111: Filler (12 chars, blanks)
+  //   112-114: PR Society (3 chars, blanks)
+  //   115-119: PR Share (5 chars)
+  //   120-122: MR Society (3 chars, blanks)
+  //   123-127: MR Share (5 chars)
+  //   128-130: SR Society (3 chars, blanks)
+  //   131-135: SR Share (5 chars)
+  //   136-138: Flags (3 chars, blanks)
+  //   139-151: IPI Base # (13 chars)
+  const seq2    = seq.padEnd(2, ' ').substring(0, 2)
+  const ip9     = ipNameNo.padEnd(9, ' ').substring(0, 9)
+  const nome45  = nome.padEnd(45, ' ').substring(0, 45)
+  const unk     = ' '
+  const tipo2   = tipo.padEnd(2, ' ').substring(0, 2)
+  const tax9    = ' '.repeat(9)
+  const ipiN13  = ' '.repeat(13)
+  const fill12  = ' '.repeat(12)
+  const soc3    = ' '.repeat(3)
+  const pr5     = prShare.padEnd(5, '0').substring(0, 5)
+  const mr5     = mrShare.padEnd(5, '0').substring(0, 5)
+  const sr5     = srShare.padEnd(5, '0').substring(0, 5)
+  const flags3  = ' '.repeat(3)
+  const ipiPad  = ipiBase.padEnd(13, ' ').substring(0, 13)
+  const seqs    = '0'.repeat(16)
+  return `SPU${seqs}${seq2}${ip9}${nome45}${unk}${tipo2}${tax9}${ipiN13}${fill12}${soc3}${pr5}${soc3}${mr5}${soc3}${sr5}${flags3}${ipiPad}`
 }
 
 // ─── Linhas reais extraídas dos registros_raw de homologação ─────────────────
@@ -233,6 +251,14 @@ describe('parseCwr — SPU', () => {
     const conteudo = NWR_100PCT_COUNTRY + '\n' + SPU_EDI_MUSIC
     const r = parseCwr(conteudo)
     expect(r.obras[0].editoras[0].controlled).toBe(true)
+  })
+
+  it('SPU percentual PR está entre 0% e 100% (linha real EDI MUSIC)', () => {
+    const conteudo = NWR_100PCT_COUNTRY + '\n' + SPU_EDI_MUSIC
+    const r = parseCwr(conteudo)
+    const e = r.obras[0].editoras[0]
+    expect(e.pr_pct).toBeGreaterThanOrEqual(0)
+    expect(e.pr_pct).toBeLessThanOrEqual(100)
   })
 })
 

@@ -322,22 +322,25 @@ export function parseCwr(conteudo: string, _opts?: unknown): CwrArquivo {
       else if ((t === 'SPU' || t === 'OPU') && cur) {
         cur.registros_raw.push(ln)
 
-        // Publisher IP Name # (9): pos 21-30
+        // Publisher IP Name # (9): pos 21-29
         const ip_name_no = tr(col(ln, 21, 30))
-        // Publisher Name (45): pos 30-75
+        // Publisher Name (45): pos 30-74
         const nome       = tr(col(ln, 30, 75))
-        // Publisher Type (2): pos 76-78
+        // Unknown Indicator (1): pos 75 | Publisher Type (2): pos 76-77
         const tipo       = tr(col(ln, 76, 78))
+        // Tax ID (9): 78-86
+        // Publisher IPI Name # (13): 87-99  (senders enviam 13 chars neste arquivo)
+        // Filler (12): 100-111
+        // PR Society (3): 112-114  |  PR Share (5): 115-119
+        // MR Society (3): 120-122  |  MR Share (5): 123-127
+        // SR Society (3): 128-130  |  SR Share (5): 131-135
+        // Flags (3): 136-138  |  IPI Base (13): 139-151
+        const prPct = pct5(col(ln, 115, 120))
+        const mrPct = pct5(col(ln, 123, 128))
+        const srPct = pct5(col(ln, 131, 136))
 
-        // IPI Base # via regex a partir de pos 78 (evita pegar o IP Name # acima)
-        const ipiBase = extractIpi(ln, 78)
-
-        // Shares SPU: tentamos layout 9-char society + 6-char share
-        // PR Society (9): 78-87, PR Share (6): 87-93  (fallback)
-        // Muitos senders usam 6-char share para SPU
-        const prPct = pct6(col(ln,  87,  93))
-        const mrPct = pct6(col(ln,  96, 102))
-        const srPct = pct6(col(ln, 105, 111))
+        // IPI Base # via regex (busca após os flags)
+        const ipiBase = extractIpi(ln, 136) || extractIpi(ln, 78)
 
         if (nome) {
           cur.editoras.push({
