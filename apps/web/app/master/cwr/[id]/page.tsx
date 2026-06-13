@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import {
   Loader2, AlertTriangle, CheckCircle2, ArrowLeft,
   Music, Users, Building2, AlertOctagon, BarChart3,
-  FileCode2, ChevronDown, ChevronUp,
+  FileCode2, ChevronDown, ChevronUp, RefreshCw,
 } from 'lucide-react'
 import { authFetch } from '@/lib/supabase/client'
 
@@ -165,6 +165,9 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
   const [confirming, setConfirming] = useState(false)
   const [confirmaErro, setConfirmaErro] = useState('')
   const [confirmado, setConfirmado] = useState(false)
+  const [reprocessando, setReprocessando] = useState(false)
+  const [reprocessErro, setReprocessErro] = useState('')
+  const [reprocessStats, setReprocessStats] = useState<Record<string, number> | null>(null)
 
   useEffect(() => { load() }, [id])
 
@@ -177,6 +180,20 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
       setData(await res.json())
     } catch { setErro('Falha na requisição.') }
     finally { setLoading(false) }
+  }
+
+  async function reprocessar() {
+    setReprocessErro('')
+    setReprocessStats(null)
+    setReprocessando(true)
+    try {
+      const res = await authFetch(`/api/cwr/${id}/reprocessar`, { method: 'POST' })
+      const d = await res.json()
+      if (!res.ok) { setReprocessErro(d.error ?? 'Erro ao reprocessar.'); return }
+      setReprocessStats(d.stats)
+      load()
+    } catch { setReprocessErro('Falha na requisição.') }
+    finally { setReprocessando(false) }
   }
 
   async function confirmar() {
@@ -225,7 +242,9 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
     relatorio:  [],
   }
 
-  const podeConfirmar = imp.status === 'em_analise'
+  // Parser v2 = reprocessado com offsets corretos (campo relatorio.parser_versao)
+  const parserAtualizado = r.parser_versao >= 2
+  const podeConfirmar = imp.status === 'em_analise' && parserAtualizado
 
   const COUNTERS = [
     { key: 'obras_lidas',                    label: 'Obras lidas',                  cls: 'text-white/70'   },
@@ -257,6 +276,17 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
             <span className={`text-[11px] px-2.5 py-1 rounded-full font-semibold ${STATUS_IMP[imp.status] ?? 'bg-white/5 text-white/40'}`}>
               {imp.status}
             </span>
+            {imp.status !== 'confirmado' && (
+              <button
+                onClick={reprocessar}
+                disabled={reprocessando}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-violet-700 hover:bg-violet-600 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+                title="Re-parsear com o parser corrigido (offsets CWR 2.1)"
+              >
+                {reprocessando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                {reprocessando ? 'Reprocessando...' : 'Reprocessar'}
+              </button>
+            )}
             {podeConfirmar && !confirmado && (
               <button
                 onClick={confirmar}
@@ -275,6 +305,34 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
         <ArrowLeft className="w-3.5 h-3.5" /> Todas as importações
       </a>
 
+      {/* Banner: parser desatualizado */}
+      {!parserAtualizado && imp.status !== 'confirmado' && (
+        <div className="flex items-start gap-3 px-4 py-3 bg-amber-500/10 border border-amber-500/25 rounded-lg text-amber-300 text-sm">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold">Parser desatualizado</p>
+            <p className="text-xs text-amber-300/70 mt-0.5">
+              Esta importação foi processada com o parser antigo (offsets incorretos).
+              Clique em <strong>Reprocessar</strong> para corrigir títulos, autores, ISWCs, ISRCs e percentuais antes de confirmar.
+              O botão <strong>Confirmar Importação</strong> ficará disponível após o reprocessamento.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Métricas de reprocessamento */}
+      {reprocessStats && (
+        <div className="flex items-start gap-3 px-4 py-3 bg-violet-500/10 border border-violet-500/25 rounded-lg text-violet-300 text-sm">
+          <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold">Reprocessamento concluído</p>
+            <p className="text-xs text-violet-300/70 mt-0.5">
+              {reprocessStats.obras_lidas} obras · {reprocessStats.iswcs_recuperados} ISWCs · {reprocessStats.isrcs_recuperados} ISRCs · {reprocessStats.erros_parse} erros de parse
+            </p>
+          </div>
+        </div>
+      )}
+
       {confirmado && (
         <div className="flex items-center gap-2 px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-300 text-sm">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -282,6 +340,12 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
         </div>
       )}
 
+      {reprocessErro && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-300 text-sm">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          Erro no reprocessamento: {reprocessErro}
+        </div>
+      )}
       {confirmaErro && (
         <div className="flex items-center gap-2 px-4 py-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-300 text-sm">
           <AlertTriangle className="w-4 h-4 shrink-0" /> {confirmaErro}
