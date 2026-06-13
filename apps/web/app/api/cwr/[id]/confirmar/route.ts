@@ -32,6 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params
   const client = sb()
 
+  // ── 1. Verificar importação ──────────────────────────────────────────────────
   const { data: imp } = await client
     .from('cwr_importacoes')
     .select('id,status,tenant_id')
@@ -40,135 +41,165 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .single()
 
   if (!imp) return NextResponse.json({ error: 'Importação não encontrada' }, { status: 404 })
-  if (imp.status === 'confirmado') return NextResponse.json({ error: 'Importação já confirmada. Para re-confirmar, reset o status para pendente.' }, { status: 400 })
+  if (imp.status === 'confirmado') return NextResponse.json({ error: 'Importação já confirmada' }, { status: 400 })
 
-  const { data: obrasImp } = await client
+  // ── 2. Carregar staging ──────────────────────────────────────────────────────
+  const { data: obrasImp, error: errStaging } = await client
     .from('cwr_importacoes_obras')
     .select('*')
     .eq('importacao_id', id)
 
+  if (errStaging) {
+    return NextResponse.json({ error: 'Erro ao ler obras da importação', detail: errStaging.message }, { status: 500 })
+  }
+
   const rows = obrasImp ?? []
 
-  // Contadores do relatório
-  let obras_novas = 0, obras_vinculadas = 0, obras_ignoradas = 0
-  let obras_divergentes = 0, conflitos_editoriais = 0
-  let fonogramas_criados = 0, negocios_criados = 0
-  let participantes_controlados = 0, participantes_nao_controlados = 0, participantes_adm_ext = 0
+  // ── 3. Separar por tipo ──────────────────────────────────────────────────────
+  const novasRows  = rows.filter(r => r.match_tipo === 'nova')
+  const conflitos  = rows.filter(r => r.match_tipo === 'conflito')
+  const vinculadas = rows.filter(r => r.match_tipo === 'vinculada')
 
-  for (const row of rows) {
+  // ── 4. Construir payload de obras com codigo_obra único ──────────────────────
+  // Evitar duplicatas dentro do próprio lote
+  const codigosUsados = new Set<string>()
+  const obraPayloads = novasRows.map((row, idx) => {
     const snap = row.snapshot_cwr as Record<string, unknown>
-    const tipo = row.match_tipo as string
-
-    if (tipo === 'conflito') {
-      conflitos_editoriais++
-      // Registrar conflito
-      await client.from('cwr_conflitos').insert({
-        importacao_id: id,
-        obra_id:       row.obra_id,
-        tipo:          'divergencia_geral',
-        descricao:     'Obra em catalogo_ativo com dados divergentes no CWR',
-        dados_cwr:     snap,
-        dados_sistema: { obra_id: row.obra_id },
-      })
-      continue
+    const titulo  = ((snap.titulo as string) ?? 'Sem título').trim()
+    let codigo    = ((snap.submitter_work_no as string) ?? '').trim()
+    if (!codigo || codigosUsados.has(codigo)) {
+      codigo = `CWR-${id.slice(0, 8)}-${idx + 1}`
     }
+    codigosUsados.add(codigo)
+    return {
+      _stagingId: row.id as string,           // não vai para o banco — apenas para mapeamento
+      tenant_id:       usuario.tenantId,
+      titulo,
+      iswc:            (snap.iswc as string | null) ?? null,
+      status_catalogo: 'pre_cadastro' as const,
+      origem_cadastro: 'importacao_cwr' as const,
+      codigo_obra:     codigo,
+    }
+  })
 
-    if (tipo === 'nova') {
-      // Criar obra como pre_cadastro
-      const tituloCwr = (snap.titulo as string) ?? 'Sem título'
-      // codigo_obra é NOT NULL — usar submitter_work_no ou gerar fallback único
-      const swn = ((snap.submitter_work_no as string) ?? '').trim()
-      const codigoObra = swn || `CWR-${id.slice(0, 8)}-${obras_novas + 1}`
+  // ── 5. Insert em lote — ATÔMICO: se falhar, nenhuma obra é criada ────────────
+  const dbPayloads = obraPayloads.map(({ _stagingId: _s, ...rest }) => rest)
+  const { data: obrasInseridas, error: errInsert } = await client
+    .from('obras')
+    .insert(dbPayloads)
+    .select('id, codigo_obra')
 
-      const { data: novaObra, error: errObra } = await client
-        .from('obras')
-        .insert({
-          tenant_id:        usuario.tenantId,
-          titulo:           tituloCwr,
-          iswc:             (snap.iswc as string | null) ?? null,
-          status_catalogo:  'pre_cadastro',
-          origem_cadastro:  'importacao_cwr',
-          codigo_obra:      codigoObra,
-        })
-        .select('id')
-        .single()
+  if (errInsert) {
+    // Não marca como confirmado — retorna o erro para o frontend
+    console.error('[CWR confirmar] Falha no insert em lote:', errInsert)
+    return NextResponse.json({
+      error:  'Falha ao criar obras no banco de dados.',
+      detail: errInsert.message,
+      code:   errInsert.code,
+    }, { status: 500 })
+  }
 
-      if (errObra) {
-        // Log erro mas não interrompe o loop — registra na importação depois
-        console.error(`[CWR confirmar] Erro ao criar obra "${tituloCwr}":`, errObra.message)
-      }
+  if (!obrasInseridas || obrasInseridas.length !== novasRows.length) {
+    return NextResponse.json({
+      error:    'Insert incompleto: número de obras criadas diverge do esperado.',
+      esperado: novasRows.length,
+      criadas:  obrasInseridas?.length ?? 0,
+    }, { status: 500 })
+  }
 
-      if (novaObra) {
-        await client
-          .from('cwr_importacoes_obras')
-          .update({ obra_id: novaObra.id })
-          .eq('id', row.id)
+  // ── 6. Mapear IDs retornados → staging rows ──────────────────────────────────
+  const codigoToId: Record<string, string> = {}
+  for (const o of obrasInseridas) {
+    codigoToId[o.codigo_obra] = o.id
+  }
 
-        obras_novas++
-        negocios_criados++
+  // ── 7. Fonogramas + atualizar staging (erros aqui não revertem obras) ─────────
+  let fonogramas_criados = 0
+  for (const payload of obraPayloads) {
+    const obraId  = codigoToId[payload.codigo_obra]
+    const row     = novasRows[obraPayloads.indexOf(payload)]
+    const snap    = row.snapshot_cwr as Record<string, unknown>
 
-        // Fonogramas
-        const fono = (snap.fonogramas as unknown[]) ?? []
-        if (fono.length > 0) {
-          const fonoRows = fono.map((f: unknown) => {
-            const fg = f as Record<string, unknown>
-            return {
-              obra_id:    novaObra.id,
-              tenant_id:  usuario.tenantId,
-              isrc:       fg.isrc ?? null,
-              titulo:     fg.titulo ?? tituloCwr,
-              interprete: fg.interprete ?? null,
-              versao:     fg.versao ?? null,
-              ano:        fg.ano ?? null,
-            }
-          })
-          await client.from('fonogramas').insert(fonoRows)
-          fonogramas_criados += fono.length
+    // Atualizar staging com obra_id real
+    await client.from('cwr_importacoes_obras').update({ obra_id: obraId }).eq('id', row.id)
+
+    // Fonogramas
+    const fono = (snap.fonogramas as unknown[]) ?? []
+    if (fono.length > 0) {
+      const fonoRows = fono.map((f: unknown) => {
+        const fg = f as Record<string, unknown>
+        return {
+          obra_id:    obraId,
+          tenant_id:  usuario.tenantId,
+          isrc:       fg.isrc   ?? null,
+          titulo:     fg.titulo ?? payload.titulo,
+          interprete: fg.interprete ?? null,
+          versao:     fg.versao ?? null,
+          ano:        fg.ano    ?? null,
         }
-      }
-    } else if (tipo === 'vinculada') {
-      obras_vinculadas++
-    } else {
-      obras_divergentes++
+      })
+      await client.from('fonogramas').insert(fonoRows)
+      fonogramas_criados += fono.length
     }
+  }
 
-    // Contadores de controle editorial
+  // ── 8. Registrar conflitos ───────────────────────────────────────────────────
+  for (const row of conflitos) {
+    const snap = row.snapshot_cwr as Record<string, unknown>
+    await client.from('cwr_conflitos').insert({
+      importacao_id: id,
+      obra_id:       row.obra_id,
+      tipo:          'divergencia_geral',
+      descricao:     'Obra em catalogo_ativo com dados divergentes no CWR',
+      dados_cwr:     snap,
+      dados_sistema: { obra_id: row.obra_id },
+    })
+  }
+
+  // ── 9. Contadores editoriais ─────────────────────────────────────────────────
+  let participantes_controlados = 0, participantes_nao_controlados = 0, participantes_adm_ext = 0
+  for (const row of rows) {
     const status = row.status_editorial as string
     if (status === 'controlado') participantes_controlados++
     else if (status === 'administrado_externo') participantes_adm_ext++
     else participantes_nao_controlados++
   }
 
-  // Titulares novos / vinculados (simplificado por ora)
-  const titulares_novos = 0
-  const titulares_vinculados = 0
-  const editoras_novas = 0
-  const editoras_vinculadas = 0
-  const fonogramas_vinculados = 0
-
+  // ── 10. Relatório final ───────────────────────────────────────────────────────
   const relatorio = {
     obras_lidas:                  rows.length,
-    obras_novas,
-    obras_vinculadas,
-    obras_ignoradas,
-    obras_divergentes,
-    titulares_novos,
-    titulares_vinculados,
-    editoras_novas,
-    editoras_vinculadas,
-    negocios_editoriais_criados:  negocios_criados,
+    obras_novas:                  obrasInseridas.length,
+    obras_vinculadas:             vinculadas.length,
+    obras_ignoradas:              0,
+    obras_divergentes:            0,
+    titulares_novos:              0,
+    titulares_vinculados:         0,
+    editoras_novas:               0,
+    editoras_vinculadas:          0,
+    negocios_editoriais_criados:  obrasInseridas.length,
     fonogramas_criados,
-    fonogramas_vinculados,
+    fonogramas_vinculados:        0,
     participantes_controlados,
     participantes_nao_controlados,
     participantes_administrado_externo: participantes_adm_ext,
-    conflitos_editoriais,
+    conflitos_editoriais:         conflitos.length,
   }
 
-  await client
+  // ── 11. Marcar como confirmado — só aqui, depois de tudo ok ──────────────────
+  const { error: errConfirm } = await client
     .from('cwr_importacoes')
     .update({ status: 'confirmado', relatorio, updated_at: new Date().toISOString() })
     .eq('id', id)
+
+  if (errConfirm) {
+    // Obras já foram criadas mas o status não atualizou — log crítico
+    console.error('[CWR confirmar] CRÍTICO: obras inseridas mas status não atualizou:', errConfirm)
+    return NextResponse.json({
+      error:       'Obras criadas mas falha ao finalizar importação.',
+      detail:      errConfirm.message,
+      obras_novas: obrasInseridas.length,
+    }, { status: 500 })
+  }
 
   return NextResponse.json({ ok: true, relatorio })
 }
