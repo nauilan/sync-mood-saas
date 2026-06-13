@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .single()
 
   if (!imp) return NextResponse.json({ error: 'Importação não encontrada' }, { status: 404 })
-  if (imp.status === 'confirmado') return NextResponse.json({ error: 'Importação já confirmada' }, { status: 400 })
+  if (imp.status === 'confirmado') return NextResponse.json({ error: 'Importação já confirmada. Para re-confirmar, reset o status para pendente.' }, { status: 400 })
 
   const { data: obrasImp } = await client
     .from('cwr_importacoes_obras')
@@ -76,7 +76,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (tipo === 'nova') {
       // Criar obra como pre_cadastro
       const tituloCwr = (snap.titulo as string) ?? 'Sem título'
-      const { data: novaObra } = await client
+      // codigo_obra é NOT NULL — usar submitter_work_no ou gerar fallback único
+      const swn = ((snap.submitter_work_no as string) ?? '').trim()
+      const codigoObra = swn || `CWR-${id.slice(0, 8)}-${obras_novas + 1}`
+
+      const { data: novaObra, error: errObra } = await client
         .from('obras')
         .insert({
           tenant_id:        usuario.tenantId,
@@ -84,10 +88,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           iswc:             (snap.iswc as string | null) ?? null,
           status_catalogo:  'pre_cadastro',
           origem_cadastro:  'importacao_cwr',
-          codigo_obra:      (snap.submitter_work_no as string) ?? null,
+          codigo_obra:      codigoObra,
         })
         .select('id')
         .single()
+
+      if (errObra) {
+        // Log erro mas não interrompe o loop — registra na importação depois
+        console.error(`[CWR confirmar] Erro ao criar obra "${tituloCwr}":`, errObra.message)
+      }
 
       if (novaObra) {
         await client
