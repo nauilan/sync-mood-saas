@@ -29,6 +29,7 @@ export const MASTER_NAV: NavSection[] = [
     { label: 'Obras', href: '/master/obras', iconName: 'Music' },
     { label: 'Catalogo (Nova Obra)', href: '/master/obras/nova', iconName: 'ListMusic' },
     { label: 'Exportacoes', href: '/master/exportacoes', iconName: 'Download' },
+    { label: 'Importacao CWR', href: '/master/cwr', iconName: 'FileCode2' },
   ]},
   { title: 'M4 Autorizacoes', items: [
     { label: 'Autorizacoes', href: '/master/autorizacoes', iconName: 'Shield' },
@@ -39,26 +40,6 @@ export const MASTER_NAV: NavSection[] = [
     { label: 'Nova Autorizacao', href: '/master/autorizacoes/nova', iconName: 'FilePlus' },
   ]},
 
-
-  // -----------------------------------------------------------------------
-  // BACKOFFICE — INFORMACAO
-  // Responsavel por: Song Code, ISRC, CWR, matching, importacao, ONI,
-  //                  pendencias juridicas, rastreabilidade de processamento
-  // Regra: BackOffice = informacao | Financeiro = dinheiro
-  // -----------------------------------------------------------------------
-  { title: 'BackOffice — Informacao', items: [
-    { label: 'Dashboard',                 href: '/master/backoffice',                      iconName: 'Database'      },
-    { label: 'Catalogo BackOffice',       href: '/master/backoffice/catalogo',             iconName: 'BookOpen'      },
-    { label: 'Importacao de Arquivos',    href: '/master/backoffice/importacao',           iconName: 'FileInput'     },
-    { label: 'Importacao CWR',            href: '/master/cwr',                             iconName: 'FileCode2'     },
-    { label: 'Exportacoes CWR',           href: '/master/backoffice/exportacoes',          iconName: 'Upload'        },
-    { label: 'Analise de Lancamentos',    href: '/master/backoffice/matching',             iconName: 'Shuffle'       },
-    { label: 'ONI — Obras Nao Id.',       href: '/master/backoffice/match-lista-oni',      iconName: 'Target'        },
-    { label: 'Relatorios BackOffice',     href: '/master/backoffice/relatorios',           iconName: 'BarChart3'     },
-    { label: 'Logs de Processamento',     href: '/master/backoffice/logs',                 iconName: 'ScrollText'    },
-    { label: 'Pendencias Juridicas',      href: '/master/backoffice/pendencias-juridicas', iconName: 'AlertTriangle' },
-    { label: 'Configuracoes BackOffice',  href: '/master/backoffice/configuracoes',        iconName: 'Settings'      },
-  ]},
 
   // -----------------------------------------------------------------------
   // FINANCEIRO — DINHEIRO
