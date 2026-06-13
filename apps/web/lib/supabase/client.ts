@@ -76,42 +76,73 @@ export function getAccessToken(): string {
   return ''
 }
 
-/**
- * Faz fetch autenticado usando o access_token da sessão Supabase.
- * Substitui o padrão: const token = getAccessToken(); fetch(..., { headers: { Authorization: `Bearer ${token}` } })
- */
 /** Remove BOM (\uFEFF) e outros caracteres invisíveis do token */
 function cleanToken(t: string): string {
   return t.replace(/[\uFEFF\u200B\u200C\u200D\u00AD]/g, '').trim()
 }
 
-export async function authFetch(url: string, opts?: RequestInit): Promise<Response> {
-  // 1. localStorage — salvo no login, mais confiável que cookie encoding
-  let token = ''
-  try { token = cleanToken(localStorage.getItem('sm_access_token') ?? '') } catch { /* noop */ }
+/**
+ * Obtém o access_token mais fresco possível.
+ * Prioridade:
+ *   1. supabase.auth.getSession() — auto-renova via refresh_token (fonte da verdade)
+ *   2. localStorage sm_access_token — cache do último login
+ *   3. Cookie parsing — compatibilidade legada
+ */
+async function getFreshToken(): Promise<string> {
+  // 1. getSession() — Supabase renova automaticamente se o token estiver expirado
+  try {
+    const supabase = createClient()
+    const { data } = await supabase.auth.getSession()
+    const token = cleanToken(data?.session?.access_token ?? '')
+    if (token) {
+      try { localStorage.setItem('sm_access_token', token) } catch { /* noop */ }
+      return token
+    }
+  } catch { /* noop */ }
 
-  // 2. Fallback: getSession() do browser client
-  if (!token) {
+  // 2. localStorage — última sessão salva (pode estar expirada)
+  try {
+    const cached = cleanToken(localStorage.getItem('sm_access_token') ?? '')
+    if (cached) return cached
+  } catch { /* noop */ }
+
+  // 3. Cookie parsing — fallback legado
+  return cleanToken(getAccessToken())
+}
+
+/**
+ * Faz fetch autenticado.
+ * Se a API retornar 401, limpa o cache e tenta renovar o token uma vez.
+ */
+export async function authFetch(url: string, opts?: RequestInit): Promise<Response> {
+  const doFetch = async (token: string) => {
+    const isFormData = opts?.body instanceof FormData
+    return fetch(url, {
+      ...opts,
+      headers: {
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+        ...(opts?.headers ?? {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
+  }
+
+  const token = await getFreshToken()
+  const res = await doFetch(token)
+
+  // Se 401, o token pode estar expirado no cache — forçar refresh e tentar uma vez
+  if (res.status === 401) {
+    try { localStorage.removeItem('sm_access_token') } catch { /* noop */ }
     try {
       const supabase = createClient()
-      const { data } = await supabase.auth.getSession()
-      token = cleanToken(data?.session?.access_token ?? '')
-      if (token) {
-        try { localStorage.setItem('sm_access_token', token) } catch { /* noop */ }
+      const { data } = await supabase.auth.refreshSession()
+      const newToken = cleanToken(data?.session?.access_token ?? '')
+      if (newToken) {
+        try { localStorage.setItem('sm_access_token', newToken) } catch { /* noop */ }
+        return doFetch(newToken)
       }
     } catch { /* noop */ }
   }
 
-  // 3. Fallback: leitura direta dos cookies (compatibilidade)
-  if (!token) token = cleanToken(getAccessToken())
-
-  const isFormData = opts?.body instanceof FormData
-  return fetch(url, {
-    ...opts,
-    headers: {
-      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-      ...(opts?.headers ?? {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  })
+  return res
 }
