@@ -349,6 +349,17 @@ export async function POST(
     }
   }
 
+  // ── 7a. Limpar obras_links_titulares existentes (criados pelo confirmar com titular_id=null) ──
+  // O confirmar cria registros placeholder. O integrar recria com IDs reais.
+  // Deletar tudo por obra_id antes de recriar — evita conflito de constraint.
+  const CLEAN_CHUNK = 200
+  for (let i = 0; i < obraIds.length; i += CLEAN_CHUNK) {
+    await client
+      .from('obras_links_titulares')
+      .delete()
+      .in('obra_id', obraIds.slice(i, i + CLEAN_CHUNK))
+  }
+
   // Agrupar participações por obra
   const partByObra = new Map<string, PartObra[]>()
   for (const p of obraParticipacoes) {
