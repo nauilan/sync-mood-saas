@@ -1,10 +1,65 @@
 /**
  * lib/cwr-parser.ts
- * Parser para arquivos CWR 2.1 / 2.2 (formato de largura fixa).
+ * Parser CWR 2.1 / 2.2 — offsets validados contra spec oficial CISAC e raw real.
+ *
+ * Posições 0-indexed, extremidade final exclusiva (substring style):
+ *
+ *  HDR : sender=9-29, receiver=29-49, data=49-57, versao=66-69
+ *
+ *  NWR/REV (240 chars):
+ *    19-79  : Work Title (60)
+ *    79-81  : Language Code (2)
+ *    81-95  : Submitter Work # (14)
+ *    95-106 : ISWC (11)
+ *    113-116: Musical Work Distribution Category (3)
+ *
+ *  ALT (100 chars):
+ *    19-79  : Title (60)
+ *    79-81  : Language (2)
+ *    81-82  : Title Type (2)
+ *
+ *  SPU/OPU (publicadora):
+ *    19-21  : Publisher Sequence # (2)
+ *    21-30  : Publisher IP Name # (9)
+ *    30-75  : Publisher Name (45)
+ *    75     : Unknown Indicator (1)
+ *    76-78  : Publisher Type (2)
+ *    IPI Base via regex I-\d{9}-\d no resto da linha
+ *    PR/MR/SR shares via posições fixas após IPI
+ *
+ *  SWR/OWR (escritor) — CWR 2.2:
+ *    19-27  : Writer IP Name # (9)
+ *    28-72  : Writer Last Name (45)
+ *    73-102 : Writer First Name (30)
+ *    103    : Writer Unknown Indicator (1)
+ *    104-105: Writer Designation Code (2)
+ *    106-114: Tax ID # (9)
+ *    115-125: Writer IPI Name # (11)
+ *    126-128: PR Affiliation Society # (3)
+ *    129-133: PR Share (5) — dividir por 100 para obter %
+ *    134-136: MR Affiliation Society # (3)
+ *    137-141: MR Share (5)
+ *    142-144: SR Affiliation Society # (3)
+ *    145-149: SR Share (5)
+ *    150-153: Flags (Reversionary, FRR, WFH, Filler)
+ *    154-166: Writer IPI Base # (13) — formato I-NNNNNNNNN-C
+ *
+ *  PWR:
+ *    19-28  : Publisher IP Name # (9)
+ *    28-73  : Publisher Name (45)
+ *    73-82  : Writer IP Name # (9)
+ *
+ *  REC (fonograma):
+ *    19-25  : Duration HHMMSS (6)
+ *    ISRC via regex [A-Z]{2}[A-Z0-9]{3}\d{7} no resto da linha
+ *    Intérprete via posição 63-103 ou regex de Performing Artist
  */
+
+// ─── Interfaces públicas ──────────────────────────────────────────────────────
 
 export interface CwrAutor {
   ipi: string | null
+  ipi_nome: string | null
   nome: string
   papel: string
   pr_pct: number
@@ -15,10 +70,13 @@ export interface CwrAutor {
 
 export interface CwrEditora {
   ipi: string | null
+  ip_name_no: string | null
   nome: string
+  tipo: string
   papel: string
   pr_pct: number
   mr_pct: number
+  sr_pct: number
   controlled: boolean
 }
 
@@ -29,37 +87,36 @@ export interface CwrFonograma {
   versao: string | null
   ano: number | null
   duracao: string | null
-  duracao_seg?: number
 }
 
 export interface CwrPwrLink {
-  writer_ipi: string | null
-  publisher_ipi: string | null
+  writer_ip: string | null
+  publisher_ip: string | null
   publisher_nome: string
 }
 
-export type CwrPapel = 'CA' | 'C' | 'A' | 'AR' | 'E' | 'ES' | 'AE' | 'SE' | 'PA' | 'outro'
-
-/** Alias de compatibilidade — equivale a CwrAutor */
+/** Alias de compatibilidade */
 export type CwrTitular = CwrAutor
+export type CwrPapel = 'CA' | 'C' | 'A' | 'AR' | 'E' | 'ES' | 'AE' | 'SE' | 'PA' | 'outro'
 
 export interface CwrObra {
   submitter_work_no: string
   iswc: string | null
   titulo: string
+  lang: string | null
   categoria: string | null
   titulos_alt: string[]
   autores: CwrAutor[]
   editoras: CwrEditora[]
   fonogramas: CwrFonograma[]
+  pwr_links: CwrPwrLink[]
   percentual_total: number
   registros_raw: string[]
-  // Campos opcionais usados por integrações legadas
+  // compat legado
   titulares?: CwrAutor[]
-  pwr_links?: CwrPwrLink[]
+  pwr_links_legacy?: CwrPwrLink[]
   codigo?: string
   titulo_alternativo?: string
-  lang?: string
   duracao_seg?: number
   pct_controlado?: number
   tem_editora?: boolean
@@ -67,9 +124,6 @@ export interface CwrObra {
   performers?: unknown[]
   codigo_interno_legado?: string
 }
-
-/** Alias de compatibilidade — equivale a CwrArquivo */
-export type CwrParseResult = CwrArquivo
 
 export interface CwrArquivo {
   versao: string
@@ -81,63 +135,345 @@ export interface CwrArquivo {
   erros_parse: string[]
 }
 
-function tr(s: string): string { return (s ?? '').trim() }
-function num(s: string): number { const n = parseFloat(tr(s).replace(',', '.')); return isNaN(n) ? 0 : n }
-function ipi(raw: string): string | null { const s = tr(raw).replace(/\D/g, ''); return (!s || /^0+$/.test(s)) ? null : s }
-function iswc(raw: string): string | null { const s = tr(raw).replace(/\s/g, ''); return (s && s.startsWith('T') && s.length >= 11) ? s : null }
-function nome(sob: string, pri: string): string { const s = tr(sob); const p = tr(pri); return p ? `${p} ${s}` : s }
+/** Alias de compatibilidade */
+export type CwrParseResult = CwrArquivo
 
-/** Detecta o offset de início da área de dados do CWR (compatibilidade legada) */
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function tr(s: string): string {
+  return (s ?? '').trim()
+}
+
+/** Lê coluna segura — retorna '' se a linha for mais curta */
+function col(ln: string, start: number, end: number): string {
+  if (ln.length <= start) return ''
+  return ln.substring(start, Math.min(end, ln.length))
+}
+
+/** Percentual CWR 8-dígitos (SWR/OWR): divide por 10000 para obter %.
+ *  "00500000" → 50.0000%
+ */
+function pct8(s: string): number {
+  const raw = tr(s).replace(/\D/g, '')
+  if (!raw) return 0
+  const v = parseInt(raw, 10)
+  return isNaN(v) ? 0 : Math.round((v / 10000) * 10000) / 10000
+}
+
+/** Percentual CWR 6-dígitos (SPU): divide por 100 para obter %.
+ *  "050000" → 50.00%
+ */
+function pct6(s: string): number {
+  const raw = tr(s).replace(/\D/g, '')
+  if (!raw) return 0
+  const v = parseInt(raw, 10)
+  return isNaN(v) ? 0 : Math.round((v / 100) * 100) / 100
+}
+
+/** Percentual CWR 5-dígitos (SWR/OWR PR/MR/SR Share): divide por 100 para obter %.
+ *  "07500" → 75.00%  |  "02500" → 25.00%
+ */
+function pct5(s: string): number {
+  const raw = tr(s).replace(/\D/g, '')
+  if (!raw) return 0
+  const v = parseInt(raw, 10)
+  return isNaN(v) ? 0 : Math.round((v / 100) * 100) / 100
+}
+
+/** IPI Base via regex I-NNNNNNNNN-C — extrai apenas dígitos */
+const RE_IPI_FORMAT = /I[-]?(\d{9})[-]?\d/
+const RE_IPI_PLAIN  = /\b(\d{9,11})\b/
+
+function extractIpi(ln: string, start = 0): string | null {
+  const sub = ln.substring(start)
+  // Formato I-XXXXXXXXX-C (padrão CISAC)
+  const m1 = RE_IPI_FORMAT.exec(sub)
+  if (m1) return m1[1]
+  // Formato numérico puro (9-11 dígitos)
+  const m2 = RE_IPI_PLAIN.exec(sub)
+  if (m2) {
+    const s = m2[1]
+    if (/^0+$/.test(s)) return null
+    return s
+  }
+  return null
+}
+
+/** ISWC: T-XXXXXXXXX-C ou TXXXXXXXXXC (11 chars) */
+const RE_ISWC = /T[-]?(\d{9})[-]?(\d)/
+
+function iswcParse(raw: string): string | null {
+  const s = tr(raw)
+  if (!s) return null
+  const m = RE_ISWC.exec(s)
+  if (m) return `T-${m[1]}-${m[2]}`
+  return null
+}
+
+/** ISRC: CC-XXX-YY-NNNNN → 12 alfanumérico sem traços.
+ *  Usa varredura de janela de 12 chars para encontrar padrão mesmo sem separadores.
+ */
+const RE_ISRC_STRICT = /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/
+
+function isrcParse(s: string): string | null {
+  const upper = tr(s).replace(/[\s\-]/g, '').toUpperCase()
+  if (upper.length < 12) return null
+  // Tenta a janela inicial
+  if (RE_ISRC_STRICT.test(upper.substring(0, 12))) return upper.substring(0, 12)
+  return null
+}
+
+/** Procura ISRC em qualquer posição de uma string longa (fallback) */
+function findIsrcInLine(ln: string, fromPos = 0): string | null {
+  const upper = ln.substring(fromPos).toUpperCase()
+  for (let i = 0; i <= upper.length - 12; i++) {
+    const candidate = upper.substring(i, i + 12)
+    if (RE_ISRC_STRICT.test(candidate)) return candidate
+  }
+  return null
+}
+
+function nomeCompleto(sobrenome: string, primeiro: string): string {
+  const s = tr(sobrenome)
+  const p = tr(primeiro)
+  if (!s && !p) return ''
+  return p ? `${p} ${s}` : s
+}
+
+/** Detecta offset de início — sempre 0 para CWR padrão */
 export function detectarOffsetCwr(_linha: string): number { return 0 }
 
+// ─── Parser principal ─────────────────────────────────────────────────────────
+
 export function parseCwr(conteudo: string, _opts?: unknown): CwrArquivo {
-  const linhas = conteudo.split(/\r?\n/).filter(l => l.length >= 3)
+  const linhas = conteudo
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .filter(l => l.length >= 3)
+
   const erros: string[] = []
   const obras: CwrObra[] = []
   let versao = '', sender = '', receiver = '', dataCri = ''
   let cur: CwrObra | null = null
-  const flush = () => { if (cur) { obras.push(cur); cur = null } }
+
+  const flush = () => {
+    if (!cur) return
+    // Remove fonogramas completamente vazios
+    cur.fonogramas = cur.fonogramas.filter(f =>
+      f.isrc || f.interprete || (f.titulo && f.titulo !== '00') || f.ano
+    )
+    obras.push(cur)
+    cur = null
+  }
 
   for (let i = 0; i < linhas.length; i++) {
     const ln = linhas[i]
     const t = ln.substring(0, 3).toUpperCase()
+
     try {
+      // ── HDR ───────────────────────────────────────────────────────────────
       if (t === 'HDR') {
-        sender = tr(ln.substring(9, 29)); versao = tr(ln.substring(66, 69)) || tr(ln.substring(5, 9))
-        receiver = tr(ln.substring(29, 49)); dataCri = tr(ln.substring(49, 57))
-      } else if (t === 'NWR' || t === 'REV') {
+        sender   = tr(col(ln,  9, 29))
+        receiver = tr(col(ln, 29, 49))
+        dataCri  = tr(col(ln, 49, 57))
+        versao   = tr(col(ln, 66, 69)) || tr(col(ln, 5, 9))
+      }
+
+      // ── NWR / REV ─────────────────────────────────────────────────────────
+      else if (t === 'NWR' || t === 'REV') {
         flush()
+        // Work Title (60): pos 19-79
+        const titulo         = tr(col(ln,  19,  79))
+        // Language Code (2): pos 79-81
+        const lang           = tr(col(ln,  79,  81)) || null
+        // Submitter Work # (14): pos 81-95
+        const submitter_work = tr(col(ln,  81,  95))
+        // ISWC (11): pos 95-106  — fallback: regex em toda a linha
+        const iswcRaw = col(ln, 95, 106)
+        const iswc    = iswcParse(iswcRaw) ?? iswcParse(ln.substring(95))
+        // Musical Work Distribution Category (3): pos 113-116
+        const categoria = tr(col(ln, 113, 116)) || null
+
         cur = {
-          submitter_work_no: tr(ln.substring(19, 33)),
-          iswc: ln.length > 149 ? iswc(ln.substring(149, 160)) : null,
-          titulo: tr(ln.substring(33, 93)),
-          categoria: tr(ln.substring(99, 101)) || null,
-          titulos_alt: [], autores: [], editoras: [], fonogramas: [],
-          percentual_total: 0, registros_raw: [ln],
+          submitter_work_no: submitter_work,
+          iswc,
+          titulo,
+          lang,
+          categoria,
+          titulos_alt:  [],
+          autores:      [],
+          editoras:     [],
+          fonogramas:   [],
+          pwr_links:    [],
+          percentual_total: 0,
+          registros_raw: [ln],
         }
-      } else if (t === 'ALT' && cur) {
+      }
+
+      // ── ALT ───────────────────────────────────────────────────────────────
+      else if (t === 'ALT' && cur) {
         cur.registros_raw.push(ln)
-        const a = tr(ln.substring(19, 79)); if (a) cur.titulos_alt.push(a)
-      } else if ((t === 'SPU' || t === 'OPU') && cur) {
+        const alt = tr(col(ln, 19, 79))
+        if (alt) cur.titulos_alt.push(alt)
+      }
+
+      // ── SPU / OPU (Publisher) ──────────────────────────────────────────────
+      else if ((t === 'SPU' || t === 'OPU') && cur) {
         cur.registros_raw.push(ln)
-        const n = tr(ln.substring(41, 96))
-        if (n) cur.editoras.push({ ipi: ipi(ln.substring(30, 41)), nome: n, papel: tr(ln.substring(96, 99)), pr_pct: num(ln.substring(99, 104)) / 100, mr_pct: num(ln.substring(104, 109)) / 100, controlled: t === 'SPU' })
-      } else if ((t === 'SWR' || t === 'OWR') && cur) {
+
+        // Publisher IP Name # (9): pos 21-30
+        const ip_name_no = tr(col(ln, 21, 30))
+        // Publisher Name (45): pos 30-75
+        const nome       = tr(col(ln, 30, 75))
+        // Publisher Type (2): pos 76-78
+        const tipo       = tr(col(ln, 76, 78))
+
+        // IPI Base # via regex a partir de pos 78 (evita pegar o IP Name # acima)
+        const ipiBase = extractIpi(ln, 78)
+
+        // Shares SPU: tentamos layout 9-char society + 6-char share
+        // PR Society (9): 78-87, PR Share (6): 87-93  (fallback)
+        // Muitos senders usam 6-char share para SPU
+        const prPct = pct6(col(ln,  87,  93))
+        const mrPct = pct6(col(ln,  96, 102))
+        const srPct = pct6(col(ln, 105, 111))
+
+        if (nome) {
+          cur.editoras.push({
+            ipi:        ipiBase,
+            ip_name_no: ip_name_no || null,
+            nome,
+            tipo,
+            papel:      tipo,   // Publisher Type serves as role for SPU
+            pr_pct:     prPct,
+            mr_pct:     mrPct,
+            sr_pct:     srPct,
+            controlled: t === 'SPU',
+          })
+        }
+      }
+
+      // ── SWR / OWR (Writer) ────────────────────────────────────────────────
+      else if ((t === 'SWR' || t === 'OWR') && cur) {
         cur.registros_raw.push(ln)
-        const n = nome(ln.substring(41, 81), ln.substring(81, 107))
-        const pr = num(ln.substring(110, 115)) / 100
-        if (n) { cur.autores.push({ ipi: ipi(ln.substring(30, 41)), nome: n, papel: tr(ln.substring(107, 110)), pr_pct: pr, mr_pct: num(ln.substring(115, 120)) / 100, sr_pct: num(ln.substring(120, 125)) / 100, controlled: t === 'SWR' }); cur.percentual_total += pr }
-      } else if (t === 'REC' && cur) {
+
+        // Writer IP Name # (9): pos 19-27
+        const ip_name_no = tr(col(ln, 19, 28))
+        // Last Name (45): pos 28-72  |  First Name (30): pos 73-102
+        const sobrenome  = col(ln, 28, 73)
+        const primeiro   = col(ln, 73, 103)
+        // Designation Code (2): pos 104-105 | fallback CWR 2.1: pos 95-96
+        const designation = tr(col(ln, 104, 106)) || tr(col(ln, 95, 97))
+
+        // CWR 2.2 shares (5-char, N/100 = %):
+        //   Tax ID (9): 106-114  |  IPI Name (11): 115-125
+        //   PR Society (3): 126-128  |  PR Share (5): 129-133
+        //   MR Society (3): 134-136  |  MR Share (5): 137-141
+        //   SR Society (3): 142-144  |  SR Share (5): 145-149
+        //   Flags (4): 150-153  |  IPI Base (13): 154-166
+        const prPct = pct5(col(ln, 129, 134))
+        const mrPct = pct5(col(ln, 137, 142))
+        const srPct = pct5(col(ln, 145, 150))
+
+        // IPI Base # (13 chars) em pos 154-166 — busca a partir de 150 para robustez
+        const ipiBase = extractIpi(ln, 150)
+
+        const nomeFull = nomeCompleto(sobrenome, primeiro)
+        if (nomeFull) {
+          cur.autores.push({
+            ipi:       ipiBase,
+            ipi_nome:  ip_name_no || null,
+            nome:      nomeFull,
+            papel:     designation,
+            pr_pct:    prPct,
+            mr_pct:    mrPct,
+            sr_pct:    srPct,
+            controlled: t === 'SWR',
+          })
+          cur.percentual_total = Math.round(
+            (cur.percentual_total + prPct) * 10000
+          ) / 10000
+        }
+      }
+
+      // ── PWR (Publisher for Writer) ────────────────────────────────────────
+      else if (t === 'PWR' && cur) {
         cur.registros_raw.push(ln)
-        const a = tr(ln.substring(51, 55)); const an = a ? parseInt(a, 10) : null
-        cur.fonogramas.push({ isrc: tr(ln.substring(123, 135)) || null, titulo: tr(ln.substring(25, 85)) || null, interprete: tr(ln.substring(135, 195)) || null, versao: tr(ln.substring(195, 225)) || null, ano: an && !isNaN(an) ? an : null, duracao: tr(ln.substring(19, 25)) || null })
-      } else if (t === 'GRT' || t === 'TRL') {
+        const pub_ip   = tr(col(ln, 19, 28))
+        const pub_nome = tr(col(ln, 28, 73))
+        const wri_ip   = tr(col(ln, 73, 82))
+        cur.pwr_links.push({
+          publisher_ip:   pub_ip  || null,
+          publisher_nome: pub_nome,
+          writer_ip:      wri_ip  || null,
+        })
+      }
+
+      // ── REC (Fonograma / Recording) ───────────────────────────────────────
+      else if (t === 'REC' && cur) {
+        cur.registros_raw.push(ln)
+
+        // Duração HHMMSS: pos 19-25
+        const duracaoRaw = tr(col(ln, 19, 25))
+        const duracao    = /^\d{6}$/.test(duracaoRaw) ? duracaoRaw : null
+
+        // ISRC — tenta posições fixas (CWR 2.1 / 2.2) e fallback de varredura total
+        let isrc: string | null = null
+        for (const [s, e] of [[51, 63], [123, 135], [63, 75]] as [number, number][]) {
+          isrc = isrcParse(col(ln, s, e))
+          if (isrc) break
+        }
+        // Fallback: varredura de janela na linha inteira a partir de pos 19
+        if (!isrc) isrc = findIsrcInLine(ln, 19)
+
+        // Intérprete: pos 63-103 (40 chars) — posição padrão CWR 2.1
+        const interprete = tr(col(ln, 63, 103)) || tr(col(ln, 135, 175)) || null
+
+        // Título da gravação: pos 25-51 (26 chars) ou 94-154 (60 chars)
+        const tituloGrav = tr(col(ln, 94, 154)) || tr(col(ln, 25, 51)) || null
+
+        // Ano: pos 96-100 (4 dígitos) — apenas se parecer ano válido
+        const anoStr = tr(col(ln, 96, 100))
+        const anoNum = parseInt(anoStr, 10)
+        const ano    = anoStr.length === 4 && anoNum >= 1900 && anoNum <= 2100
+          ? anoNum
+          : null
+
+        cur.fonogramas.push({
+          isrc,
+          titulo:     tituloGrav,
+          interprete: interprete || null,
+          versao:     null,
+          ano,
+          duracao,
+        })
+      }
+
+      // ── GRH / GRT / TRL — fim de grupo/arquivo ────────────────────────────
+      else if (t === 'GRT' || t === 'TRL' || t === 'GRH') {
         flush()
-      } else if (cur) {
+      }
+
+      // ── Demais registros: preservar raw na obra atual ─────────────────────
+      else if (cur) {
         cur.registros_raw.push(ln)
       }
-    } catch (e) { erros.push(`L${i + 1}(${t}):${String(e)}`) }
+
+    } catch (e) {
+      erros.push(`L${i + 1}(${t}): ${String(e)}`)
+    }
   }
+
   flush()
-  return { versao, sender, receiver, data_criacao: dataCri, obras, total_records: linhas.length, erros_parse: erros }
+
+  return {
+    versao,
+    sender,
+    receiver,
+    data_criacao: dataCri,
+    obras,
+    total_records: linhas.length,
+    erros_parse:  erros,
+  }
 }
