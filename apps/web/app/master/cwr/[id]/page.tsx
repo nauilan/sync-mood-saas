@@ -176,9 +176,15 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
     setErro('')
     try {
       const res = await authFetch(`/api/cwr/${id}`)
-      if (!res.ok) { setErro('Importação não encontrada.'); return }
+      if (res.status === 401) { setErro('Sessão expirada. Faça login novamente.'); return }
+      if (res.status === 404) { setErro('Importação não encontrada. O registro pode ter sido removido — faça um novo upload.'); return }
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setErro(d.error ?? `Erro ${res.status} ao carregar importação.`)
+        return
+      }
       setData(await res.json())
-    } catch { setErro('Falha na requisição.') }
+    } catch { setErro('Falha na requisição. Verifique sua conexão.') }
     finally { setLoading(false) }
   }
 
@@ -218,6 +224,7 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
   }
 
   if (erro || !data) {
+    const isExpired = erro?.includes('expirada')
     return (
       <div className="space-y-4">
         <a href="/master/cwr" className="inline-flex items-center gap-1.5 text-xs text-white/40 hover:text-white/60 transition-colors">
@@ -225,6 +232,16 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
         </a>
         <div className="flex items-center gap-2 px-4 py-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-300 text-sm">
           <AlertTriangle className="w-4 h-4 shrink-0" /> {erro || 'Importação não encontrada.'}
+        </div>
+        <div className="flex gap-3">
+          {isExpired && (
+            <a href="/auth/login" className="inline-flex items-center gap-1.5 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold rounded-lg transition-colors">
+              Fazer login
+            </a>
+          )}
+          <a href="/master/cwr" className="inline-flex items-center gap-1.5 px-4 py-2 bg-white/[0.06] hover:bg-white/[0.10] text-white/70 text-xs font-semibold rounded-lg transition-colors">
+            <FileCode2 className="w-3.5 h-3.5" /> Novo upload CWR
+          </a>
         </div>
       </div>
     )
