@@ -426,9 +426,14 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                 </span>
               )}
               {obra.iswc && <span className="text-xs font-mono text-emerald-400">{obra.iswc}</span>}
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_OBRA_COLORS[obra.status as StatusObra]}`}>
-                {STATUS_OBRA_LABELS[obra.status as StatusObra]}
-              </span>
+              {(() => {
+                const st = (obra.status || obra.status_catalogo) as StatusObra
+                return (
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_OBRA_COLORS[st] ?? 'bg-white/5 text-white/40'}`}>
+                    {STATUS_OBRA_LABELS[st] ?? st ?? '—'}
+                  </span>
+                )
+              })()}
               <BackOfficeBadge status={obra.backoffice_status} />
             </div>
           </div>
@@ -952,7 +957,7 @@ export default function ObrasPage() {
     async function carregarObras() {
       setObrasLoading(true)
       try {
-        const res = await authFetch('/api/obras?per_page=200')
+        const res = await authFetch('/api/obras?per_page=1000')
         if (res.ok) {
           const json = await res.json()
           setObrasData(json.data ?? [])
@@ -1017,7 +1022,9 @@ export default function ObrasPage() {
   const kpis = useMemo(() => ({
     total: catalogoCompleto.length,
     ativas: catalogoCompleto.filter(o => o.status === 'ativa' || o.status === 'validada').length,
-    pre_cadastro: catalogoCompleto.filter(o => o.status === 'pre_cadastro').length,
+    pre_cadastro: catalogoCompleto.filter(o =>
+      o.status === 'pre_cadastro' || o.status_catalogo === 'pre_cadastro'
+    ).length,
     sem_iswc: catalogoCompleto.filter(o => !o.iswc).length,
     com_fonograma: catalogoCompleto.filter(o => (o._fonogramas_count ?? 0) > 0).length,
   }), [catalogoCompleto])
@@ -1045,7 +1052,7 @@ export default function ObrasPage() {
   const obras = useMemo(() => {
     return catalogoCompleto.filter(o => {
       if (search && !o.titulo.toLowerCase().includes(search.toLowerCase()) && !o.codigo.toLowerCase().includes(search.toLowerCase())) return false
-      if (filterStatus && o.status !== filterStatus) return false
+      if (filterStatus && (o.status || o.status_catalogo) !== filterStatus) return false
       if (filterEditora && o.editora_id !== filterEditora) return false
       if (filterIswc === 'com' && !o.iswc) return false
       if (filterIswc === 'sem' && o.iswc) return false
@@ -1284,9 +1291,14 @@ export default function ObrasPage() {
                       <IswcBadge iswc={obra.iswc} />
                     </td>
                     <td className="px-4 py-3.5">
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_OBRA_COLORS[obra.status as StatusObra] ?? ''}`}>
-                        {STATUS_OBRA_LABELS[obra.status as StatusObra] ?? obra.status}
-                      </span>
+                      {(() => {
+                        const st = (obra.status || obra.status_catalogo) as StatusObra
+                        return (
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_OBRA_COLORS[st] ?? 'bg-white/5 text-white/40'}`}>
+                            {STATUS_OBRA_LABELS[st] ?? st ?? '—'}
+                          </span>
+                        )
+                      })()}
                     </td>
                     <td className="px-4 py-3.5 text-center">
                       <div className="flex items-center justify-center gap-1">

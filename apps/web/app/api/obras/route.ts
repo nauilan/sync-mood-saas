@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
   const status   = searchParams.get('status')
   const search   = searchParams.get('q')
   const page     = Math.max(1, parseInt(searchParams.get('page') ?? '1'))
-  const per_page = Math.min(200, parseInt(searchParams.get('per_page') ?? '100'))
+  const per_page = Math.min(1000, parseInt(searchParams.get('per_page') ?? '100'))
   const offset   = (page - 1) * per_page
 
   let query = sb
