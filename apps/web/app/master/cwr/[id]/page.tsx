@@ -169,7 +169,22 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
   const [reprocessErro, setReprocessErro] = useState('')
   const [reprocessStats, setReprocessStats] = useState<Record<string, number> | null>(null)
 
+  const [populando, setPopulando] = useState(false)
+  const [populaMsg, setPopulaMsg] = useState('')
+
   useEffect(() => { load() }, [id])
+
+  async function popularLinks() {
+    setPopulaMsg('')
+    setPopulando(true)
+    try {
+      const res = await authFetch(`/api/cwr/${id}/popular-links`, { method: 'POST' })
+      const d = await res.json()
+      if (!res.ok) { setPopulaMsg(d.error ?? 'Erro ao popular titulares.'); return }
+      setPopulaMsg(`✓ ${d.titulares_criados} titulares gravados em ${d.links_criados} obras.`)
+    } catch { setPopulaMsg('Falha na requisição.') }
+    finally { setPopulando(false) }
+  }
 
   async function load() {
     setLoading(true)
@@ -293,6 +308,17 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
             <span className={`text-[11px] px-2.5 py-1 rounded-full font-semibold ${STATUS_IMP[imp.status] ?? 'bg-white/5 text-white/40'}`}>
               {imp.status}
             </span>
+            {imp.status === 'confirmado' && (
+              <button
+                onClick={popularLinks}
+                disabled={populando}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+                title="Gravar autores e editoras do CWR nas obras do catálogo"
+              >
+                {populando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Users className="w-3.5 h-3.5" />}
+                {populando ? 'Gravando titulares...' : 'Popular Titulares'}
+              </button>
+            )}
             {imp.status !== 'confirmado' && (
               <button
                 onClick={reprocessar}
@@ -361,6 +387,12 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
         <div className="flex items-center gap-2 px-4 py-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-300 text-sm">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           Erro no reprocessamento: {reprocessErro}
+        </div>
+      )}
+      {populaMsg && (
+        <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm border ${populaMsg.startsWith('✓') ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 'bg-rose-500/10 border-rose-500/20 text-rose-300'}`}>
+          {populaMsg.startsWith('✓') ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+          {populaMsg}
         </div>
       )}
       {confirmaErro && (

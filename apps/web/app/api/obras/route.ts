@@ -54,7 +54,19 @@ export async function GET(req: NextRequest) {
 
   let query = sb
     .from('obras')
-    .select('*', { count: 'exact' })
+    .select(
+      `*,
+      obras_links(
+        id, numero_link, percentual_link, tipo_link, controlado, status,
+        obras_links_titulares(
+          id, nome, papel, funcao_no_link,
+          percentual_exec_publica, percentual_fonomecanico, percentual_sincronizacao,
+          ipi, controlado, titular_id
+        )
+      ),
+      fonogramas(id)`,
+      { count: 'exact' }
+    )
     .eq('tenant_id', usuario.tenant_id)
     .is('deleted_at', null)
     .order('titulo', { ascending: true })
@@ -76,9 +88,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // Mapear obras_links → _links (formato esperado pelo frontend)
+  const mapped = (data ?? []).map((obra: Record<string, unknown>) => {
+    const { obras_links, fonogramas: fono, ...rest } = obra as any
+    return {
+      ...rest,
+      _links: (obras_links ?? []).map((l: any) => ({
+        ...l,
+        titulares:           l.obras_links_titulares ?? [],
+        obras_links_titulares: undefined,
+      })),
+      _fonogramas_count: (fono ?? []).length,
+    }
+  })
+
   return NextResponse.json({
-    data: data ?? [],
-    total: count ?? 0,
+    data:     mapped,
+    total:    count ?? 0,
     page,
     per_page,
   })

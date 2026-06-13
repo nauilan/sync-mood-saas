@@ -143,7 +143,78 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
-  // ── 8. Registrar conflitos ───────────────────────────────────────────────────
+  // ── 8. Criar obras_links + obras_links_titulares a partir do snapshot ────────
+  function _mapAutor(p: string) {
+    const r = (p ?? '').toUpperCase().trim()
+    if (r === 'CA' || r === 'C' || r === 'ES') return 'compositor'
+    if (r === 'A'  || r === 'PA') return 'autor'
+    if (r === 'AR' || r === 'AE') return 'arranjador'
+    if (r === 'AD') return 'adaptador'
+    return 'compositor'
+  }
+  function _mapEditora(tipo: string, papel: string) {
+    const t = (tipo ?? papel ?? '').toUpperCase().trim()
+    if (t === 'SE') return 'subeditora'
+    if (t === 'AM' || t === 'AQ') return 'administradora'
+    return 'editora_original'
+  }
+
+  const linksPayload = obraPayloads.map(p => ({
+    obra_id:         codigoToId[p.codigo_obra],
+    tenant_id:       usuario.tenantId,
+    numero_link:     1,
+    percentual_link: 100,
+    tipo_link:       'coautoria',
+    controlado:      true,
+    status:          'ativo',
+  }))
+
+  const { data: linksCreated } = await client
+    .from('obras_links')
+    .insert(linksPayload)
+    .select('id, obra_id')
+
+  if (linksCreated?.length) {
+    const obraToLink: Record<string, string> = {}
+    for (const l of linksCreated) obraToLink[l.obra_id as string] = l.id as string
+
+    const allTitulares: Record<string, unknown>[] = []
+    for (const payload of obraPayloads) {
+      const obraId = codigoToId[payload.codigo_obra]
+      const linkId = obraToLink[obraId]
+      if (!linkId) continue
+      const row  = novasRows[obraPayloads.indexOf(payload)]
+      const snap = row.snapshot_cwr as Record<string, unknown>
+      for (const a of ((snap.autores as any[]) ?? [])) {
+        if (!(a.nome as string)?.trim()) continue
+        allTitulares.push({
+          obra_link_id: linkId, obra_id: obraId, tenant_id: usuario.tenantId,
+          titular_id: null, nome: (a.nome as string).trim(),
+          papel: _mapAutor(a.papel ?? ''), funcao_no_link: _mapAutor(a.papel ?? ''),
+          percentual_exec_publica: a.pr_pct ?? 0, percentual_fonomecanico: a.mr_pct ?? 0,
+          percentual_sincronizacao: a.sr_pct ?? 0, controlado: a.controlled ?? false,
+          ipi: a.ipi ?? null, cae: a.ipi ?? null,
+        })
+      }
+      for (const e of ((snap.editoras as any[]) ?? [])) {
+        if (!(e.nome as string)?.trim()) continue
+        allTitulares.push({
+          obra_link_id: linkId, obra_id: obraId, tenant_id: usuario.tenantId,
+          titular_id: null, nome: (e.nome as string).trim(),
+          papel: _mapEditora(e.tipo ?? '', e.papel ?? ''),
+          funcao_no_link: _mapEditora(e.tipo ?? '', e.papel ?? ''),
+          percentual_exec_publica: e.pr_pct ?? 0, percentual_fonomecanico: e.mr_pct ?? 0,
+          percentual_sincronizacao: e.sr_pct ?? 0, controlado: e.controlled ?? false,
+          ipi: e.ipi ?? null, cae: e.ipi ?? null,
+        })
+      }
+    }
+    for (let i = 0; i < allTitulares.length; i += 500) {
+      await client.from('obras_links_titulares').insert(allTitulares.slice(i, i + 500))
+    }
+  }
+
+  // ── 9. Registrar conflitos ───────────────────────────────────────────────────
   for (const row of conflitos) {
     const snap = row.snapshot_cwr as Record<string, unknown>
     await client.from('cwr_conflitos').insert({
