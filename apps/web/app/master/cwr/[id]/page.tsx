@@ -169,10 +169,31 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
   const [reprocessErro, setReprocessErro] = useState('')
   const [reprocessStats, setReprocessStats] = useState<Record<string, number> | null>(null)
 
+  const [integrando, setIntegrando] = useState(false)
+  const [integraMsg, setIntegraMsg] = useState('')
+
   const [populando, setPopulando] = useState(false)
   const [populaMsg, setPopulaMsg] = useState('')
 
   useEffect(() => { load() }, [id])
+
+  async function integrarCatalogo() {
+    setIntegraMsg('')
+    setIntegrando(true)
+    try {
+      const res = await authFetch(`/api/cwr/${id}/integrar`, { method: 'POST' })
+      const d = await res.json()
+      if (!res.ok) { setIntegraMsg(d.error ?? 'Erro ao integrar.'); return }
+      setIntegraMsg(
+        `✓ Integração concluída: ${d.obras_integradas} obras · ` +
+        `${d.titulares_criados} titulares criados · ` +
+        `${d.titulares_vinculados} vinculados · ` +
+        `${d.participacoes_gravadas} participações · ` +
+        `${d.fonogramas_criados} fonogramas criados`
+      )
+    } catch { setIntegraMsg('Falha na requisição.') }
+    finally { setIntegrando(false) }
+  }
 
   async function popularLinks() {
     setPopulaMsg('')
@@ -310,13 +331,13 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
             </span>
             {imp.status === 'confirmado' && (
               <button
-                onClick={popularLinks}
-                disabled={populando}
+                onClick={integrarCatalogo}
+                disabled={integrando}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
-                title="Gravar autores e editoras do CWR nas obras do catálogo"
+                title="Criar titulares, editoras, participações e fonogramas reais no banco"
               >
-                {populando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Users className="w-3.5 h-3.5" />}
-                {populando ? 'Gravando titulares...' : 'Popular Titulares'}
+                {integrando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Users className="w-3.5 h-3.5" />}
+                {integrando ? 'Integrando...' : 'Integrar ao Catálogo'}
               </button>
             )}
             {imp.status !== 'confirmado' && (
@@ -387,6 +408,12 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
         <div className="flex items-center gap-2 px-4 py-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-300 text-sm">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           Erro no reprocessamento: {reprocessErro}
+        </div>
+      )}
+      {integraMsg && (
+        <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm border ${integraMsg.startsWith('✓') ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 'bg-rose-500/10 border-rose-500/20 text-rose-300'}`}>
+          {integraMsg.startsWith('✓') ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+          {integraMsg}
         </div>
       )}
       {populaMsg && (
