@@ -9,7 +9,7 @@ const PAGES = [
   { href: '/master/contratos', label: 'Contratos', group: 'M2', icon: FileText },
   { href: '/master/obras', label: 'Obras', group: 'M3', icon: Music },
   { href: '/master/autorizacoes', label: 'Autorizações', group: 'M4', icon: Shield },
-  { href: '/master/cwr', label: 'Importacao CWR', group: 'M3', icon: Music },
+  { href: '/master/backoffice', label: 'BackOffice / CWR', group: 'M5', icon: FileText },
   { href: '/master/recebimentos', label: 'Recebimentos', group: 'M6', icon: DollarSign },
   { href: '/master/conciliacao', label: 'Conciliação', group: 'M7', icon: BarChart3 },
   { href: '/master/distribuicao', label: 'Distribuição', group: 'M8', icon: DollarSign },
