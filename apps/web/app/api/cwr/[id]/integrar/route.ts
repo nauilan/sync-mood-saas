@@ -413,7 +413,17 @@ export async function POST(
       .from('obras_links_titulares')
       .insert(titPayloads.slice(i, i + TCHUNK))
       .select('id')
-    if (insErr && !insertError) insertError = insErr.message
+    if (insErr) {
+      // Abortar imediatamente e retornar erro + amostra do payload
+      return NextResponse.json({
+        ok:    false,
+        debug: 'obras_links_titulares_insert_erro',
+        error: insErr.message,
+        code:  insErr.code,
+        detalhe: insErr.details,
+        amostra: titPayloads[i],   // primeiro payload do chunk com erro
+      }, { status: 500 })
+    }
     if (ins) {
       participacoesGravadas += ins.length
       participacoesIds.push(...ins.map(x => x.id as string))
