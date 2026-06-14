@@ -134,7 +134,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           isrc:             fg.isrc       ?? null,
           titulo_fonograma: (fg.titulo as string) ?? payload.titulo,
           interprete:       (fg.interprete as string) ?? '',
-          versao:           fg.versao     ?? null,
+          versao:           (fg.versao as string) ?? 'original',
           ano_gravacao:     fg.ano        ?? null,
           status:           'ativo',
         }
@@ -194,6 +194,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         allTitulares.push({
           obra_link_id: linkId, obra_id: obraId, tenant_id: usuario.tenantId,
           titular_id: null,
+          nome: (a.nome as string)?.trim() ?? '',
           funcao_no_link: sanitizeFuncaoAutor(a.papel ?? ''),
           percentual_exec_publica: a.pr_pct ?? 0, percentual_fonomecanico: a.mr_pct ?? 0,
           percentual_sincronizacao: a.sr_pct ?? 0,
@@ -206,6 +207,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         allTitulares.push({
           obra_link_id: linkId, obra_id: obraId, tenant_id: usuario.tenantId,
           titular_id: null,
+          nome: (e.nome as string)?.trim() ?? '',
           funcao_no_link: sanitizeFuncaoEditora(e.tipo ?? '', e.papel ?? ''),
           percentual_exec_publica: e.pr_pct ?? 0, percentual_fonomecanico: e.mr_pct ?? 0,
           percentual_sincronizacao: e.sr_pct ?? 0,

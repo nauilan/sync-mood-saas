@@ -280,7 +280,7 @@ export async function POST(
         tenant_id:      usuario.tenantId,
         codigo_titular: `CWR${String(seq).padStart(5, '0')}`,
         codigo_interno: `CWR${String(seq).padStart(5, '0')}`,
-        tipo:           info.tipo,
+        tipo:           (info.tipo === 'editora_administrada' ? 'editora' : info.tipo) as string,
         pessoa:         isEdit ? 'PJ' : 'PF',
         nome_completo:  info.nome,
         ipi:            info.ipi ?? null,
@@ -296,10 +296,17 @@ export async function POST(
     for (let i = 0; i < payloads.length; i += CHUNK) {
       const chunk      = payloads.slice(i, i + CHUNK)
       const chunkChaves = chaveKeys.slice(i, i + CHUNK)
-      const { data: criados } = await client
+      const { data: criados, error: titErr } = await client
         .from('titulares')
         .insert(chunk)
         .select('id, ipi, nome_completo')
+      if (titErr) {
+        return NextResponse.json({
+          ok: false, debug: 'titulares_insert_erro',
+          error: titErr.message, code: titErr.code,
+          amostra: chunk[0],
+        }, { status: 500 })
+      }
 
       if (criados) {
         titularesCriados += criados.length
@@ -389,7 +396,8 @@ export async function POST(
         obra_id:                  obraId,
         tenant_id:                usuario.tenantId,
         titular_id:               chaveToId[p.chave] ?? null,
-        funcao_no_link:           p.papel,   // código CWR bruto: CA, A, C, E…
+        nome:                     info?.nome ?? '',
+        funcao_no_link:           p.papel,
         percentual_exec_publica:  p.pr_pct  ?? 0,
         percentual_fonomecanico:  p.mr_pct  ?? 0,
         percentual_sincronizacao: p.sr_pct  ?? 0,
@@ -500,7 +508,7 @@ export async function POST(
 
     const FCHUNK = 500
     for (let i = 0; i < novos.length; i += FCHUNK) {
-      const { data: fgCriados } = await client
+      const { data: fgCriados, error: fgErr } = await client
         .from('fonogramas')
         .insert(novos.slice(i, i + FCHUNK).map(f => ({
           obra_id:          f.obraId,
@@ -508,11 +516,18 @@ export async function POST(
           isrc:             f.isrc         ?? null,
           titulo_fonograma: f.titulo       ?? '',
           interprete:       f.interprete   ?? null,
-          versao:           f.versao       ?? null,
+          versao:           f.versao       ?? 'original',
           ano_gravacao:     f.ano          ?? null,
           status:           'ativo',
         })))
         .select('id')
+      if (fgErr) {
+        return NextResponse.json({
+          ok: false, debug: 'fonogramas_insert_erro',
+          error: fgErr.message, code: fgErr.code,
+          amostra: novos[i],
+        }, { status: 500 })
+      }
       if (fgCriados) {
         fonogramasCriados += fgCriados.length
         fonogramasCriadosIds.push(...fgCriados.map(x => x.id as string))
