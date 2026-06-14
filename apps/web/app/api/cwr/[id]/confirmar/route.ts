@@ -164,7 +164,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     tenant_id:       usuario.tenantId,
     numero_link:     1,
     percentual_link: 100,
-    tipo_link:       'coautoria',
+    tipo_link:       'controlado',
     controlado:      true,
     status:          'ativo',
   }))

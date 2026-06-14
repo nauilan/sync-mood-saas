@@ -199,7 +199,7 @@ export async function POST(req: NextRequest) {
           tenant_id: usuario.tenant_id,
           numero_link: link.ordem ?? (i + 1),
           percentual_link: link.percentual_controlado ?? 0,
-          tipo_link: 'coautoria',
+          tipo_link: 'controlado',
           controlado: link.controlado ?? false,
           status: 'ativo',
         })
