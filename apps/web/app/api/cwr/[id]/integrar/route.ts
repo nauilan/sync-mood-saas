@@ -64,20 +64,15 @@ function chaveTitular(ipi: string | null | undefined, nome: string): string {
   return i.length > 0 ? `IPI:${i}` : `NOME:${normNome(nome)}`
 }
 
+/** Retorna o código CWR bruto que o enum funcao_no_link aceita (CA, A, C, E, SE, AM…) */
 function mapPapelAutor(p: string): string {
   const r = (p ?? '').toUpperCase().trim()
-  if (r === 'CA' || r === 'C' || r === 'ES') return 'compositor'
-  if (r === 'A'  || r === 'PA')               return 'autor'
-  if (r === 'AR' || r === 'AE')               return 'arranjador'
-  if (r === 'AD')                             return 'adaptador'
-  return 'compositor'
+  return r || 'CA'   // fallback: CA = Composer-Author
 }
 
 function mapPapelEditora(tipo: string, papel: string): string {
   const t = (tipo ?? papel ?? '').toUpperCase().trim()
-  if (t === 'SE')            return 'subeditora'
-  if (t === 'AM' || t === 'AQ') return 'administradora'
-  return 'editora_original'
+  return t || 'E'    // fallback: E = Publisher
 }
 
 async function deleteInChunks(
