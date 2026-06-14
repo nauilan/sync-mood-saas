@@ -312,50 +312,44 @@ export async function POST(
   // ── 7. Garantir obras_links e inserir obras_links_titulares ───────────────
   let participacoesGravadas = 0
   const participacoesIds: string[]  = []
-  const obrasLinksIds:    string[]  = []
 
   const obraIds = [...new Set(impObras.map(r => r.obra_id as string))]
 
-  const { data: linksExist } = await client
-    .from('obras_links')
-    .select('id, obra_id')
-    .in('obra_id', obraIds)
-
-  const obraIdToLinkId: Record<string, string> = {}
-  for (const l of (linksExist ?? [])) {
-    obraIdToLinkId[l.obra_id as string] = l.id as string
+  // ── Upsert obras_links (idempotente — ignora duplicatas) ──────────────────
+  const CHUNK = 500
+  for (let i = 0; i < obraIds.length; i += CHUNK) {
+    const { error: linkErr } = await client
+      .from('obras_links')
+      .upsert(
+        obraIds.slice(i, i + CHUNK).map(oid => ({
+          obra_id:         oid,
+          tenant_id:       usuario.tenantId,
+          numero_link:     1,
+          percentual_link: 100,
+          tipo_link:       'controlado',
+          status:          'ativo',
+        })),
+        { onConflict: 'obra_id,numero_link', ignoreDuplicates: true }
+      )
+    if (linkErr) {
+      return NextResponse.json({
+        ok: false, debug: 'obras_links_upsert_erro',
+        error: linkErr.message, code: linkErr.code,
+      }, { status: 500 })
+    }
   }
 
-  const semLink = obraIds.filter(oid => !obraIdToLinkId[oid])
-  if (semLink.length > 0) {
-    const CHUNK = 500
-    for (let i = 0; i < semLink.length; i += CHUNK) {
-      const { data: novos, error: linkErr } = await client
-        .from('obras_links')
-        .insert(semLink.slice(i, i + CHUNK).map(oid => ({
-          obra_id:       oid,
-          tenant_id:     usuario.tenantId,
-          numero_link:   1,
-          percentual_link: 100,
-          tipo_link:     'controlado',
-          controlado:    true,
-          status:        'ativo',
-        })))
-        .select('id, obra_id')
-      if (linkErr) {
-        return NextResponse.json({
-          ok: false,
-          debug: 'obras_links_insert_erro',
-          error: linkErr.message,
-          code:  linkErr.code,
-          semLink_len: semLink.length,
-          amostra_obra_id: semLink[0],
-        }, { status: 500 })
-      }
-      for (const l of (novos ?? [])) {
-        obraIdToLinkId[l.obra_id as string] = l.id as string
-        obrasLinksIds.push(l.id as string)
-      }
+  // Carregar IDs dos links (novos + já existentes)
+  const obraIdToLinkId: Record<string, string> = {}
+  const obrasLinksIds: string[] = []
+  for (let i = 0; i < obraIds.length; i += CHUNK) {
+    const { data: lks } = await client
+      .from('obras_links')
+      .select('id, obra_id')
+      .in('obra_id', obraIds.slice(i, i + CHUNK))
+    for (const l of (lks ?? [])) {
+      obraIdToLinkId[l.obra_id as string] = l.id as string
+      obrasLinksIds.push(l.id as string)
     }
   }
 
