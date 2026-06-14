@@ -391,12 +391,28 @@ export async function POST(
     }
   }
 
+  // ── debug: retornar se titPayloads vazio antes de tentar insert ──────────
+  if (titPayloads.length === 0) {
+    return NextResponse.json({
+      ok: false,
+      debug: 'titPayloads_vazio',
+      obraParticipacoes_len: obraParticipacoes.length,
+      obraIds_len: obraIds.length,
+      chaveToId_len: Object.keys(chaveToId).length,
+      partByObra_len: partByObra.size,
+      obraIdToLinkId_len: Object.keys(obraIdToLinkId).length,
+      titPayloads_len: 0,
+    }, { status: 422 })
+  }
+
+  let insertError: string | null = null
   const TCHUNK = 500
   for (let i = 0; i < titPayloads.length; i += TCHUNK) {
-    const { data: ins } = await client
+    const { data: ins, error: insErr } = await client
       .from('obras_links_titulares')
       .insert(titPayloads.slice(i, i + TCHUNK))
       .select('id')
+    if (insErr && !insertError) insertError = insErr.message
     if (ins) {
       participacoesGravadas += ins.length
       participacoesIds.push(...ins.map(x => x.id as string))
@@ -507,6 +523,12 @@ export async function POST(
     obras_integradas:       impObras.length,
     titulares_criados:      titularesCriados,
     titulares_vinculados:   titularesVinculados,
+    _debug: {
+      obraParticipacoes_len: obraParticipacoes.length,
+      titPayloads_len:       titPayloads.length,
+      obraIdToLinkId_len:    Object.keys(obraIdToLinkId).length,
+      insert_error:          insertError,
+    },
     editoras_criadas:       editorasCriadas,
     participacoes_gravadas: participacoesGravadas,
     fonogramas_criados:     fonogramasCriados,
