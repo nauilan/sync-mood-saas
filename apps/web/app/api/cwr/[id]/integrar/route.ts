@@ -388,15 +388,12 @@ export async function POST(
         obra_id:                  obraId,
         tenant_id:                usuario.tenantId,
         titular_id:               chaveToId[p.chave] ?? null,
-        nome:                     info?.nome ?? '',
-        papel:                    p.papel,
-        funcao_no_link:           p.papel,
-        percentual_exec_publica:  p.pr_pct,
-        percentual_fonomecanico:  p.mr_pct,
-        percentual_sincronizacao: p.sr_pct,
-        controlado:               p.controlled,
+        funcao_no_link:           p.papel,   // código CWR bruto: CA, A, C, E…
+        percentual_exec_publica:  p.pr_pct  ?? 0,
+        percentual_fonomecanico:  p.mr_pct  ?? 0,
+        percentual_sincronizacao: p.sr_pct  ?? 0,
         ipi:                      info?.ipi ?? null,
-        cae:                      info?.ipi ?? null,
+        status_controle:          p.controlled ? 'controlado' : 'nao_controlado',
       })
     }
   }

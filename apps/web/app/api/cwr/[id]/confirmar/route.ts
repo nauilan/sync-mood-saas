@@ -189,23 +189,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         if (!(a.nome as string)?.trim()) continue
         allTitulares.push({
           obra_link_id: linkId, obra_id: obraId, tenant_id: usuario.tenantId,
-          titular_id: null, nome: (a.nome as string).trim(),
-          papel: _mapAutor(a.papel ?? ''), funcao_no_link: _mapAutor(a.papel ?? ''),
+          titular_id: null,
+          funcao_no_link: (a.papel ?? 'CA').toString().toUpperCase().trim() || 'CA',
           percentual_exec_publica: a.pr_pct ?? 0, percentual_fonomecanico: a.mr_pct ?? 0,
-          percentual_sincronizacao: a.sr_pct ?? 0, controlado: a.controlled ?? false,
-          ipi: a.ipi ?? null, cae: a.ipi ?? null,
+          percentual_sincronizacao: a.sr_pct ?? 0,
+          ipi: a.ipi ?? null,
+          status_controle: a.controlled ? 'controlado' : 'nao_controlado',
         })
       }
       for (const e of ((snap.editoras as any[]) ?? [])) {
         if (!(e.nome as string)?.trim()) continue
         allTitulares.push({
           obra_link_id: linkId, obra_id: obraId, tenant_id: usuario.tenantId,
-          titular_id: null, nome: (e.nome as string).trim(),
-          papel: _mapEditora(e.tipo ?? '', e.papel ?? ''),
-          funcao_no_link: _mapEditora(e.tipo ?? '', e.papel ?? ''),
+          titular_id: null,
+          funcao_no_link: (e.tipo ?? e.papel ?? 'E').toString().toUpperCase().trim() || 'E',
           percentual_exec_publica: e.pr_pct ?? 0, percentual_fonomecanico: e.mr_pct ?? 0,
-          percentual_sincronizacao: e.sr_pct ?? 0, controlado: e.controlled ?? false,
-          ipi: e.ipi ?? null, cae: e.ipi ?? null,
+          percentual_sincronizacao: e.sr_pct ?? 0,
+          ipi: e.ipi ?? null,
+          status_controle: e.controlled ? 'controlado' : 'nao_controlado',
         })
       }
     }
