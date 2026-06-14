@@ -64,15 +64,27 @@ function chaveTitular(ipi: string | null | undefined, nome: string): string {
   return i.length > 0 ? `IPI:${i}` : `NOME:${normNome(nome)}`
 }
 
-/** Retorna o código CWR bruto que o enum funcao_no_link aceita (CA, A, C, E, SE, AM…) */
+/** Valores aceitos pelo enum funcao_no_link no Postgres */
+const FUNCAO_ENUM_OK = new Set<string>(['CA','V','SA','E','AM','SE','C','CE','A','I','M','T','AD','H'])
+
+/** Mapeia código CWR do escritor para valor válido do enum funcao_no_link */
 function mapPapelAutor(p: string): string {
   const r = (p ?? '').toUpperCase().trim()
-  return r || 'CA'   // fallback: CA = Composer-Author
+  if (FUNCAO_ENUM_OK.has(r)) return r
+  if (r === 'AR' || r === 'AE') return 'AD' // Arranger / Author of Expl. Text
+  if (r === 'ES')               return 'CA' // Composer sem letra → CA
+  if (r === 'PA')               return 'A'  // Pseudonymous Author
+  if (r === 'TR')               return 'T'  // Translator
+  return 'CA'                               // fallback universal
 }
 
+/** Mapeia código CWR da editora para valor válido do enum funcao_no_link */
 function mapPapelEditora(tipo: string, papel: string): string {
   const t = (tipo ?? papel ?? '').toUpperCase().trim()
-  return t || 'E'    // fallback: E = Publisher
+  if (FUNCAO_ENUM_OK.has(t)) return t
+  if (t === 'AQ')             return 'AM' // Acquirer → Administradora
+  if (t === 'ES')             return 'SE' // Exclusive Subcollector → Subeditora
+  return 'E'                              // fallback: Editora Original
 }
 
 async function deleteInChunks(

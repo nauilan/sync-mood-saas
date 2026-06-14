@@ -129,13 +129,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const fonoRows = fono.map((f: unknown) => {
         const fg = f as Record<string, unknown>
         return {
-          obra_id:    obraId,
-          tenant_id:  usuario.tenantId,
-          isrc:       fg.isrc   ?? null,
-          titulo:     fg.titulo ?? payload.titulo,
-          interprete: fg.interprete ?? null,
-          versao:     fg.versao ?? null,
-          ano:        fg.ano    ?? null,
+          obra_id:          obraId,
+          tenant_id:        usuario.tenantId,
+          isrc:             fg.isrc       ?? null,
+          titulo_fonograma: (fg.titulo as string) ?? payload.titulo,
+          interprete:       (fg.interprete as string) ?? '',
+          versao:           fg.versao     ?? null,
+          ano_gravacao:     fg.ano        ?? null,
+          status:           'ativo',
         }
       })
       await client.from('fonogramas').insert(fonoRows)
@@ -144,19 +145,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   // ── 8. Criar obras_links + obras_links_titulares a partir do snapshot ────────
-  function _mapAutor(p: string) {
+  const FUNCAO_OK = new Set<string>(['CA','V','SA','E','AM','SE','C','CE','A','I','M','T','AD','H'])
+  function sanitizeFuncaoAutor(p: string): string {
     const r = (p ?? '').toUpperCase().trim()
-    if (r === 'CA' || r === 'C' || r === 'ES') return 'compositor'
-    if (r === 'A'  || r === 'PA') return 'autor'
-    if (r === 'AR' || r === 'AE') return 'arranjador'
-    if (r === 'AD') return 'adaptador'
-    return 'compositor'
+    if (FUNCAO_OK.has(r)) return r
+    if (r === 'AR' || r === 'AE') return 'AD'
+    if (r === 'ES')               return 'CA'
+    if (r === 'PA')               return 'A'
+    if (r === 'TR')               return 'T'
+    return 'CA'
   }
-  function _mapEditora(tipo: string, papel: string) {
+  function sanitizeFuncaoEditora(tipo: string, papel: string): string {
     const t = (tipo ?? papel ?? '').toUpperCase().trim()
-    if (t === 'SE') return 'subeditora'
-    if (t === 'AM' || t === 'AQ') return 'administradora'
-    return 'editora_original'
+    if (FUNCAO_OK.has(t)) return t
+    if (t === 'AQ')       return 'AM'
+    if (t === 'ES')       return 'SE'
+    return 'E'
   }
 
   const linksPayload = obraPayloads.map(p => ({
@@ -190,7 +194,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         allTitulares.push({
           obra_link_id: linkId, obra_id: obraId, tenant_id: usuario.tenantId,
           titular_id: null,
-          funcao_no_link: (a.papel ?? 'CA').toString().toUpperCase().trim() || 'CA',
+          funcao_no_link: sanitizeFuncaoAutor(a.papel ?? ''),
           percentual_exec_publica: a.pr_pct ?? 0, percentual_fonomecanico: a.mr_pct ?? 0,
           percentual_sincronizacao: a.sr_pct ?? 0,
           ipi: a.ipi ?? null,
@@ -202,7 +206,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         allTitulares.push({
           obra_link_id: linkId, obra_id: obraId, tenant_id: usuario.tenantId,
           titular_id: null,
-          funcao_no_link: (e.tipo ?? e.papel ?? 'E').toString().toUpperCase().trim() || 'E',
+          funcao_no_link: sanitizeFuncaoEditora(e.tipo ?? '', e.papel ?? ''),
           percentual_exec_publica: e.pr_pct ?? 0, percentual_fonomecanico: e.mr_pct ?? 0,
           percentual_sincronizacao: e.sr_pct ?? 0,
           ipi: e.ipi ?? null,
