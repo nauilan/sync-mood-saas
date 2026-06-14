@@ -330,7 +330,7 @@ export async function POST(
   if (semLink.length > 0) {
     const CHUNK = 500
     for (let i = 0; i < semLink.length; i += CHUNK) {
-      const { data: novos } = await client
+      const { data: novos, error: linkErr } = await client
         .from('obras_links')
         .insert(semLink.slice(i, i + CHUNK).map(oid => ({
           obra_id:       oid,
@@ -342,6 +342,16 @@ export async function POST(
           status:        'ativo',
         })))
         .select('id, obra_id')
+      if (linkErr) {
+        return NextResponse.json({
+          ok: false,
+          debug: 'obras_links_insert_erro',
+          error: linkErr.message,
+          code:  linkErr.code,
+          semLink_len: semLink.length,
+          amostra_obra_id: semLink[0],
+        }, { status: 500 })
+      }
       for (const l of (novos ?? [])) {
         obraIdToLinkId[l.obra_id as string] = l.id as string
         obrasLinksIds.push(l.id as string)
