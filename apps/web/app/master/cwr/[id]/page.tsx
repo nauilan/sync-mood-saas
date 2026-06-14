@@ -34,14 +34,77 @@ const STATUS_IMP: Record<string, string> = {
   descartado: 'bg-rose-500/15 text-rose-400',
 }
 
+// ─── sub-componentes corpo autoral ────────────────────────────────────────────
+
+function PctCell({ pr, mr, sr }: { pr: number; mr: number; sr: number }) {
+  const items = [
+    pr > 0 && `PR ${pr}%`,
+    mr > 0 && `MR ${mr}%`,
+    sr > 0 && `SR ${sr}%`,
+  ].filter(Boolean)
+  if (!items.length) return null
+  return (
+    <span className="text-[10px] text-white/30 font-mono whitespace-nowrap">
+      {items.join(' · ')}
+    </span>
+  )
+}
+
+function PapelTag({ papel, cor }: { papel: string; cor: 'violet' | 'sky' | 'slate' }) {
+  const cls = {
+    violet: 'bg-violet-500/15 text-violet-400',
+    sky:    'bg-sky-500/15 text-sky-400',
+    slate:  'bg-slate-500/15 text-slate-400',
+  }[cor]
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold shrink-0 ${cls}`}>
+      {papel}
+    </span>
+  )
+}
+
 function ObraCard({ obra, showConfirm }: { obra: any; showConfirm?: boolean }) {
   const [open, setOpen] = useState(false)
   const cwr = obra.snapshot_cwr ?? {}
   const mb = MATCH_BADGE[obra.match_tipo] ?? { label: obra.match_tipo, cls: 'bg-white/5 text-white/40' }
   const eb = EDITORIAL_BADGE[obra.status_editorial] ?? { label: obra.status_editorial, cls: 'text-white/40' }
 
+  const autores:    any[]    = cwr.autores    ?? []
+  const editoras:   any[]    = cwr.editoras   ?? []
+  const fonogramas: any[]    = cwr.fonogramas ?? []
+  const pwrLinks:   any[]    = cwr.pwr_links  ?? []
+  const titAlt:     string[] = cwr.titulos_alt ?? []
+
+  // Mapas de IPI para lookup rápido
+  const autorByIpi  = new Map(autores.filter((a: any) => a.ipi).map((a: any) => [a.ipi, a]))
+  const edByIpi     = new Map(editoras.filter((e: any) => e.ipi).map((e: any) => [e.ipi, e]))
+
+  // Links controlados: agrupa autor + editora via pwr_links
+  const linkGroups = pwrLinks.map((p: any) => ({
+    autor:    autorByIpi.get(p.writer_ip)    ?? null,
+    editora:  edByIpi.get(p.publisher_ip)    ?? null,
+    writerIp: p.writer_ip,
+    pubIp:    p.publisher_ip,
+    pubNome:  p.publisher_nome,
+  })).filter((g: any) => g.autor || g.editora)
+
+  const ipisComLink = new Set([
+    ...linkGroups.map((g: any) => g.writerIp).filter(Boolean),
+    ...linkGroups.map((g: any) => g.pubIp).filter(Boolean),
+  ])
+
+  // Autores/editoras controlados sem pwr_link (fallback quando não há pwr_links)
+  const autoresSemLink  = autores.filter((a: any) => !ipisComLink.has(a.ipi))
+  const editorasSemLink = editoras.filter((e: any) => !ipisComLink.has(e.ipi))
+
+  const autCtrl    = autoresSemLink.filter((a: any) => a.controlled !== false)
+  const autNaoCtrl = autoresSemLink.filter((a: any) => a.controlled === false)
+  const edCtrl     = editorasSemLink.filter((e: any) => e.controlled !== false)
+  const edNaoCtrl  = editorasSemLink.filter((e: any) => e.controlled === false)
+
   return (
     <div className="bg-white/[0.02] border border-white/[0.04] rounded-lg overflow-hidden">
+      {/* ── cabeçalho ── */}
       <button
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/[0.02] transition-colors"
@@ -50,7 +113,7 @@ function ObraCard({ obra, showConfirm }: { obra: any; showConfirm?: boolean }) {
           <Music className="w-3.5 h-3.5 text-violet-400 shrink-0" />
           <span className="text-sm text-white font-medium truncate">{cwr.titulo ?? '—'}</span>
           {cwr.iswc && (
-            <span className="text-[10px] font-mono text-white/30 shrink-0">{cwr.iswc}</span>
+            <span className="text-[10px] font-mono text-violet-300/50 shrink-0">{cwr.iswc}</span>
           )}
         </div>
         <div className="flex items-center gap-3 shrink-0 ml-4">
@@ -61,79 +124,174 @@ function ObraCard({ obra, showConfirm }: { obra: any; showConfirm?: boolean }) {
         </div>
       </button>
 
+      {/* ── corpo expandido ── */}
       {open && (
-        <div className="px-4 pb-4 space-y-3 border-t border-white/[0.04] pt-3">
-          {/* Autores */}
-          {(cwr.autores ?? []).length > 0 && (
-            <div>
-              <p className="text-[10px] text-white/30 font-semibold uppercase mb-1.5 flex items-center gap-1">
-                <Users className="w-3 h-3" /> Autores
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {(cwr.autores as any[]).map((a: any, i: number) => (
-                  <span key={i} className="text-xs bg-white/[0.04] text-white/60 px-2 py-0.5 rounded">
-                    {a.nome} {a.percentual_pr ? `(${a.percentual_pr}%)` : ''} {a.ipi ? `— IPI ${a.ipi}` : ''}
-                  </span>
-                ))}
-              </div>
+        <div className="px-4 pb-4 space-y-4 border-t border-white/[0.04] pt-3">
+
+          {/* Info geral */}
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px]">
+            <span className="text-white/30">
+              Código CWR: <span className="font-mono text-white/50">{cwr.submitter_work_no || '—'}</span>
+            </span>
+            {cwr.iswc && (
+              <span className="text-white/30">
+                ISWC: <span className="font-mono text-violet-300/60">{cwr.iswc}</span>
+              </span>
+            )}
+            {cwr.lang && (
+              <span className="text-white/30">
+                Idioma: <span className="text-white/50">{cwr.lang}</span>
+              </span>
+            )}
+            {cwr.categoria && (
+              <span className="text-white/30">
+                Categoria: <span className="text-white/50">{cwr.categoria}</span>
+              </span>
+            )}
+          </div>
+
+          {/* Títulos alternativos */}
+          {titAlt.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {titAlt.map((t, i) => (
+                <span key={i} className="text-[10px] bg-white/[0.03] text-white/35 px-2 py-0.5 rounded border border-white/[0.05]">
+                  {t}
+                </span>
+              ))}
             </div>
           )}
 
-          {/* Editoras */}
-          {(cwr.editoras ?? []).length > 0 && (
+          {/* ─── Links controlados (autor + editora no mesmo bloco) ─── */}
+          {linkGroups.length > 0 && (
             <div>
-              <p className="text-[10px] text-white/30 font-semibold uppercase mb-1.5 flex items-center gap-1">
-                <Building2 className="w-3 h-3" /> Editoras
+              <p className="text-[10px] text-white/30 font-semibold uppercase mb-2 flex items-center gap-1.5">
+                <FileCode2 className="w-3 h-3" /> Links Controlados
               </p>
-              <div className="flex flex-wrap gap-1.5">
-                {(cwr.editoras as any[]).map((e: any, i: number) => (
-                  <span key={i} className="text-xs bg-white/[0.04] text-white/60 px-2 py-0.5 rounded">
-                    {e.nome} {e.percentual_pr ? `(${e.percentual_pr}%)` : ''}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Fonogramas */}
-          {(cwr.fonogramas ?? []).length > 0 && (
-            <div>
-              <p className="text-[10px] text-white/30 font-semibold uppercase mb-1.5">Fonogramas</p>
-              <div className="space-y-1">
-                {(cwr.fonogramas as any[]).map((f: any, i: number) => (
-                  <div key={i} className="text-[11px] text-white/50 flex items-center gap-2">
-                    <span className="font-mono text-violet-300/60">{f.isrc ?? '—'}</span>
-                    <span>{f.interprete ?? '—'}</span>
-                    {f.versao && <span className="text-white/30">{f.versao}</span>}
-                    {f.ano && <span className="text-white/30">{f.ano}</span>}
+              <div className="space-y-2">
+                {linkGroups.map((lg: any, i: number) => (
+                  <div key={i} className="bg-white/[0.025] border border-white/[0.05] rounded-md overflow-hidden">
+                    {lg.autor && (
+                      <div className="flex items-center gap-2 px-3 py-2 text-xs">
+                        <Users className="w-3 h-3 text-violet-400 shrink-0" />
+                        <span className="text-white/75 font-medium flex-1 min-w-0 truncate">{lg.autor.nome}</span>
+                        <PapelTag papel={lg.autor.papel || 'CA'} cor="violet" />
+                        {lg.autor.ipi && (
+                          <span className="text-[10px] text-white/25 font-mono hidden sm:block">IPI {lg.autor.ipi}</span>
+                        )}
+                        <PctCell pr={lg.autor.pr_pct ?? 0} mr={lg.autor.mr_pct ?? 0} sr={lg.autor.sr_pct ?? 0} />
+                      </div>
+                    )}
+                    {lg.editora && (
+                      <div className="flex items-center gap-2 px-3 py-2 text-xs border-t border-white/[0.04] bg-white/[0.01] pl-6">
+                        <Building2 className="w-3 h-3 text-sky-400 shrink-0" />
+                        <span className="text-white/60 flex-1 min-w-0 truncate">{lg.editora.nome}</span>
+                        <PapelTag papel={lg.editora.tipo || lg.editora.papel || 'E'} cor="sky" />
+                        {lg.editora.ipi && (
+                          <span className="text-[10px] text-white/25 font-mono hidden sm:block">IPI {lg.editora.ipi}</span>
+                        )}
+                        <PctCell pr={lg.editora.pr_pct ?? 0} mr={lg.editora.mr_pct ?? 0} sr={lg.editora.sr_pct ?? 0} />
+                      </div>
+                    )}
+                    {!lg.editora && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 text-[10px] border-t border-white/[0.03] bg-white/[0.01] pl-6 text-white/25 italic">
+                        <Building2 className="w-3 h-3 shrink-0" />
+                        {lg.pubNome || 'Editora não identificada'}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Títulos alternativos */}
-          {(cwr.titulos_alt ?? []).length > 0 && (
+          {/* ─── Autores/editoras controlados sem pwr_link ─── */}
+          {(autCtrl.length > 0 || edCtrl.length > 0) && (
             <div>
-              <p className="text-[10px] text-white/30 font-semibold uppercase mb-1">Títulos Alternativos</p>
-              <div className="flex flex-wrap gap-1.5">
-                {(cwr.titulos_alt as string[]).map((t, i) => (
-                  <span key={i} className="text-[11px] bg-white/[0.03] text-white/40 px-2 py-0.5 rounded">{t}</span>
+              <p className="text-[10px] text-white/30 font-semibold uppercase mb-2 flex items-center gap-1.5">
+                <Users className="w-3 h-3 text-violet-400" /> Autores Controlados
+              </p>
+              <div className="space-y-1">
+                {autCtrl.map((a: any, i: number) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2 bg-white/[0.025] border border-white/[0.05] rounded-md text-xs">
+                    <Users className="w-3 h-3 text-violet-400 shrink-0" />
+                    <span className="text-white/75 font-medium flex-1 min-w-0 truncate">{a.nome}</span>
+                    <PapelTag papel={a.papel || 'CA'} cor="violet" />
+                    {a.ipi && <span className="text-[10px] text-white/25 font-mono hidden sm:block">IPI {a.ipi}</span>}
+                    <PctCell pr={a.pr_pct ?? 0} mr={a.mr_pct ?? 0} sr={a.sr_pct ?? 0} />
+                  </div>
+                ))}
+                {edCtrl.map((e: any, i: number) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2 bg-white/[0.025] border border-white/[0.05] rounded-md text-xs pl-5">
+                    <Building2 className="w-3 h-3 text-sky-400 shrink-0" />
+                    <span className="text-white/60 flex-1 min-w-0 truncate">{e.nome}</span>
+                    <PapelTag papel={e.tipo || e.papel || 'E'} cor="sky" />
+                    {e.ipi && <span className="text-[10px] text-white/25 font-mono hidden sm:block">IPI {e.ipi}</span>}
+                    <PctCell pr={e.pr_pct ?? 0} mr={e.mr_pct ?? 0} sr={e.sr_pct ?? 0} />
+                  </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Critério de match */}
+          {/* ─── Autores/editoras NÃO controlados ─── */}
+          {(autNaoCtrl.length > 0 || edNaoCtrl.length > 0) && (
+            <div>
+              <p className="text-[10px] text-white/30 font-semibold uppercase mb-2 flex items-center gap-1.5">
+                <Users className="w-3 h-3 text-white/30" /> Não Controlados
+              </p>
+              <div className="space-y-1">
+                {autNaoCtrl.map((a: any, i: number) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.015] border border-white/[0.04] rounded-md text-xs">
+                    <Users className="w-3 h-3 text-white/25 shrink-0" />
+                    <span className="text-white/45 flex-1 min-w-0 truncate">{a.nome}</span>
+                    <PapelTag papel={a.papel || 'OA'} cor="slate" />
+                    {a.ipi && <span className="text-[10px] text-white/20 font-mono hidden sm:block">IPI {a.ipi}</span>}
+                    <PctCell pr={a.pr_pct ?? 0} mr={a.mr_pct ?? 0} sr={a.sr_pct ?? 0} />
+                  </div>
+                ))}
+                {edNaoCtrl.map((e: any, i: number) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.015] border border-white/[0.04] rounded-md text-xs pl-5">
+                    <Building2 className="w-3 h-3 text-white/25 shrink-0" />
+                    <span className="text-white/45 flex-1 min-w-0 truncate">{e.nome}</span>
+                    <PapelTag papel={e.tipo || e.papel || 'OE'} cor="slate" />
+                    {e.ipi && <span className="text-[10px] text-white/20 font-mono hidden sm:block">IPI {e.ipi}</span>}
+                    <PctCell pr={e.pr_pct ?? 0} mr={e.mr_pct ?? 0} sr={e.sr_pct ?? 0} />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ─── Fonogramas ─── */}
+          {fonogramas.length > 0 && (
+            <div>
+              <p className="text-[10px] text-white/30 font-semibold uppercase mb-2">Fonogramas</p>
+              <div className="space-y-1">
+                {fonogramas.map((f: any, i: number) => (
+                  <div key={i} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] px-3 py-1.5 bg-white/[0.015] rounded border border-white/[0.04]">
+                    {f.isrc
+                      ? <span className="font-mono text-violet-300/70">{f.isrc}</span>
+                      : <span className="font-mono text-white/20">sem ISRC</span>
+                    }
+                    {f.interprete && <span className="text-white/55">{f.interprete}</span>}
+                    {f.versao    && <span className="text-white/30 text-[10px]">{f.versao}</span>}
+                    {f.ano       && <span className="text-white/30 text-[10px]">{f.ano}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ─── Rodapé ─── */}
           {obra.match_criterio && (
             <p className="text-[10px] text-white/25">
-              Match por: <span className="text-white/40">{obra.match_criterio}</span>
-              {obra.obra_id && <span className="ml-2 font-mono text-white/20">obra #{obra.obra_id.slice(0, 8)}</span>}
+              Match: <span className="text-white/35">{obra.match_criterio}</span>
+              {obra.obra_id && <span className="ml-2 font-mono text-white/20">id {obra.obra_id.slice(0, 8)}</span>}
             </p>
           )}
 
           {showConfirm && obra.match_tipo === 'nova' && (
-            <div className="mt-1 pt-2 border-t border-white/[0.04] text-[10px] text-white/30">
+            <div className="pt-2 border-t border-white/[0.04] text-[10px] text-white/30">
               Será criada como <span className="text-amber-400 font-semibold">pré-cadastro</span> ao confirmar a importação.
             </div>
           )}
