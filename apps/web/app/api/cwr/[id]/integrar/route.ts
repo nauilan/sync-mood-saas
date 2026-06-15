@@ -139,15 +139,28 @@ export async function POST(
   }
 
   // ── 2. Carregar snapshots ─────────────────────────────────────────────────
-  const { data: impObras } = await client
+  const { data: impObrasRaw } = await client
     .from('cwr_importacoes_obras')
-    .select('obra_id, snapshot_cwr')
+    .select('obra_id, snapshot_cwr, created_at')
     .eq('importacao_id', id)
     .not('obra_id', 'is', null)
+    .order('created_at', { ascending: false })
 
-  if (!impObras?.length) {
+  if (!impObrasRaw?.length) {
     return NextResponse.json({ error: 'Nenhuma obra encontrada nesta importação.' }, { status: 404 })
   }
+
+  // Deduplicar por obra_id — manter apenas o snapshot mais recente por obra.
+  // Situação possível: reprocessar insere novo lote antes de deletar o antigo;
+  // se o delete falhar silenciosamente ambos coexistem. Usar o mais novo garante
+  // que a integração sempre usa os valores do último parser (ex: SPT correto).
+  const seenObraIds = new Set<string>()
+  const impObras = impObrasRaw.filter(r => {
+    const oid = r.obra_id as string
+    if (seenObraIds.has(oid)) return false
+    seenObraIds.add(oid)
+    return true
+  })
 
   // ── 3. Extrair autores, editoras, fonogramas dos snapshots ────────────────
   const autoresUnicos   = new Map<string, { nome: string; ipi: string | null; tipo: 'autor' }>()
@@ -589,6 +602,9 @@ export async function POST(
     titulares_criados:      titularesCriados,
     titulares_vinculados:   titularesVinculados,
     _debug: {
+      snapshots_raw:         impObrasRaw.length,
+      snapshots_dedup:       impObras.length,
+      duplicatas_removidas:  impObrasRaw.length - impObras.length,
       obraParticipacoes_len: obraParticipacoes.length,
       titPayloads_len:       titPayloads.length,
       obraIdToLinkId_len:    Object.keys(obraIdToLinkId).length,
