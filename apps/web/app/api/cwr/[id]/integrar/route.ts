@@ -522,10 +522,7 @@ export async function POST(
     for (let i = 0; i < stagingPayloads.length; i += SCHUNK) {
       const { error: stErr } = await client
         .from('cwr_importacoes_titulares')
-        .upsert(stagingPayloads.slice(i, i + SCHUNK), {
-          onConflict:       'importacao_id,obra_id,nome_cwr,papel_cwr',
-          ignoreDuplicates: true,
-        })
+        .insert(stagingPayloads.slice(i, i + SCHUNK))
       if (stErr) {
         // Não abortar a integração por falha no staging — apenas logar
         console.error('[integrar] staging_titulares_insert_erro', stErr.message)
