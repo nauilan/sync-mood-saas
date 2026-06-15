@@ -414,8 +414,10 @@ export async function POST(
         nome_completo:  info.nome,
         ipi:            info.ipi ?? null,
         codigo_ipi:     info.ipi ?? null,
-        status:         'ativo',
-        observacoes:    `Criado via importação CWR ${id}`,
+        status:            'pre_cadastro',
+        origem_importacao: 'cwr',
+        importacao_id:     id,
+        observacoes:       `Criado via importação CWR ${id}`,
       })
       chaveKeys.push(chave)
       seq++
@@ -458,19 +460,31 @@ export async function POST(
   // ── 6b. Registrar staging cwr_importacoes_titulares ─────────────────────
   // Uma linha por (titular × obra) — base de auditoria e fila de revisão.
   let stagingEncontrados    = 0
+  let stagingEmRevisao      = 0
   let stagingCriadosCount   = 0
   let stagingConflitosCount = 0
   let stagingIgnoradosCount = 0
 
   {
+    // Deduplicar por (obra_id, chave, papel_cwr) — mesmo titular pode aparecer
+    // múltiplas vezes no array se o CWR tiver registros duplicados.
+    const stagingDedup = new Map<string, StagingEntry>()
+    for (const s of stagingEntries) {
+      const k = `${s.obra_id}|${s.chave}|${s.papel_cwr}`
+      if (!stagingDedup.has(k)) stagingDedup.set(k, s)
+    }
+    const stagingUnique = [...stagingDedup.values()]
+
     const criadosSet = new Set(titularesCriadosIds)
-    const stagingPayloads = stagingEntries.map(s => {
+    const stagingPayloads = stagingUnique.map(s => {
       const tid    = chaveToId[s.chave]
       const status = !tid
         ? 'ignorado'
         : criadosSet.has(tid)
           ? 'criado_pre_cadastro'
-          : 'encontrado'
+          : chaveMatchCriterio[s.chave] === 'nome'
+            ? 'em_revisao'   // match por nome: requer revisão humana
+            : 'encontrado'   // match por IPI: confiança máxima
       return {
         importacao_id:      s.importacao_id,
         obra_importacao_id: s.obra_importacao_id,
@@ -495,6 +509,7 @@ export async function POST(
 
     for (const s of stagingPayloads) {
       if      (s.match_status === 'encontrado')           stagingEncontrados++
+      else if (s.match_status === 'em_revisao')           stagingEmRevisao++
       else if (s.match_status === 'criado_pre_cadastro')  stagingCriadosCount++
       else if (s.match_status === 'conflito')             stagingConflitosCount++
       else                                                stagingIgnoradosCount++
@@ -507,7 +522,10 @@ export async function POST(
     for (let i = 0; i < stagingPayloads.length; i += SCHUNK) {
       const { error: stErr } = await client
         .from('cwr_importacoes_titulares')
-        .insert(stagingPayloads.slice(i, i + SCHUNK))
+        .upsert(stagingPayloads.slice(i, i + SCHUNK), {
+          onConflict:       'importacao_id,obra_id,nome_cwr,papel_cwr',
+          ignoreDuplicates: true,
+        })
       if (stErr) {
         // Não abortar a integração por falha no staging — apenas logar
         console.error('[integrar] staging_titulares_insert_erro', stErr.message)
@@ -777,6 +795,7 @@ export async function POST(
     staging_titulares: {
       total:                stagingEntries.length,
       encontrados:          stagingEncontrados,
+      em_revisao:           stagingEmRevisao,
       criados_pre_cadastro: stagingCriadosCount,
       conflitos:            stagingConflitosCount,
       ignorados:            stagingIgnoradosCount,

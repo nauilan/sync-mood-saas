@@ -35,10 +35,11 @@ CREATE TABLE IF NOT EXISTS cwr_importacoes_titulares (
 
   -- Resultado do matching
   match_status        TEXT        NOT NULL DEFAULT 'ignorado',
-  -- encontrado          → titular já existia no banco
-  -- criado_pre_cadastro → titular criado automaticamente (status=ativo, origem=importacao_cwr)
-  -- conflito            → múltiplos candidatos; requer revisão manual
-  -- ignorado            → sem nome ou sem possibilidade de match
+  -- encontrado          → match por IPI/CAE; confiança máxima; integrado automaticamente
+  -- em_revisao          → match por nome (score 85); requer revisão humana antes de homologar
+  -- criado_pre_cadastro → titular não existia; criado com status=pre_cadastro em titulares
+  -- conflito            → múltiplos candidatos; requer decisão manual
+  -- ignorado            → sem nome válido ou sem possibilidade de match
 
   match_criterio      TEXT,
   -- ipi_cae      → match por IPI/CAE (confiança máxima)
@@ -63,13 +64,19 @@ CREATE INDEX IF NOT EXISTS idx_cwr_imp_tit_titular     ON cwr_importacoes_titula
 CREATE INDEX IF NOT EXISTS idx_cwr_imp_tit_status      ON cwr_importacoes_titulares (match_status);
 CREATE INDEX IF NOT EXISTS idx_cwr_imp_tit_obra_imp    ON cwr_importacoes_titulares (obra_importacao_id);
 
+-- Unique: evita duplicidade de mesma (obra, nome, papel) na mesma importação.
+-- O route usa upsert ON CONFLICT DO NOTHING → CWR com registros duplicados não quebra.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_cwr_imp_tit_obra_nome_papel
+  ON cwr_importacoes_titulares (importacao_id, obra_id, nome_cwr, papel_cwr);
+
 -- Comentários
 COMMENT ON TABLE cwr_importacoes_titulares IS
   'Staging de titulares (autores e editoras) identificados em cada obra de uma importação CWR. '
   'Uma linha por titular por obra. Base da fila de revisão de pré-cadastros.';
 
 COMMENT ON COLUMN cwr_importacoes_titulares.match_status IS
-  'encontrado=já existia no banco; criado_pre_cadastro=criado automaticamente; '
+  'encontrado=match IPI (confiança máxima); em_revisao=match nome (requer revisão humana); '
+  'criado_pre_cadastro=titular criado com status=pre_cadastro, origem_importacao=cwr; '
   'conflito=múltiplos candidatos; ignorado=sem match possível';
 
 COMMENT ON COLUMN cwr_importacoes_titulares.fonte_percentual IS
