@@ -452,7 +452,7 @@ export default function TitularesPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    authFetch('/api/titulares?per_page=200')
+    authFetch('/api/titulares?per_page=2000')
       .then(r => r.json())
       .then(json => {
         if (json.data) {

@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search') ?? ''
   const tipo = searchParams.get('tipo') ?? 'todos'   // autor | editora | todos
   const status = searchParams.get('status') ?? 'todos' // ativo | inativo | todos
-  const per_page = Math.min(Number(searchParams.get('per_page') ?? 50), 200)
+  const per_page = Math.min(Number(searchParams.get('per_page') ?? 50), 2000)
   const page = Math.max(Number(searchParams.get('page') ?? 1), 1)
   const offset = (page - 1) * per_page
 
