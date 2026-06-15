@@ -26,8 +26,9 @@ async function getUser(req: NextRequest) {
 }
 
 // ── POST /api/cwr/[id]/reprocessar ────────────────────────────────────────────
-// Lê conteudo_raw do banco, re-parseia com o parser atualizado,
-// apaga os snapshots antigos e grava os novos.
+// Lê conteudo_raw do banco, re-parseia com o parser atualizado e substitui
+// snapshots de forma segura: INSERT novo lote → só então DELETE lote antigo.
+// Se o INSERT falhar, o lote antigo é preservado intacto.
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const usuario = await getUser(req)
@@ -82,9 +83,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return { cwr: cwrObra, match: matchResult, autores: autoresMatch, editoras: editorasMatch }
   })
 
-  // 5. Apagar snapshots antigos e inserir novos
-  await client.from('cwr_importacoes_obras').delete().eq('importacao_id', id)
+  // 5. Substituição segura: capturar IDs antigos → INSERT novo lote → DELETE lote antigo
+  // Se o INSERT falhar, o lote antigo é preservado e o erro é retornado.
 
+  // 5a. Validar que o parse produziu dados antes de tocar o banco
+  if (obrasAnalisadas.length === 0) {
+    return NextResponse.json(
+      { error: 'Parser não produziu obras — reprocessamento cancelado, snapshot anterior mantido' },
+      { status: 422 }
+    )
+  }
+
+  // 5b. Capturar IDs do lote atual (antes de inserir o novo)
+  const { data: existingRows } = await client
+    .from('cwr_importacoes_obras')
+    .select('id')
+    .eq('importacao_id', id)
+  const oldIds = (existingRows ?? []).map((r: { id: string }) => r.id)
+
+  // 5c. Montar novo lote
   const rows = obrasAnalisadas.map(o => ({
     importacao_id:     id,
     obra_id:           o.match.obra_id,
@@ -101,8 +118,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     titulos_alt: o.cwr.titulos_alt,
   }))
 
+  // 5d. INSERT novo lote PRIMEIRO — se falhar, snapshot anterior intacto
   const { error: errInsert } = await client.from('cwr_importacoes_obras').insert(rows)
   if (errInsert) return NextResponse.json({ error: errInsert.message }, { status: 500 })
+
+  // 5e. Só após insert com sucesso, deletar lote antigo pelos IDs capturados
+  if (oldIds.length > 0) {
+    const chunkSize = 200
+    for (let i = 0; i < oldIds.length; i += chunkSize) {
+      await client
+        .from('cwr_importacoes_obras')
+        .delete()
+        .in('id', oldIds.slice(i, i + chunkSize))
+    }
+  }
 
   // 6. Métricas de reprocessamento
   const stats = {
