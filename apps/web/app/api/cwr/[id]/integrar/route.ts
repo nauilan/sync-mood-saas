@@ -516,7 +516,18 @@ export async function POST(
     }
 
     // Idempotência: apagar staging anterior desta importação antes de recriar
-    await client.from('cwr_importacoes_titulares').delete().eq('importacao_id', id)
+    const { error: delErr } = await client
+      .from('cwr_importacoes_titulares')
+      .delete()
+      .eq('importacao_id', id)
+    if (delErr) {
+      return NextResponse.json({
+        ok:    false,
+        debug: 'staging_delete_erro',
+        error: delErr.message,
+        code:  delErr.code,
+      }, { status: 500 })
+    }
 
     const SCHUNK = 500
     for (let i = 0; i < stagingPayloads.length; i += SCHUNK) {
@@ -524,8 +535,19 @@ export async function POST(
         .from('cwr_importacoes_titulares')
         .insert(stagingPayloads.slice(i, i + SCHUNK))
       if (stErr) {
-        // Não abortar a integração por falha no staging — apenas logar
-        console.error('[integrar] staging_titulares_insert_erro', stErr.message)
+        // Falha no staging → retornar 500 com diagnóstico completo
+        return NextResponse.json({
+          ok:    false,
+          debug: 'staging_titulares_insert_erro',
+          error: stErr.message,
+          code:  stErr.code,
+          detalhe: stErr.details,
+          hint:    (stErr as any).hint ?? null,
+          chunk_index:     i,
+          chunk_size:      SCHUNK,
+          payload_amostra: stagingPayloads[i],   // primeiro item do chunk com erro
+          staging_total:   stagingPayloads.length,
+        }, { status: 500 })
       }
     }
   }
