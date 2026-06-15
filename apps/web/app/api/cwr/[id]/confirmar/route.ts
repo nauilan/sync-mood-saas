@@ -136,7 +136,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           interprete:       (fg.interprete as string) ?? '',
           versao:           (fg.versao as string) ?? 'original',
           ano_gravacao:     fg.ano        ?? null,
-          status:           'ativo',
         }
       })
       await client.from('fonogramas').insert(fonoRows)

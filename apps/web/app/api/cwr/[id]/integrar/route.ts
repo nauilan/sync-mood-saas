@@ -518,7 +518,6 @@ export async function POST(
           interprete:       f.interprete   ?? null,
           versao:           f.versao       ?? 'original',
           ano_gravacao:     f.ano          ?? null,
-          status:           'ativo',
         })))
         .select('id')
       if (fgErr) {
