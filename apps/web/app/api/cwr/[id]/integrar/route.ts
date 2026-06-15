@@ -159,7 +159,11 @@ export async function POST(
     controlled: boolean; obraId: string
   }
   const obraParticipacoes: PartObra[] = []
-  let adminsPendentesCount = 0   // AM com todos percentuais 0 — share definido por contrato
+  // Contadores de categoria AM por obra
+  let obrasSemAm           = 0   // Cenário A: sem administradora
+  let obrasAmDefinido      = 0   // AM com percentual explícito no CWR
+  let obrasAmPendente      = 0   // AM presente mas pct=0 e não é Cenário C
+  let adminsPendentesCount = 0   // total de entradas AM pendentes
   type FgObra = { obraId: string; isrc: string | null; titulo: string; interprete: string | null; versao: string | null; ano: number | null }
   const obraFonogramas: FgObra[] = []
 
@@ -185,29 +189,47 @@ export async function POST(
       })
     }
 
-    for (const e of ((snap.editoras as any[]) ?? [])) {
+    // ── Categorizar AMs desta obra ────────────────────────────────────────────
+    // Cenário A: sem AM → integração normal, nenhuma pendência
+    // Cenário B: E + AM com pct=0 → AM pendente (share por contrato)
+    // Cenário C: AM e E são a mesma entidade (mesmo IPI/nome) → NÃO é pendência
+    const editorasCwr: any[] = (snap.editoras as any[]) ?? []
+
+    const isPendingAm = (e: any): boolean => {
+      if (mapPapelEditora(e.tipo ?? '', e.papel ?? '') !== 'AM') return false
+      if ((Number(e.pr_pct)||0) > 0 || (Number(e.mr_pct)||0) > 0 || (Number(e.sr_pct)||0) > 0) return false
+      const amIpi  = (e.ipi  as string | null)?.trim()
+      const amNome = (e.nome as string | null)?.trim().toLowerCase()
+      // Cenário C: mesma entidade aparece como E → não é administradora pendente
+      return !editorasCwr.some((e2: any) => {
+        if (mapPapelEditora(e2.tipo ?? '', e2.papel ?? '') !== 'E') return false
+        if (amIpi && amIpi !== '' && (e2.ipi as string | null)?.trim() === amIpi) return true
+        return Boolean(amNome && (e2.nome as string | null)?.trim().toLowerCase() === amNome)
+      })
+    }
+
+    const temAm = editorasCwr.some((e: any) => mapPapelEditora(e.tipo ?? '', e.papel ?? '') === 'AM')
+    const amsPendentesObra = editorasCwr.filter(isPendingAm)
+
+    if (!temAm)                           obrasSemAm++
+    else if (amsPendentesObra.length > 0) obrasAmPendente++
+    else                                  obrasAmDefinido++
+    adminsPendentesCount += amsPendentesObra.length
+
+    for (const e of editorasCwr) {
       if (!(e.nome as string)?.trim()) continue
       const chave = chaveTitular(e.ipi, e.nome)
       const tipoEdit: 'editora' | 'editora_administrada' = e.controlled ? 'editora' : 'editora_administrada'
       if (!editorasUnicas.has(chave)) {
         editorasUnicas.set(chave, { nome: (e.nome as string).trim(), ipi: e.ipi ?? null, controlled: e.controlled ?? false, tipo: tipoEdit })
       }
-      const papelMapeado = mapPapelEditora(e.tipo ?? '', e.papel ?? '')
-      const prPct = Number(e.pr_pct) || 0
-      const mrPct = Number(e.mr_pct) || 0
-      const srPct = Number(e.sr_pct) || 0
-      // AM com todos os percentuais zero: share definido por contrato, não pelo CWR NWR.
-      // Não criar participação editorial — registrar como pendente.
-      if (papelMapeado === 'AM' && prPct === 0 && mrPct === 0 && srPct === 0) {
-        adminsPendentesCount++
-        continue
-      }
+      if (isPendingAm(e)) continue   // Cenário B sem pct: não criar participação editorial
       obraParticipacoes.push({
         chave,
-        papel:      papelMapeado,
-        pr_pct:     prPct,
-        mr_pct:     mrPct,
-        sr_pct:     srPct,
+        papel:      mapPapelEditora(e.tipo ?? '', e.papel ?? ''),
+        pr_pct:     Number(e.pr_pct) || 0,
+        mr_pct:     Number(e.mr_pct) || 0,
+        sr_pct:     Number(e.sr_pct) || 0,
         controlled: e.controlled ?? false,
         obraId,
       })
@@ -576,6 +598,9 @@ export async function POST(
     participacoes_gravadas:    participacoesGravadas,
     fonogramas_criados:        fonogramasCriados,
     fonogramas_vinculados:     fonogramasVinculados,
+    obras_sem_am:              obrasSemAm,
+    obras_am_definido:         obrasAmDefinido,
+    obras_am_pendente:         obrasAmPendente,
     administradoras_pendentes: adminsPendentesCount,
     conflitos:                 conflitos.length,
     conflitos_detalhe:         conflitos.slice(0, 50),

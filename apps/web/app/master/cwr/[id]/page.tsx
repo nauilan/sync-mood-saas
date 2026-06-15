@@ -344,11 +344,9 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
       if (!res.ok) { setIntegraMsg(d.error ?? 'Erro ao integrar.'); return }
       setIntegraMsg(
         `✓ Integração concluída: ${d.obras_integradas} obras · ` +
-        `${d.titulares_criados} titulares criados · ` +
-        `${d.titulares_vinculados} vinculados · ` +
-        `${d.participacoes_gravadas} participações · ` +
-        `${d.fonogramas_criados} fonogramas criados` +
-        (d.administradoras_pendentes > 0 ? ` · ⚠ ${d.administradoras_pendentes} AM c/ percentual pendente` : '')
+        `${d.titulares_criados} titulares criados · ${d.titulares_vinculados} vinculados · ` +
+        `${d.participacoes_gravadas} participações · ${d.fonogramas_criados} fonogramas` +
+        ` | AM: ${d.obras_sem_am ?? 0} sem AM · ${d.obras_am_definido ?? 0} definido · ${d.obras_am_pendente ?? 0} pendente`
       )
     } catch { setIntegraMsg('Falha na requisição.') }
     finally { setIntegrando(false) }
@@ -447,16 +445,30 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
   const conflitos: any[] = data.conflitos ?? []
   const r = imp.relatorio ?? {}
 
-  // Administradoras com percentual zerado no CWR (padrão NWR — share por contrato)
-  const amPendentesCount: number = obras.reduce((acc: number, o: any) => {
-    const eds: any[] = o.snapshot_cwr?.editoras ?? []
-    return acc + eds.filter((e: any) => {
-      const papel = (e.tipo ?? e.papel ?? '').toUpperCase().trim()
-      return (papel === 'AM' || papel === 'AQ') &&
-             (Number(e.pr_pct) || 0) === 0 &&
-             (Number(e.mr_pct) || 0) === 0
-    }).length
-  }, 0)
+  // ── Indicadores AM por obra (computado do snapshot) ───────────────────────
+  // Cenário A: sem AM  |  Cenário B/C: AM definido  |  Pendente: AM com pct=0
+  const categoriasAm = obras.reduce(
+    (acc: { sem_am: number; am_definido: number; am_pendente: number }, o: any) => {
+      const eds: any[] = o.snapshot_cwr?.editoras ?? []
+      const amEntries = eds.filter((e: any) => {
+        const p = (e.tipo ?? e.papel ?? '').toUpperCase().trim()
+        return p === 'AM' || p === 'AQ'
+      })
+      if (amEntries.length === 0) {
+        acc.sem_am++
+      } else {
+        const temPctAm = amEntries.some(
+          (e: any) => (Number(e.pr_pct)||0) > 0 || (Number(e.mr_pct)||0) > 0
+        )
+        if (temPctAm) acc.am_definido++
+        else          acc.am_pendente++
+      }
+      return acc
+    },
+    { sem_am: 0, am_definido: 0, am_pendente: 0 }
+  )
+  // Mantém compatibilidade com refs antigas
+  const amPendentesCount = categoriasAm.am_pendente
 
   const obrasFiltradas: Record<TabKey, any[]> = {
     novas:      obras.filter(o => o.match_tipo === 'nova'),
@@ -592,6 +604,27 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
           {populaMsg}
         </div>
       )}
+      {/* Indicadores de administradora por obra */}
+      {imp.status === 'confirmado' && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="flex flex-col items-center justify-center px-3 py-2 bg-zinc-800 rounded-lg border border-zinc-700">
+            <span className="text-xs text-zinc-400">Sem AM</span>
+            <span className="text-lg font-bold text-zinc-200">{categoriasAm.sem_am}</span>
+            <span className="text-xs text-zinc-500">obras</span>
+          </div>
+          <div className="flex flex-col items-center justify-center px-3 py-2 bg-emerald-900/20 rounded-lg border border-emerald-700/30">
+            <span className="text-xs text-emerald-400">AM definido</span>
+            <span className="text-lg font-bold text-emerald-300">{categoriasAm.am_definido}</span>
+            <span className="text-xs text-emerald-500">obras</span>
+          </div>
+          <div className={`flex flex-col items-center justify-center px-3 py-2 rounded-lg border ${categoriasAm.am_pendente > 0 ? 'bg-amber-900/20 border-amber-700/30' : 'bg-zinc-800 border-zinc-700'}`}>
+            <span className={`text-xs ${categoriasAm.am_pendente > 0 ? 'text-amber-400' : 'text-zinc-400'}`}>AM pendente</span>
+            <span className={`text-lg font-bold ${categoriasAm.am_pendente > 0 ? 'text-amber-300' : 'text-zinc-200'}`}>{categoriasAm.am_pendente}</span>
+            <span className={`text-xs ${categoriasAm.am_pendente > 0 ? 'text-amber-500' : 'text-zinc-500'}`}>obras</span>
+          </div>
+        </div>
+      )}
+
       {confirmaErro && (
         <div className="flex items-center gap-2 px-4 py-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-300 text-sm">
           <AlertTriangle className="w-4 h-4 shrink-0" /> {confirmaErro}
@@ -603,7 +636,7 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
         <div className="flex items-start gap-3 px-4 py-3 bg-amber-500/10 border border-amber-500/25 rounded-lg text-amber-300 text-sm">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold">Administradoras com percentual pendente ({amPendentesCount} ocorrências)</p>
+            <p className="font-semibold">Administradoras com percentual pendente ({amPendentesCount} obras)</p>
             <p className="text-xs text-amber-300/70 mt-0.5">
               Papel AM detectado com todos os percentuais zerados no CWR — padrão para
               administradoras cujo share é definido por contrato, não pelo arquivo NWR.
