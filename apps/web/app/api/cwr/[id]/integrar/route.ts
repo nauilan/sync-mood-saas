@@ -16,6 +16,11 @@
  *
  * 3. ORIGEM
  *    - titulares criados recebem observacoes contendo o importacao_id.
+ *
+ * 4. STAGING DE TITULARES
+ *    - cwr_importacoes_titulares registra cada titular (autor/editora) por obra,
+ *      com match_status: encontrado | criado_pre_cadastro | conflito | ignorado.
+ *    - Base da fila de revisão /master/titulares?status=pre_cadastro.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -139,9 +144,10 @@ export async function POST(
   }
 
   // ── 2. Carregar snapshots ─────────────────────────────────────────────────
+  // Incluir `id` da linha em cwr_importacoes_obras para rastreabilidade no staging.
   const { data: impObrasRaw } = await client
     .from('cwr_importacoes_obras')
-    .select('obra_id, snapshot_cwr, created_at')
+    .select('id, obra_id, snapshot_cwr, created_at')
     .eq('importacao_id', id)
     .not('obra_id', 'is', null)
     .order('created_at', { ascending: false })
@@ -162,6 +168,12 @@ export async function POST(
     return true
   })
 
+  // Mapa obra_id → id da linha em cwr_importacoes_obras (para staging de titulares)
+  const obraImportacaoIdMap: Record<string, string> = {}
+  for (const r of impObras) {
+    obraImportacaoIdMap[r.obra_id as string] = (r as any).id as string
+  }
+
   // ── 3. Extrair autores, editoras, fonogramas dos snapshots ────────────────
   const autoresUnicos   = new Map<string, { nome: string; ipi: string | null; tipo: 'autor' }>()
   const editorasUnicas  = new Map<string, { nome: string; ipi: string | null; controlled: boolean; tipo: 'editora' | 'editora_administrada' }>()
@@ -172,6 +184,27 @@ export async function POST(
     controlled: boolean; obraId: string
   }
   const obraParticipacoes: PartObra[] = []
+
+  // Staging: um registro por (titular × obra) para auditoria e fila de revisão
+  type StagingEntry = {
+    importacao_id:      string
+    obra_importacao_id: string | null
+    obra_id:            string
+    chave:              string
+    nome_cwr:           string
+    ipi_cae:            string | null
+    ip_name_number:     string | null
+    papel_cwr:          string
+    tipo_cwr:           string
+    controlled:         boolean
+    pr_pct:             number
+    mr_pct:             number
+    sr_pct:             number
+    fonte_percentual:   string
+    dados_raw:          Record<string, unknown>
+  }
+  const stagingEntries: StagingEntry[] = []
+
   // Contadores de categoria AM por obra
   let obrasSemAm           = 0   // Cenário A: sem administradora
   let obrasAmDefinido      = 0   // AM com percentual explícito no CWR
@@ -205,6 +238,24 @@ export async function POST(
         sr_pct:     Number(a.sr_pct)  || 0,
         controlled: a.controlled ?? false,
         obraId,
+      })
+      // Registrar no staging (todos os autores, independente de pct)
+      stagingEntries.push({
+        importacao_id:      id,
+        obra_importacao_id: obraImportacaoIdMap[obraId] ?? null,
+        obra_id:            obraId,
+        chave,
+        nome_cwr:           (a.nome as string).trim(),
+        ipi_cae:            (a.ipi as string | null) ?? null,
+        ip_name_number:     (a as any).ip_name_number ?? null,
+        papel_cwr:          (a.papel as string | null) ?? '',
+        tipo_cwr:           'autor',
+        controlled:         (a.controlled as boolean | null) ?? false,
+        pr_pct:             Number(a.pr_pct) || 0,
+        mr_pct:             Number(a.mr_pct) || 0,
+        sr_pct:             Number(a.sr_pct) || 0,
+        fonte_percentual:   'SWR',
+        dados_raw:          a as Record<string, unknown>,
       })
     }
 
@@ -242,6 +293,24 @@ export async function POST(
       if (!editorasUnicas.has(chave)) {
         editorasUnicas.set(chave, { nome: (e.nome as string).trim(), ipi: e.ipi ?? null, controlled: e.controlled ?? false, tipo: tipoEdit })
       }
+      // Registrar no staging ANTES do filtro isPendingAm — captura todos os titulares do CWR
+      stagingEntries.push({
+        importacao_id:      id,
+        obra_importacao_id: obraImportacaoIdMap[obraId] ?? null,
+        obra_id:            obraId,
+        chave,
+        nome_cwr:           (e.nome as string).trim(),
+        ipi_cae:            (e.ipi as string | null) ?? null,
+        ip_name_number:     (e as any).ip_name_number ?? null,
+        papel_cwr:          (e.papel as string | null) ?? (e.tipo as string | null) ?? '',
+        tipo_cwr:           (e.tipo as string | null) ?? 'editora',
+        controlled:         (e.controlled as boolean | null) ?? false,
+        pr_pct:             Number(e.pr_pct) || 0,
+        mr_pct:             Number(e.mr_pct) || 0,
+        sr_pct:             Number(e.sr_pct) || 0,
+        fonte_percentual:   (e as any).fonte_percentual ?? 'SPT',
+        dados_raw:          e as Record<string, unknown>,
+      })
       if (isPendingAm(e)) continue   // Cenário B sem pct: não criar participação editorial
       obraParticipacoes.push({
         chave,
@@ -287,9 +356,15 @@ export async function POST(
   const chaveToId: Record<string, string> = {}
   const conflitos: { tipo: string; descricao: string }[] = []
 
+  // Rastreamento de matching para o staging de titulares
+  const chaveMatchCriterio: Record<string, string> = {}
+  const chaveMatchScore:    Record<string, number>  = {}
+
   function resolverChave(chave: string, info: { nome: string; ipi: string | null; tipo: 'autor' | 'editora' | 'editora_administrada' }) {
     if (info.ipi && ipiToId[info.ipi]) {
-      chaveToId[chave] = ipiToId[info.ipi]
+      chaveToId[chave]          = ipiToId[info.ipi]
+      chaveMatchCriterio[chave] = 'ipi_cae'
+      chaveMatchScore[chave]    = 100
       // Detectar divergência de nome (mesma entidade, nomes diferentes)
       const tExist = (todosExistentes ?? []).find(t => t.ipi === info.ipi)
       if (tExist && normNome(tExist.nome_completo as string) !== normNome(info.nome)) {
@@ -302,7 +377,9 @@ export async function POST(
       const nomeNorm = normNome(info.nome)
       if (nomeNormToId[nomeNorm]) {
         // Matching por nome — reutiliza titular existente sem criar novo
-        chaveToId[chave] = nomeNormToId[nomeNorm]
+        chaveToId[chave]          = nomeNormToId[nomeNorm]
+        chaveMatchCriterio[chave] = 'nome'
+        chaveMatchScore[chave]    = 85
       } else {
         chavesToCreate.set(chave, info)
       }
@@ -346,7 +423,7 @@ export async function POST(
 
     const CHUNK = 200
     for (let i = 0; i < payloads.length; i += CHUNK) {
-      const chunk      = payloads.slice(i, i + CHUNK)
+      const chunk       = payloads.slice(i, i + CHUNK)
       const chunkChaves = chaveKeys.slice(i, i + CHUNK)
       const { data: criados, error: titErr } = await client
         .from('titulares')
@@ -365,6 +442,9 @@ export async function POST(
         for (let j = 0; j < criados.length; j++) {
           chaveToId[chunkChaves[j]] = criados[j].id as string
           titularesCriadosIds.push(criados[j].id as string)
+          // Registrar critério para o staging
+          chaveMatchCriterio[chunkChaves[j]] = 'nome'
+          chaveMatchScore[chunkChaves[j]]    = 0
           // Atualizar mapa de nomes para evitar duplicatas nos próximos lotes
           const n = normNome(criados[j].nome_completo as string)
           if (!nomeNormToId[n]) nomeNormToId[n] = criados[j].id as string
@@ -374,6 +454,66 @@ export async function POST(
   }
 
   const titularesVinculados = Object.keys(chaveToId).length - titularesCriados
+
+  // ── 6b. Registrar staging cwr_importacoes_titulares ─────────────────────
+  // Uma linha por (titular × obra) — base de auditoria e fila de revisão.
+  let stagingEncontrados    = 0
+  let stagingCriadosCount   = 0
+  let stagingConflitosCount = 0
+  let stagingIgnoradosCount = 0
+
+  {
+    const criadosSet = new Set(titularesCriadosIds)
+    const stagingPayloads = stagingEntries.map(s => {
+      const tid    = chaveToId[s.chave]
+      const status = !tid
+        ? 'ignorado'
+        : criadosSet.has(tid)
+          ? 'criado_pre_cadastro'
+          : 'encontrado'
+      return {
+        importacao_id:      s.importacao_id,
+        obra_importacao_id: s.obra_importacao_id,
+        obra_id:            s.obra_id,
+        titular_id:         tid ?? null,
+        nome_cwr:           s.nome_cwr,
+        ipi_cae:            s.ipi_cae,
+        ip_name_number:     s.ip_name_number,
+        papel_cwr:          s.papel_cwr,
+        tipo_cwr:           s.tipo_cwr,
+        controlled:         s.controlled,
+        pr_pct:             s.pr_pct,
+        mr_pct:             s.mr_pct,
+        sr_pct:             s.sr_pct,
+        fonte_percentual:   s.fonte_percentual,
+        match_status:       status,
+        match_criterio:     chaveMatchCriterio[s.chave] ?? null,
+        match_score:        chaveMatchScore[s.chave] ?? 0,
+        dados_raw:          s.dados_raw,
+      }
+    })
+
+    for (const s of stagingPayloads) {
+      if      (s.match_status === 'encontrado')           stagingEncontrados++
+      else if (s.match_status === 'criado_pre_cadastro')  stagingCriadosCount++
+      else if (s.match_status === 'conflito')             stagingConflitosCount++
+      else                                                stagingIgnoradosCount++
+    }
+
+    // Idempotência: apagar staging anterior desta importação antes de recriar
+    await client.from('cwr_importacoes_titulares').delete().eq('importacao_id', id)
+
+    const SCHUNK = 500
+    for (let i = 0; i < stagingPayloads.length; i += SCHUNK) {
+      const { error: stErr } = await client
+        .from('cwr_importacoes_titulares')
+        .insert(stagingPayloads.slice(i, i + SCHUNK))
+      if (stErr) {
+        // Não abortar a integração por falha no staging — apenas logar
+        console.error('[integrar] staging_titulares_insert_erro', stErr.message)
+      }
+    }
+  }
 
   // ── 7. Garantir obras_links e inserir obras_links_titulares ───────────────
   let participacoesGravadas = 0
@@ -634,6 +774,13 @@ export async function POST(
     obras_integradas:       impObras.length,
     titulares_criados:      titularesCriados,
     titulares_vinculados:   titularesVinculados,
+    staging_titulares: {
+      total:                stagingEntries.length,
+      encontrados:          stagingEncontrados,
+      criados_pre_cadastro: stagingCriadosCount,
+      conflitos:            stagingConflitosCount,
+      ignorados:            stagingIgnoradosCount,
+    },
     _debug: {
       snapshots_raw:         impObrasRaw.length,
       snapshots_dedup:       impObras.length,
