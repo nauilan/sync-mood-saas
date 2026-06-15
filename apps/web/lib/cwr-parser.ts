@@ -431,13 +431,18 @@ export function parseCwr(conteudo: string, _opts?: unknown): CwrArquivo {
         if (!isrc) isrc = findIsrcInLine(ln, 19)
 
         // Intérprete: pos 63-103 (40 chars) — posição padrão CWR 2.1
-        const interprete = tr(col(ln, 63, 103)) || tr(col(ln, 135, 175)) || null
+        // Rejeitar valores puramente numéricos (campos de controle, não nomes reais)
+        const interpreteRaw = tr(col(ln, 63, 103))
+        const interprete = (interpreteRaw && !/^\d+$/.test(interpreteRaw)) ? interpreteRaw : null
 
-        // Título da gravação: pos 25-51 (26 chars) ou 94-154 (60 chars)
-        const tituloGrav = tr(col(ln, 94, 154)) || tr(col(ln, 25, 51)) || null
+        // Título da gravação: pos 94-154 (60 chars) — Recording Title conforme CWR 2.1
+        // Não usar pos 25-51 (zona de campos numéricos de controle → produzia "00")
+        // Não usar pos 135-175 (zona de duração/controle → produzia "000000")
+        const tituloRaw = tr(col(ln, 94, 154))
+        const tituloGrav = (tituloRaw && !/^\d+$/.test(tituloRaw)) ? tituloRaw : null
 
-        // Ano: pos 96-100 (4 dígitos) — apenas se parecer ano válido
-        const anoStr = tr(col(ln, 96, 100))
+        // Ano: pos 160-167 (release date YYYYMMDD) → extrair 4 primeiros dígitos
+        const anoStr = tr(col(ln, 160, 164))
         const anoNum = parseInt(anoStr, 10)
         const ano    = anoStr.length === 4 && anoNum >= 1900 && anoNum <= 2100
           ? anoNum
