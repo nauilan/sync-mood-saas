@@ -151,6 +151,19 @@ export async function PATCH(
   if ('vigencia_fim' in body && !('data_fim' in body)) body.data_fim = body.vigencia_fim
   if ('territorio_principal' in body && !('territorio' in body)) body.territorio = body.territorio_principal
 
+  // Mapeia valor do frontend para enum do banco (mesmo mapeamento do POST)
+  const TIPO_MAPA: Record<string, string> = {
+    cessao_obras: 'cessao',
+    coedicao: 'coedicao',
+    administracao: 'administracao',
+    subedicao: 'subedicao',
+    licenciamento: 'licenciamento',
+    autorizacao: 'autorizacao',
+  }
+  if (typeof body.tipo === 'string' && TIPO_MAPA[body.tipo]) {
+    body.tipo = TIPO_MAPA[body.tipo]
+  }
+
   // Whitelist de campos editáveis — impede sobrescrita de campos protegidos
   const ALLOWED_PATCH = new Set([
     'tipo', 'status', 'numero', 'editora_id', 'titular_id',
