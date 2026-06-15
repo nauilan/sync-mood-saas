@@ -508,8 +508,10 @@ export default function TitularesPage() {
       const cae = (t._pf?.cae ?? t._pj?.cae ?? '').toLowerCase()
       const ipi = (t._pf?.ipi ?? t._pj?.ipi ?? '').toLowerCase()
 
+      const nomeDirecto = (t.nome_completo ?? '').toLowerCase()
       const matchSearch = !q
         || nome.includes(q)
+        || nomeDirecto.includes(q)
         || (searchDoc && docNum.includes(searchDoc))
         || pseudo.includes(q)
         || email.includes(q)
