@@ -263,6 +263,11 @@ export function parseCwr(conteudo: string, _opts?: unknown): CwrArquivo {
     cur.fonogramas = cur.fonogramas.filter(f =>
       f.isrc || f.interprete || (f.titulo && f.titulo !== '00') || f.ano
     )
+    // Recalcular percentual_total com percentuais finais pós-SWT
+    // (SWT pode ter sobrescrito os valores do SWR)
+    cur.percentual_total = Math.round(
+      cur.autores.reduce((s, a) => s + a.pr_pct, 0) * 10000
+    ) / 10000
     obras.push(cur)
     cur = null
   }
@@ -357,6 +362,45 @@ export function parseCwr(conteudo: string, _opts?: unknown): CwrArquivo {
         }
       }
 
+      // ── SPT (Publisher Territory — percentuais territoriais efetivos) ───────
+      // SPT define os percentuais REAIS por território.
+      // O SPU identifica a editora; o SPT define o quanto ela coleta no território.
+      // Hierarquia: SPT sobrescreve SPU; preferência para Brasil (TIS 0076).
+      //
+      // Layout SPT (0-indexed):
+      //   19-27  IP Name # (9) — identifica o SPU pai (match por ip_name_no)
+      //   34-38  PR Collection Share (5) — divide por 100 para obter %
+      //   39-43  MR Collection Share (5)
+      //   44-48  SR Collection Share (5)
+      //   49     Inclusion/Exclusion Indicator ('I' = incluir)
+      //   50-53  TIS Numeric Code ('0076' = Brasil)
+      else if (t === 'SPT' && cur) {
+        cur.registros_raw.push(ln)
+        const ipNameNo = tr(col(ln, 19, 28))   // IP Name # do SPU pai
+        const ieInd    = tr(col(ln, 49, 50))   // 'I' = incluir no cálculo
+        if (ipNameNo && ieInd === 'I') {
+          const prPct   = pct5(col(ln, 34, 39))
+          const mrPct   = pct5(col(ln, 39, 44))
+          const srPct   = pct5(col(ln, 44, 49))
+          const tisCode = tr(col(ln, 50, 54))   // '0076' = Brasil
+          // Percorre de trás pra frente — SPT sempre segue seu SPU pai no arquivo,
+          // então o último match é o pai correto (mesmo publisher em links múltiplos)
+          for (let j = cur.editoras.length - 1; j >= 0; j--) {
+            if (tr(cur.editoras[j].ip_name_no ?? '') === ipNameNo) {
+              // Preferir Brasil; aceitar outro território apenas se ainda não há Brasil
+              const ed = cur.editoras[j] as (typeof cur.editoras[0]) & { _spt_br?: boolean }
+              if (tisCode === '0076' || !ed._spt_br) {
+                ed.pr_pct = prPct
+                ed.mr_pct = mrPct
+                ed.sr_pct = srPct
+                if (tisCode === '0076') ed._spt_br = true
+              }
+              break
+            }
+          }
+        }
+      }
+
       // ── SWR / OWR (Writer) ────────────────────────────────────────────────
       else if ((t === 'SWR' || t === 'OWR') && cur) {
         cur.registros_raw.push(ln)
@@ -397,6 +441,42 @@ export function parseCwr(conteudo: string, _opts?: unknown): CwrArquivo {
           cur.percentual_total = Math.round(
             (cur.percentual_total + prPct) * 10000
           ) / 10000
+        }
+      }
+
+      // ── SWT (Writer Territory — percentuais territoriais efetivos) ────────
+      // SWT sobrescreve SWR/OWR para percentuais por território.
+      // Preferência para Brasil (TIS 0076); fallback = percentual do SWR.
+      //
+      // Layout SWT (0-indexed):
+      //   19-27  IP Name # (9) — identifica o SWR/OWR pai (match por ipi_nome)
+      //   28-32  PR Collection Share (5) — divide por 100 para obter %
+      //   33-37  MR Collection Share (5)
+      //   38-42  SR Collection Share (5)
+      //   43     Inclusion/Exclusion Indicator ('I' = incluir)
+      //   44-47  TIS Numeric Code ('0076' = Brasil)
+      else if (t === 'SWT' && cur) {
+        cur.registros_raw.push(ln)
+        const ipNameNo = tr(col(ln, 19, 28))   // IP Name # do SWR/OWR pai
+        const ieInd    = tr(col(ln, 43, 44))   // 'I' = incluir no cálculo
+        if (ipNameNo && ieInd === 'I') {
+          const prPct   = pct5(col(ln, 28, 33))
+          const mrPct   = pct5(col(ln, 33, 38))
+          const srPct   = pct5(col(ln, 38, 43))
+          const tisCode = tr(col(ln, 44, 48))   // '0076' = Brasil
+          // Percorre de trás pra frente — SWT sempre segue seu SWR pai no arquivo
+          for (let j = cur.autores.length - 1; j >= 0; j--) {
+            if (tr(cur.autores[j].ipi_nome ?? '') === ipNameNo) {
+              const aut = cur.autores[j] as (typeof cur.autores[0]) & { _swt_br?: boolean }
+              if (tisCode === '0076' || !aut._swt_br) {
+                aut.pr_pct = prPct
+                aut.mr_pct = mrPct
+                aut.sr_pct = srPct
+                if (tisCode === '0076') aut._swt_br = true
+              }
+              break
+            }
+          }
         }
       }
 
