@@ -361,14 +361,44 @@ export function parseCwr(conteudo: string, _opts?: unknown): CwrArquivo {
         }
       }
 
-      // ── SPT (Publisher Territory — cotas territoriais de arrecadação) ────────
-      // SPT representa cotas de ARRECADAÇÃO territorial, não percentuais editoriais.
-      // Validado: SPU/SWR contêm os percentuais editoriais corretos (batem com
-      // sistema externo de referência). SPT/SWT têm semântica diferente e NÃO
-      // devem sobrescrever os percentuais editoriais de obras_links_titulares.
-      // Preservamos apenas no registros_raw para auditoria/exportação CWR.
+      // ── SPT (Publisher Territory — split territorial por editora) ────────────
+      // Diagnóstico confirmado (Query 3 raw):
+      //   EDI MUSIC SPT BR: PR=5.34, MR=0, SR=0
+      //   TOP SHOW SPT BR:  PR=1.33, MR=33.34, SR=33.34
+      // SPT divide o total do SPU entre editora original (E) e administradora (AM).
+      // Para publishers: SPT é a fonte correta. Para writers: SWT NÃO é usado (SWR=correto).
+      //
+      // Layout SPT (0-indexed):
+      //   19-27  IP Name # (9) — identifica o SPU pai (match por ip_name_no)
+      //   34-38  PR Collection Share (5) — pct5 → %
+      //   39-43  MR Collection Share (5)
+      //   44-48  SR Collection Share (5)
+      //   49     Inclusion/Exclusion Indicator ('I' = incluir)
+      //   50-53  TIS Numeric Code ('0076' = Brasil)
       else if (t === 'SPT' && cur) {
         cur.registros_raw.push(ln)
+        const ipNameNo = tr(col(ln, 19, 28))
+        const ieInd    = tr(col(ln, 49, 50))
+        if (ipNameNo && ieInd === 'I') {
+          const prPct   = pct5(col(ln, 34, 39))
+          const mrPct   = pct5(col(ln, 39, 44))
+          const srPct   = pct5(col(ln, 44, 49))
+          const tisCode = tr(col(ln, 50, 54))
+          // Sobrescreve o SPU com o valor territorial efetivo.
+          // Preferência para Brasil (0076); aceita outro território se Brasil ainda não foi visto.
+          for (let j = cur.editoras.length - 1; j >= 0; j--) {
+            if (tr(cur.editoras[j].ip_name_no ?? '') === ipNameNo) {
+              const ed = cur.editoras[j] as (typeof cur.editoras[0]) & { _spt_br?: boolean }
+              if (tisCode === '0076' || !ed._spt_br) {
+                ed.pr_pct = prPct
+                ed.mr_pct = mrPct
+                ed.sr_pct = srPct
+                if (tisCode === '0076') ed._spt_br = true
+              }
+              break
+            }
+          }
+        }
       }
 
       // ── SWR / OWR (Writer) ────────────────────────────────────────────────
