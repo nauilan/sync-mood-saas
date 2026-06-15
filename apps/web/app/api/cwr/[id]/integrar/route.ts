@@ -159,6 +159,7 @@ export async function POST(
     controlled: boolean; obraId: string
   }
   const obraParticipacoes: PartObra[] = []
+  let adminsPendentesCount = 0   // AM com todos percentuais 0 — share definido por contrato
   type FgObra = { obraId: string; isrc: string | null; titulo: string; interprete: string | null; versao: string | null; ano: number | null }
   const obraFonogramas: FgObra[] = []
 
@@ -191,12 +192,22 @@ export async function POST(
       if (!editorasUnicas.has(chave)) {
         editorasUnicas.set(chave, { nome: (e.nome as string).trim(), ipi: e.ipi ?? null, controlled: e.controlled ?? false, tipo: tipoEdit })
       }
+      const papelMapeado = mapPapelEditora(e.tipo ?? '', e.papel ?? '')
+      const prPct = Number(e.pr_pct) || 0
+      const mrPct = Number(e.mr_pct) || 0
+      const srPct = Number(e.sr_pct) || 0
+      // AM com todos os percentuais zero: share definido por contrato, não pelo CWR NWR.
+      // Não criar participação editorial — registrar como pendente.
+      if (papelMapeado === 'AM' && prPct === 0 && mrPct === 0 && srPct === 0) {
+        adminsPendentesCount++
+        continue
+      }
       obraParticipacoes.push({
         chave,
-        papel:      mapPapelEditora(e.tipo ?? '', e.papel ?? ''),
-        pr_pct:     Number(e.pr_pct)  || 0,
-        mr_pct:     Number(e.mr_pct)  || 0,
-        sr_pct:     Number(e.sr_pct)  || 0,
+        papel:      papelMapeado,
+        pr_pct:     prPct,
+        mr_pct:     mrPct,
+        sr_pct:     srPct,
         controlled: e.controlled ?? false,
         obraId,
       })
@@ -261,7 +272,7 @@ export async function POST(
   for (const [chave, info] of editorasUnicas) resolverChave(chave, info)
 
   // ── 6. Criar titulares ausentes em lote ───────────────────────────────────
-  let titularesCriados   = 0
+  let titularesCriados     = 0
   const titularesCriadosIds: string[] = []
 
   if (chavesToCreate.size > 0) {
@@ -561,12 +572,13 @@ export async function POST(
       obraIdToLinkId_len:    Object.keys(obraIdToLinkId).length,
       insert_error:          insertError,
     },
-    editoras_criadas:       editorasCriadas,
-    participacoes_gravadas: participacoesGravadas,
-    fonogramas_criados:     fonogramasCriados,
-    fonogramas_vinculados:  fonogramasVinculados,
-    conflitos:              conflitos.length,
-    conflitos_detalhe:      conflitos.slice(0, 50),
-    rollback_disponivel:    true,
+    editoras_criadas:          editorasCriadas,
+    participacoes_gravadas:    participacoesGravadas,
+    fonogramas_criados:        fonogramasCriados,
+    fonogramas_vinculados:     fonogramasVinculados,
+    administradoras_pendentes: adminsPendentesCount,
+    conflitos:                 conflitos.length,
+    conflitos_detalhe:         conflitos.slice(0, 50),
+    rollback_disponivel:       true,
   })
 }

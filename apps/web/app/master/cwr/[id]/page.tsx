@@ -347,7 +347,8 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
         `${d.titulares_criados} titulares criados · ` +
         `${d.titulares_vinculados} vinculados · ` +
         `${d.participacoes_gravadas} participações · ` +
-        `${d.fonogramas_criados} fonogramas criados`
+        `${d.fonogramas_criados} fonogramas criados` +
+        (d.administradoras_pendentes > 0 ? ` · ⚠ ${d.administradoras_pendentes} AM c/ percentual pendente` : '')
       )
     } catch { setIntegraMsg('Falha na requisição.') }
     finally { setIntegrando(false) }
@@ -445,6 +446,17 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
   const obras: any[] = data.obras ?? []
   const conflitos: any[] = data.conflitos ?? []
   const r = imp.relatorio ?? {}
+
+  // Administradoras com percentual zerado no CWR (padrão NWR — share por contrato)
+  const amPendentesCount: number = obras.reduce((acc: number, o: any) => {
+    const eds: any[] = o.snapshot_cwr?.editoras ?? []
+    return acc + eds.filter((e: any) => {
+      const papel = (e.tipo ?? e.papel ?? '').toUpperCase().trim()
+      return (papel === 'AM' || papel === 'AQ') &&
+             (Number(e.pr_pct) || 0) === 0 &&
+             (Number(e.mr_pct) || 0) === 0
+    }).length
+  }, 0)
 
   const obrasFiltradas: Record<TabKey, any[]> = {
     novas:      obras.filter(o => o.match_tipo === 'nova'),
@@ -583,6 +595,22 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
       {confirmaErro && (
         <div className="flex items-center gap-2 px-4 py-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-300 text-sm">
           <AlertTriangle className="w-4 h-4 shrink-0" /> {confirmaErro}
+        </div>
+      )}
+
+      {/* Alerta: administradoras com percentual pendente */}
+      {imp.status === 'confirmado' && amPendentesCount > 0 && (
+        <div className="flex items-start gap-3 px-4 py-3 bg-amber-500/10 border border-amber-500/25 rounded-lg text-amber-300 text-sm">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold">Administradoras com percentual pendente ({amPendentesCount} ocorrências)</p>
+            <p className="text-xs text-amber-300/70 mt-0.5">
+              Papel AM detectado com todos os percentuais zerados no CWR — padrão para
+              administradoras cujo share é definido por contrato, não pelo arquivo NWR.
+              Essas participações <strong>não serão criadas na integração</strong>.
+              Defina o percentual por regra administrativa após importar.
+            </p>
+          </div>
         </div>
       )}
 
