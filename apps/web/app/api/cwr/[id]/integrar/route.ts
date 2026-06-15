@@ -180,10 +180,16 @@ export async function POST(
   type FgObra = { obraId: string; isrc: string | null; titulo: string; interprete: string | null; versao: string | null; ano: number | null }
   const obraFonogramas: FgObra[] = []
 
+  // Mapa auxiliar para debug: obraId → titulo e data do snapshot usado
+  const obraIdToTitulo:       Record<string, string> = {}
+  const obraIdToSnapshotDate: Record<string, string> = {}
+
   for (const row of impObras) {
     const snap    = (row.snapshot_cwr ?? {}) as Record<string, unknown>
     const obraId  = row.obra_id as string
     const obraTit = (snap.titulo as string) ?? ''
+    obraIdToTitulo[obraId]       = obraTit
+    obraIdToSnapshotDate[obraId] = (row as any).created_at ?? ''
 
     for (const a of ((snap.autores as any[]) ?? [])) {
       if (!(a.nome as string)?.trim()) continue
@@ -464,6 +470,33 @@ export async function POST(
       partByObra_len: partByObra.size,
       obraIdToLinkId_len: Object.keys(obraIdToLinkId).length,
       titPayloads_len: 0,
+    }, { status: 422 })
+  }
+
+  // ── Validação anti-AM-zerado: abortar se qualquer AM chegou aqui com pct=0 ──
+  // isPendingAm já deveria ter filtrado; se chegou com tudo zero é bug de pipeline.
+  const amZerados = titPayloads.filter(p =>
+    p.funcao_no_link === 'AM' &&
+    (p.percentual_exec_publica  as number) === 0 &&
+    (p.percentual_fonomecanico  as number) === 0 &&
+    (p.percentual_sincronizacao as number) === 0
+  )
+  if (amZerados.length > 0) {
+    return NextResponse.json({
+      ok:    false,
+      debug: 'am_zerado_detectado_pre_insert',
+      total_am_zerados:    amZerados.length,
+      snapshots_raw:       impObrasRaw.length,
+      snapshots_apos_dedup: impObras.length,
+      duplicatas_removidas: impObrasRaw.length - impObras.length,
+      am_zerados_amostra: amZerados.slice(0, 20).map(p => ({
+        obra_titulo:   obraIdToTitulo[p.obra_id as string] ?? '?',
+        nome:          p.nome,
+        funcao:        p.funcao_no_link,
+        pr:            p.percentual_exec_publica,
+        mr:            p.percentual_fonomecanico,
+        snapshot_date: obraIdToSnapshotDate[p.obra_id as string] ?? '?',
+      })),
     }, { status: 422 })
   }
 
