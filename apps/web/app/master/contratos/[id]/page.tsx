@@ -50,6 +50,8 @@ export default function ContratoDetailPage() {
   const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [wfLoading, setWfLoading] = useState(false)
   const [wfResult, setWfResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [syncLoading, setSyncLoading] = useState(false)
+  const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -109,6 +111,30 @@ export default function ContratoDetailPage() {
       setWfResult({ ok: false, message: 'Erro de conexão.' })
     } finally {
       setWfLoading(false)
+    }
+  }
+
+  // ── Sincronizar status com D4Sign (fallback quando webhook não chegou) ──────
+  async function handleSincronizar() {
+    if (!id || syncLoading) return
+    setSyncLoading(true)
+    setSyncResult(null)
+    try {
+      const res = await authFetch(`/api/contratos/${id}/sincronizar`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) {
+        setSyncResult({ ok: false, message: json.error ?? 'Erro ao sincronizar.' })
+      } else {
+        setSyncResult({ ok: true, message: json.message ?? 'Sincronizado.' })
+        if (json.sincronizado) {
+          const updated = await authFetch(`/api/contratos/${id}`).then(r => r.json())
+          setContrato((updated.contrato ?? null) as ContratoV2 | null)
+        }
+      }
+    } catch {
+      setSyncResult({ ok: false, message: 'Erro de conexão.' })
+    } finally {
+      setSyncLoading(false)
     }
   }
 
@@ -832,6 +858,36 @@ export default function ContratoDetailPage() {
       />
 
       {/* Barra de ações para rascunho */}
+      {/* Banner: Aguardando Assinatura — botão de sincronização manual com D4Sign */}
+      {contrato.status === 'aguardando_assinatura' && (
+        <div className="bg-amber-500/[0.07] border border-amber-500/20 rounded-xl px-5 py-4 flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-300">Aguardando Assinatura Digital</p>
+              <p className="text-xs text-amber-400/60 mt-0.5">
+                O contrato foi enviado para o D4Sign. Após todos assinarem, clique em
+                &quot;Verificar Assinatura&quot; para sincronizar o status.
+              </p>
+            </div>
+            <button
+              onClick={handleSincronizar}
+              disabled={syncLoading}
+              className="flex items-center gap-1.5 h-8 px-3 text-xs bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+            >
+              {syncLoading
+                ? <><span className="w-3.5 h-3.5 border-2 border-amber-300/40 border-t-amber-300 rounded-full animate-spin" /> Verificando...</>
+                : <><RefreshCw className="w-3.5 h-3.5" /> Verificar Assinatura</>
+              }
+            </button>
+          </div>
+          {syncResult && (
+            <p className={`text-xs px-3 py-2 rounded-lg ${syncResult.ok ? 'bg-emerald-500/10 text-emerald-300' : 'bg-red-500/10 text-red-400'}`}>
+              {syncResult.message}
+            </p>
+          )}
+        </div>
+      )}
+
       {contrato.status === 'rascunho' && (
         <div className="bg-amber-500/[0.07] border border-amber-500/20 rounded-xl px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="flex-1">
