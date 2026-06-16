@@ -89,16 +89,61 @@ export async function POST(
     return NextResponse.json({ error: 'titulo_fonograma ou isrc obrigatório' }, { status: 400 })
   }
 
-  const ALLOWED = ['titulo_fonograma', 'isrc', 'interprete', 'versao', 'duracao_segundos',
+  const ALLOWED = [
+    'titulo_fonograma', 'isrc', 'interprete', 'versao', 'duracao_segundos',
     'ano_gravacao', 'gravadora', 'produtor_fonografico', 'data_lancamento', 'pais',
-    'plataformas', 'url_preview', 'status']
+    'plataformas', 'url_preview', 'status',
+    // Migration 058 — rastreabilidade
+    'origem', 'titular_id', 'contrato_id',
+  ]
 
   const payload: Record<string, unknown> = { obra_id, tenant_id: usuario.tenant_id }
   for (const k of ALLOWED) {
     if (body[k] !== undefined && body[k] !== null && body[k] !== '') payload[k] = body[k]
   }
 
+  // Normalizar ISRC para maiúsculas
+  if (payload.isrc) payload.isrc = String(payload.isrc).toUpperCase().trim()
+
+  // Verificar duplicidade de ISRC na mesma obra
+  if (payload.isrc) {
+    const { data: dup } = await sb
+      .from('fonogramas')
+      .select('id')
+      .eq('obra_id', obra_id)
+      .eq('isrc', payload.isrc)
+      .limit(1)
+      .single()
+    if (dup) return NextResponse.json({ error: `ISRC ${payload.isrc} já existe nesta obra` }, { status: 409 })
+  }
+
   const { data, error } = await sb.from('fonogramas').insert(payload).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ data }, { status: 201 })
+}
+
+// ── DELETE ───────────────────────────────────────────────────────────────────
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const sb = getAdminClient()
+  if (!sb) return NextResponse.json({ error: 'Config inválida' }, { status: 500 })
+
+  const usuario = await autenticar(sb, req)
+  if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  const { id: obra_id } = await params
+  const fid = new URL(req.url).searchParams.get('fid')
+  if (!fid) return NextResponse.json({ error: 'fid (fonograma id) é obrigatório' }, { status: 422 })
+
+  const { error } = await sb
+    .from('fonogramas')
+    .delete()
+    .eq('id', fid)
+    .eq('obra_id', obra_id)
+    .eq('tenant_id', usuario.tenant_id)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
 }

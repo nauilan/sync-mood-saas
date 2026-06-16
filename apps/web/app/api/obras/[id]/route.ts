@@ -101,6 +101,10 @@ export async function PATCH(
     // Migration 059 — CWR/Socinpro/BackOffice
     'titulo_original', 'cwr_work_id', 'socinpro_obra_id', 'socinpro_status',
     'exportacao_bloqueada', 'exportacao_bloqueio_motivo',
+    // Migration 058 — campos editoriais completos
+    'iswc_anterior', 'iswc_alternativo', 'iswc_origem', 'status_iswc',
+    'territorio', 'prazo_inicio', 'prazo_fim', 'prazo_indeterminado',
+    'direitos_administrados',
   ]
 
   const update: Record<string, unknown> = {}
@@ -141,6 +145,10 @@ export async function PATCH(
     'interprete_referencia', 'editora_id', 'contrato_origem_id', 'observacoes',
     'titulo_original', 'cwr_work_id', 'socinpro_obra_id', 'socinpro_status',
     'exportacao_bloqueada',
+    // Migration 058
+    'iswc_anterior', 'iswc_alternativo', 'iswc_origem', 'status_iswc',
+    'territorio', 'prazo_inicio', 'prazo_fim', 'prazo_indeterminado',
+    'direitos_administrados',
   ]
   const historico = CAMPOS_RASTREAR
     .filter(campo => campo in update && String(anterior[campo] ?? '') !== String(update[campo] ?? ''))

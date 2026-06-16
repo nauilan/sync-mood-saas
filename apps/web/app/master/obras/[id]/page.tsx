@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/components/ui/page-header'
 import {
   Edit, AlignLeft, Mic2, FileText, Link2, Activity, AlertTriangle,
   CheckCircle2, ChevronRight, ExternalLink, Music, Users2, Globe2, DollarSign, Users,
-  BookOpen, Loader2, BarChart3, Clock, Plus,
+  BookOpen, Loader2, BarChart3, Clock, Plus, Headphones, X, Save, RefreshCw,
+  CheckSquare, Square,
 } from 'lucide-react'
 import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, PAPEL_TITULAR_LABELS, PAPEL_TITULAR_COLORS, normalizarLinksObra, type StatusObra } from '@/lib/types-obras'
 import { formatarPercentual } from '@/lib/percentual'
@@ -16,6 +18,7 @@ import { fmtBRL, fmtDate } from '@/lib/mock-cc'
 const TABS = [
   { id: 'resumo',         label: 'Resumo',              icon: Music },
   { id: 'integrantes',    label: 'Integrantes da Obra',  icon: Users2 },
+  { id: 'interpretes',    label: 'Intérpretes',          icon: Headphones },
   { id: 'completude',     label: 'Completude',           icon: BarChart3 },
   { id: 'conta_corrente', label: 'Conta Corrente',       icon: DollarSign },
   { id: 'letra',          label: 'Letra',               icon: AlignLeft },
@@ -105,12 +108,31 @@ function ControleBadge({ pct, label, color }: { pct: number; label: string; colo
 }
 
 export default function ObraDetailPage({ params }: { params: { id: string } }) {
+  const router = useRouter()
   const [obra, setObra] = useState<any>(null)
   const [links, setLinks] = useState<any[]>([])
   const [fonogramas, setFonogramas] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('resumo')
   const [ativando, setAtivando] = useState(false)
+
+  // ── Intérpretes ─────────────────────────────────────────────────────────────
+  const [interpretes, setInterpretes] = useState<any[]>([])
+  const [interpretesLoading, setInterpretesLdg] = useState(false)
+  const [interpretesCarregado, setInterpretesCarregado] = useState(false)
+  const [novoInterp, setNovoInterp] = useState({ nome_artistico: '', nome_civil: '', tipo: 'principal' })
+  const [interpSaving, setInterpSaving] = useState(false)
+
+  // ── Formulário de novo fonograma ────────────────────────────────────────────
+  const [showFonoForm, setShowFonoForm] = useState(false)
+  const [novoFono, setNovoFono] = useState({ titulo_fonograma: '', interprete: '', isrc: '', versao: 'original', ano_gravacao: '', gravadora: '' })
+  const [fonoSaving, setFonoSaving] = useState(false)
+  const [fonoErr, setFonoErr] = useState('')
+
+  // ── Edição inline dos dados editoriais (resumo) ─────────────────────────────
+  const [editResumo, setEditResumo] = useState(false)
+  const [resumoDraft, setResumoDraft] = useState<Record<string, any>>({})
+  const [resumoSaving, setResumoSaving] = useState(false)
 
   // ── Completude ──────────────────────────────────────────────────────────────
   const [completude, setCompletude] = useState<any>(null)
@@ -136,6 +158,9 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
     }
     if (activeTab === 'exportacoes' && !exportacoesCarregado && !exportacoesLdg) {
       loadExportacoes()
+    }
+    if (activeTab === 'interpretes' && !interpretesCarregado && !interpretesLoading) {
+      loadInterpretes()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, obra])
@@ -191,6 +216,84 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
     } finally {
       setAtivando(false)
     }
+  }
+
+  // ── Intérpretes ──────────────────────────────────────────────────────────────
+  async function loadInterpretes() {
+    setInterpretesLdg(true)
+    try {
+      const res = await authFetch(`/api/obras/${params.id}/interpretes`)
+      if (res.ok) { const d = await res.json(); setInterpretes(d.data ?? []) }
+      setInterpretesCarregado(true)
+    } catch (e) { console.error('[interpretes]', e) }
+    finally { setInterpretesLdg(false) }
+  }
+
+  async function addInterprete() {
+    if (!novoInterp.nome_artistico.trim() || interpSaving) return
+    setInterpSaving(true)
+    try {
+      const res = await authFetch(`/api/obras/${params.id}/interpretes`, {
+        method: 'POST',
+        body: JSON.stringify(novoInterp),
+      })
+      const d = await res.json()
+      if (!res.ok) { alert(d.error ?? 'Erro ao adicionar intérprete'); return }
+      setInterpretes(prev => [...prev, d.data])
+      setNovoInterp({ nome_artistico: '', nome_civil: '', tipo: 'principal' })
+    } catch (e) { alert('Erro: ' + String(e)) }
+    finally { setInterpSaving(false) }
+  }
+
+  async function removeInterprete(iid: string) {
+    if (!window.confirm('Remover este intérprete?')) return
+    const res = await authFetch(`/api/obras/${params.id}/interpretes?iid=${iid}`, { method: 'DELETE' })
+    if (res.ok) setInterpretes(prev => prev.filter((i: any) => i.id !== iid))
+    else { const d = await res.json(); alert(d.error ?? 'Erro ao remover') }
+  }
+
+  // ── Novo fonograma ───────────────────────────────────────────────────────────
+  async function addFonograma() {
+    if (fonoSaving) return
+    setFonoErr('')
+    setFonoSaving(true)
+    try {
+      const res = await authFetch(`/api/obras/${params.id}/fonogramas`, {
+        method: 'POST',
+        body: JSON.stringify(novoFono),
+      })
+      const d = await res.json()
+      if (!res.ok) { setFonoErr(d.error ?? 'Erro ao criar fonograma'); return }
+      setFonogramas(prev => [...prev, d.data])
+      setNovoFono({ titulo_fonograma: '', interprete: '', isrc: '', versao: 'original', ano_gravacao: '', gravadora: '' })
+      setShowFonoForm(false)
+    } catch (e) { setFonoErr('Erro: ' + String(e)) }
+    finally { setFonoSaving(false) }
+  }
+
+  async function removeFonograma(fid: string) {
+    if (!window.confirm('Remover este fonograma?')) return
+    const res = await authFetch(`/api/obras/${params.id}/fonogramas?fid=${fid}`, { method: 'DELETE' })
+    if (res.ok) setFonogramas(prev => prev.filter((f: any) => f.id !== fid))
+    else { const d = await res.json(); alert(d.error ?? 'Erro ao remover') }
+  }
+
+  // ── Salvar dados editoriais (resumo edit) ────────────────────────────────────
+  async function saveResumo() {
+    if (resumoSaving) return
+    setResumoSaving(true)
+    try {
+      const res = await authFetch(`/api/obras/${params.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(resumoDraft),
+      })
+      const d = await res.json()
+      if (!res.ok) { alert(d.error ?? 'Erro ao salvar'); return }
+      setObra((prev: any) => ({ ...prev, ...resumoDraft }))
+      setEditResumo(false)
+      setResumoDraft({})
+    } catch (e) { alert('Erro: ' + String(e)) }
+    finally { setResumoSaving(false) }
   }
 
   useEffect(() => {
@@ -413,6 +516,130 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
               </div>
             ))}
           </div>
+          {/* Painel editorial editável */}
+          <div className="lg:col-span-2 bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+              <h3 className="text-sm font-semibold text-white">Dados Editoriais</h3>
+              {!editResumo ? (
+                <button
+                  onClick={() => { setEditResumo(true); setResumoDraft({ iswc: obra.iswc ?? '', iswc_anterior: obra.iswc_anterior ?? '', iswc_alternativo: obra.iswc_alternativo ?? '', status_iswc: obra.status_iswc ?? 'pendente', territorio: obra.territorio ?? '', direitos_administrados: obra.direitos_administrados ?? {} }) }}
+                  className="inline-flex items-center gap-1.5 h-7 px-3 text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white/70 rounded-lg transition-colors"
+                >
+                  <Edit className="w-3 h-3" /> Editar
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    onClick={saveResumo}
+                    disabled={resumoSaving}
+                    className="inline-flex items-center gap-1.5 h-7 px-3 text-xs bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/20 text-emerald-300 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {resumoSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                    Salvar
+                  </button>
+                  <button
+                    onClick={() => { setEditResumo(false); setResumoDraft({}) }}
+                    className="h-7 px-3 text-xs text-white/40 hover:text-white/60 border border-white/10 rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="p-5">
+              {editResumo ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-1">ISWC Principal</label>
+                      <input
+                        className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white font-mono placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                        placeholder="T-000.000.000-0"
+                        value={resumoDraft.iswc ?? ''}
+                        onChange={e => setResumoDraft(p => ({ ...p, iswc: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-1">ISWC Anterior</label>
+                      <input
+                        className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white font-mono placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                        placeholder="—"
+                        value={resumoDraft.iswc_anterior ?? ''}
+                        onChange={e => setResumoDraft(p => ({ ...p, iswc_anterior: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-1">Status ISWC</label>
+                      <select
+                        className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+                        value={resumoDraft.status_iswc ?? 'pendente'}
+                        onChange={e => setResumoDraft(p => ({ ...p, status_iswc: e.target.value }))}
+                      >
+                        <option value="pendente">Pendente</option>
+                        <option value="aguardando_registro">Aguardando Registro</option>
+                        <option value="recebido">Registrado</option>
+                        <option value="conflito_iswc">Conflito</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-1">Território</label>
+                    <input
+                      className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                      placeholder="Mundial / Brasil / América Latina..."
+                      value={resumoDraft.territorio ?? ''}
+                      onChange={e => setResumoDraft(p => ({ ...p, territorio: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-2">Direitos Administrados</label>
+                    <div className="flex flex-wrap gap-3">
+                      {[
+                        { key: 'execucao_publica', label: 'Execução Pública (PR)' },
+                        { key: 'sincronizacao', label: 'Sincronização' },
+                        { key: 'fonomecanico', label: 'Fonomecânico (MR)' },
+                        { key: 'digital', label: 'Digital' },
+                        { key: 'grafico', label: 'Edição Gráfica' },
+                        { key: 'internacional', label: 'Internacional' },
+                      ].map(d => {
+                        const checked = resumoDraft.direitos_administrados?.[d.key] ?? false
+                        return (
+                          <label key={d.key} className="flex items-center gap-2 cursor-pointer">
+                            <button
+                              type="button"
+                              onClick={() => setResumoDraft(p => ({
+                                ...p,
+                                direitos_administrados: { ...(p.direitos_administrados ?? {}), [d.key]: !checked }
+                              }))}
+                              className="text-violet-400 hover:text-violet-300"
+                            >
+                              {checked ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4 opacity-40" />}
+                            </button>
+                            <span className="text-xs text-white/60">{d.label}</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                  {[
+                    { label: 'ISWC', value: obra.iswc ?? 'Pendente', color: obra.iswc ? 'text-emerald-400 font-mono' : 'text-amber-400' },
+                    { label: 'ISWC Anterior', value: obra.iswc_anterior ?? '—', color: 'text-white/55 font-mono' },
+                    { label: 'Status ISWC', value: obra.status_iswc ?? 'pendente', color: 'text-white/55' },
+                    { label: 'Território', value: obra.territorio ?? 'Não definido', color: 'text-white/55' },
+                  ].map(f => (
+                    <div key={f.label}>
+                      <p className="text-white/30 mb-0.5">{f.label}</p>
+                      <p className={f.color}>{f.value}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           {obra.observacoes && (
             <div className="lg:col-span-2 bg-[#0d1526] border border-white/[0.06] rounded-xl p-5">
               <h3 className="text-xs font-semibold text-white/50 mb-2">Observacoes</h3>
@@ -437,49 +664,67 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
               <h3 className="text-sm font-semibold text-white">Integrantes da Obra</h3>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[600px]">
+              <table className="w-full text-sm min-w-[820px]">
                 <thead>
                   <tr className="border-b border-white/[0.06]">
-                    <th className="text-center px-4 py-2.5 text-white/30 font-semibold text-xs w-12">Link</th>
-                    <th className="text-left px-4 py-2.5 text-white/30 font-semibold text-xs">Nome</th>
-                    <th className="text-center px-4 py-2.5 text-white/30 font-semibold text-xs w-28">IPI / Cód.</th>
-                    <th className="text-center px-4 py-2.5 text-white/30 font-semibold text-xs w-16">Cat.</th>
-                    <th className="text-right px-5 py-2.5 text-white/30 font-semibold text-xs w-24">%</th>
+                    <th className="text-center px-3 py-2.5 text-white/30 font-semibold text-xs w-12">Link</th>
+                    <th className="text-left px-3 py-2.5 text-white/30 font-semibold text-xs">Nome</th>
+                    <th className="text-center px-3 py-2.5 text-white/30 font-semibold text-xs w-16">Cat.</th>
+                    <th className="text-center px-3 py-2.5 text-white/30 font-semibold text-xs w-16">Controle</th>
+                    <th className="text-right px-3 py-2.5 text-white/30 font-semibold text-xs w-20">PR</th>
+                    <th className="text-right px-3 py-2.5 text-white/30 font-semibold text-xs w-20">MR</th>
+                    <th className="text-right px-3 py-2.5 text-white/30 font-semibold text-xs w-20">SR</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.04]">
                   {links.flatMap((link: any) =>
-                    (link.titulares ?? []).map((t: any) => (
-                      <tr key={t.id} className="hover:bg-white/[0.02] transition-colors">
-                        <td className="px-4 py-3 text-center">
-                          <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 text-[10px] font-bold text-white">
-                            {link.ordem}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`font-medium ${t.controlado ? 'text-white/80' : 'text-white/55'}`}>
-                            {t.nome}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className="font-mono text-sm text-violet-400/80">
-                            {t.ipi || t.cae || '—'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <SiglaBadge papel={t.papel} />
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          <span className="font-semibold tabular-nums text-sky-300/90 text-sm">
-                            {formatarPercentual(t.percentual)}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
+                    (link.titulares ?? []).map((t: any) => {
+                      const sc = t.status_controle ?? ''
+                      const scColor = sc === 'controlado' ? 'text-emerald-400' : sc === 'nao_controlado' ? 'text-white/35' : 'text-amber-400'
+                      const scLabel = sc === 'controlado' ? 'Controlado' : sc === 'nao_controlado' ? 'Não ctrl.' : sc === 'contrato_pendente' ? 'Pendente' : sc || '—'
+                      return (
+                        <tr key={t.id} className="hover:bg-white/[0.02] transition-colors">
+                          <td className="px-3 py-3 text-center">
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 text-[10px] font-bold text-white">
+                              {link.numero_link ?? link.ordem ?? '?'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3">
+                            <span className={`font-medium ${t.controlado ? 'text-white/80' : 'text-white/55'}`}>
+                              {t.nome}
+                            </span>
+                            {(t.ipi || t.cae) && (
+                              <span className="block text-[10px] font-mono text-white/30">{t.ipi || t.cae}</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <SiglaBadge papel={t.papel} />
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <span className={`text-[10px] font-semibold ${scColor}`}>{scLabel}</span>
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            <span className="font-semibold tabular-nums text-sky-300/90 text-xs">
+                              {t.percentual_exec_publica != null ? formatarPercentual(t.percentual_exec_publica) : <span className="text-white/25">—</span>}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            <span className="font-semibold tabular-nums text-violet-300/90 text-xs">
+                              {t.percentual_fonomecanico != null ? formatarPercentual(t.percentual_fonomecanico) : <span className="text-white/25">—</span>}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            <span className="font-semibold tabular-nums text-teal-300/70 text-xs">
+                              {t.percentual_sincronizacao != null ? formatarPercentual(t.percentual_sincronizacao) : <span className="text-white/25">—</span>}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })
                   )}
                   {links.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-xs text-white/30">
+                      <td colSpan={7} className="px-4 py-8 text-center text-xs text-white/30">
                         Nenhum integrante vinculado.
                       </td>
                     </tr>
@@ -487,15 +732,107 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
                 </tbody>
                 <tfoot>
                   <tr className="border-t border-white/[0.08]">
-                    <td colSpan={4} className="px-4 py-2 text-right text-xs text-white/25 font-medium">Total</td>
-                    <td className="px-5 py-2 text-right font-bold tabular-nums text-xs text-white/50">
-                      {formatarPercentual(links.flatMap((l: any) => l.titulares ?? []).reduce((s: number, t: any) => s + t.percentual, 0))}
+                    <td colSpan={4} className="px-3 py-2 text-right text-xs text-white/25 font-medium">Total PR / MR / SR</td>
+                    <td className="px-3 py-2 text-right text-xs font-bold tabular-nums text-sky-300/70">
+                      {formatarPercentual(links.flatMap((l: any) => l.titulares ?? []).reduce((s: number, t: any) => s + (t.percentual_exec_publica ?? 0), 0))}
+                    </td>
+                    <td className="px-3 py-2 text-right text-xs font-bold tabular-nums text-violet-300/70">
+                      {formatarPercentual(links.flatMap((l: any) => l.titulares ?? []).reduce((s: number, t: any) => s + (t.percentual_fonomecanico ?? 0), 0))}
+                    </td>
+                    <td className="px-3 py-2 text-right text-xs font-bold tabular-nums text-teal-300/60">
+                      {formatarPercentual(links.flatMap((l: any) => l.titulares ?? []).reduce((s: number, t: any) => s + (t.percentual_sincronizacao ?? 0), 0))}
                     </td>
                   </tr>
                 </tfoot>
               </table>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Tab: Intérpretes */}
+      {activeTab === 'interpretes' && (
+        <div className="space-y-4">
+          {/* Formulário de adição */}
+          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-white mb-4">Adicionar Intérprete</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <input
+                className="col-span-1 sm:col-span-2 bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                placeholder="Nome artístico *"
+                value={novoInterp.nome_artistico}
+                onChange={e => setNovoInterp(p => ({ ...p, nome_artistico: e.target.value }))}
+              />
+              <input
+                className="bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                placeholder="Nome civil (opcional)"
+                value={novoInterp.nome_civil}
+                onChange={e => setNovoInterp(p => ({ ...p, nome_civil: e.target.value }))}
+              />
+              <select
+                className="bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+                value={novoInterp.tipo}
+                onChange={e => setNovoInterp(p => ({ ...p, tipo: e.target.value }))}
+              >
+                <option value="principal">Principal</option>
+                <option value="feat">Feat.</option>
+                <option value="participacao">Participação</option>
+                <option value="grupo">Grupo</option>
+                <option value="banda">Banda</option>
+                <option value="convidado">Convidado</option>
+              </select>
+            </div>
+            <button
+              onClick={addInterprete}
+              disabled={!novoInterp.nome_artistico.trim() || interpSaving}
+              className="mt-3 inline-flex items-center gap-1.5 h-8 px-3 text-xs bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/20 text-violet-300 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {interpSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+              Adicionar
+            </button>
+          </div>
+
+          {/* Lista de intérpretes */}
+          {interpretesLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-white/30" /></div>
+          ) : interpretes.length === 0 ? (
+            <p className="text-center py-8 text-xs text-white/30">Nenhum intérprete vinculado ainda.</p>
+          ) : (
+            <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/[0.06]">
+                    <th className="text-left px-4 py-2.5 text-white/30 font-semibold text-xs">Nome Artístico</th>
+                    <th className="text-left px-4 py-2.5 text-white/30 font-semibold text-xs">Nome Civil</th>
+                    <th className="text-center px-4 py-2.5 text-white/30 font-semibold text-xs">Tipo</th>
+                    <th className="text-center px-4 py-2.5 text-white/30 font-semibold text-xs">Titular</th>
+                    <th className="w-10" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.04]">
+                  {interpretes.map((i: any) => (
+                    <tr key={i.id} className="hover:bg-white/[0.02]">
+                      <td className="px-4 py-3 font-medium text-white/80">{i.nome_artistico}</td>
+                      <td className="px-4 py-3 text-white/40 text-xs">{i.nome_civil || '—'}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-300 uppercase">
+                          {i.tipo}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center text-xs text-white/40">
+                        {i.titulares?.nome_completo ?? '—'}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <button onClick={() => removeInterprete(i.id)} className="text-rose-400/50 hover:text-rose-400 transition-colors">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
@@ -520,8 +857,87 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
         <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
             <h3 className="text-sm font-semibold text-white">Fonogramas ({fonogramas.length})</h3>
+            <button
+              onClick={() => setShowFonoForm(f => !f)}
+              className="ml-auto inline-flex items-center gap-1.5 h-7 px-3 text-xs bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/20 text-violet-300 rounded-lg transition-colors"
+            >
+              <Plus className="w-3 h-3" /> Novo Fonograma
+            </button>
           </div>
-          {fonogramas.length === 0 ? (
+
+          {/* Formulário de novo fonograma */}
+          {showFonoForm && (
+            <div className="px-5 pb-4">
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 space-y-3">
+                <h4 className="text-xs font-semibold text-white/60 uppercase tracking-wider">Novo Fonograma</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <input
+                    className="sm:col-span-2 bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    placeholder="Título do fonograma"
+                    value={novoFono.titulo_fonograma}
+                    onChange={e => setNovoFono(p => ({ ...p, titulo_fonograma: e.target.value }))}
+                  />
+                  <select
+                    className="bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    value={novoFono.versao}
+                    onChange={e => setNovoFono(p => ({ ...p, versao: e.target.value }))}
+                  >
+                    <option value="original">Original</option>
+                    <option value="ao_vivo">Ao Vivo</option>
+                    <option value="remix">Remix</option>
+                    <option value="acustico">Acústico</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                  <input
+                    className="bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    placeholder="Intérprete"
+                    value={novoFono.interprete}
+                    onChange={e => setNovoFono(p => ({ ...p, interprete: e.target.value }))}
+                  />
+                  <input
+                    className="bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/25 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    placeholder="ISRC (ex: BRSM12500001)"
+                    value={novoFono.isrc}
+                    onChange={e => setNovoFono(p => ({ ...p, isrc: e.target.value.toUpperCase() }))}
+                  />
+                  <input
+                    className="bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    placeholder="Gravadora"
+                    value={novoFono.gravadora}
+                    onChange={e => setNovoFono(p => ({ ...p, gravadora: e.target.value }))}
+                  />
+                  <input
+                    className="bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/25 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    placeholder="Ano de gravação"
+                    type="number"
+                    min="1900"
+                    max="2099"
+                    value={novoFono.ano_gravacao}
+                    onChange={e => setNovoFono(p => ({ ...p, ano_gravacao: e.target.value }))}
+                  />
+                </div>
+                {fonoErr && <p className="text-xs text-rose-400">{fonoErr}</p>}
+                <div className="flex gap-2">
+                  <button
+                    onClick={addFonograma}
+                    disabled={fonoSaving}
+                    className="inline-flex items-center gap-1.5 h-8 px-4 text-xs bg-violet-600/25 hover:bg-violet-600/35 border border-violet-500/30 text-violet-300 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {fonoSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    Salvar Fonograma
+                  </button>
+                  <button
+                    onClick={() => { setShowFonoForm(false); setFonoErr('') }}
+                    className="h-8 px-3 text-xs text-white/40 hover:text-white/60 border border-white/10 rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {fonogramas.length === 0 && !showFonoForm ? (
             <div className="py-8 text-center text-xs text-white/30">Nenhum fonograma cadastrado.</div>
           ) : (
             <div className="overflow-x-auto">
@@ -533,6 +949,7 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
                     <th className="text-center px-4 py-2.5 text-white/30 font-semibold">ISRC</th>
                     <th className="text-center px-4 py-2.5 text-white/30 font-semibold">Versão</th>
                     <th className="text-center px-4 py-2.5 text-white/30 font-semibold">Ano</th>
+                    <th className="w-10" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.03]">
@@ -551,6 +968,11 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
                       </td>
                       <td className="px-4 py-3 text-center text-white/40">{f.versao ?? '—'}</td>
                       <td className="px-4 py-3 text-center text-white/40">{f.ano_gravacao ?? f.data_lancamento?.substring(0, 4) ?? '—'}</td>
+                      <td className="px-4 py-3 text-center">
+                        <button onClick={() => removeFonograma(f.id)} className="text-rose-400/40 hover:text-rose-400 transition-colors">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
