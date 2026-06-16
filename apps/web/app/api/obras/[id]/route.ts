@@ -45,28 +45,24 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!SUPABASE_URL || !ANON_KEY) {
-    return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
-  }
+  const sb = getAdminClient()
+  if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
 
-  const token = getToken(req) || ANON_KEY
+  const usuario = await autenticar(req, sb)
+  if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
   const { id } = await params
 
   try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/obras?id=eq.${id}&select=*&limit=1`,
-      {
-        headers: {
-          apikey: ANON_KEY,
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    )
-    const data = await res.json()
-    if (!res.ok) return NextResponse.json({ error: data }, { status: res.status })
-    const row = Array.isArray(data) ? data[0] : null
-    if (!row) return NextResponse.json({ error: 'Obra não encontrada' }, { status: 404 })
+    const { data: row, error } = await sb
+      .from('obras')
+      .select('*')
+      .eq('id', id)
+      .eq('tenant_id', usuario.tenant_id)
+      .is('deleted_at', null)
+      .single()
+
+    if (error || !row) return NextResponse.json({ error: 'Obra não encontrada' }, { status: 404 })
     return NextResponse.json({ data: row })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
