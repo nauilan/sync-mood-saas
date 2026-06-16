@@ -75,11 +75,18 @@ export async function POST(
     )
   }
 
-  // statusId 4 = Finalizado; 6 = Cancelado
+  // D4Sign statusId: 4=Finalizado, 6=Cancelado
+  // Comparar como número e string para garantir compatibilidade com variações de resposta da API
+  const sid = doc.statusId
+  const isFinalizado = sid === 4 || (sid as unknown as string) === '4'
+    || (doc.statusName ?? '').toLowerCase().includes('finalizado')
+  const isCancelado  = sid === 6 || (sid as unknown as string) === '6'
+    || (doc.statusName ?? '').toLowerCase().includes('cancelado')
+
   let novoStatus: string | null = null
-  if (doc.statusId === 4 && contrato.status !== 'assinado') {
+  if (isFinalizado && contrato.status !== 'assinado') {
     novoStatus = 'assinado'
-  } else if (doc.statusId === 6 && contrato.status === 'aguardando_assinatura') {
+  } else if (isCancelado && contrato.status === 'aguardando_assinatura') {
     novoStatus = 'rascunho'
   }
 
@@ -90,7 +97,7 @@ export async function POST(
       d4sign_status_id: doc.statusId,
       d4sign_status_name: doc.statusName,
       contrato_status: contrato.status,
-      message: 'Nenhuma alteração necessária.',
+      message: `D4Sign: ${doc.statusName ?? '?'} (id=${doc.statusId}). Nenhuma alteração necessária.`,
     })
   }
 
