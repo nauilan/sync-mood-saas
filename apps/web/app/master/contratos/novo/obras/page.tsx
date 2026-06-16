@@ -504,8 +504,8 @@ export default function NovoContratoObrasPage() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    // Step 1: apenas PF categoria autor
-    authFetch('/api/titulares?tipo=autor&status=ativo&per_page=200')
+    // Step 1: PF — sem filtro de tipo/status para incluir pre_cadastro e variações de tipo vindas do CWR
+    authFetch('/api/titulares?tipo=todos&status=todos&per_page=2000')
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => {
         const pf = (d.data ?? []).filter((t: { pessoa?: string }) => !t.pessoa || t.pessoa === 'PF')
@@ -513,8 +513,8 @@ export default function NovoContratoObrasPage() {
       })
       .catch(() => {})
 
-    // Pickers de assinantes: todas as PF ativas
-    authFetch('/api/titulares?tipo=todos&status=ativo&per_page=500')
+    // Pickers de assinantes: todas as PF
+    authFetch('/api/titulares?tipo=todos&status=todos&per_page=2000')
       .then(r => r.ok ? r.json() : { data: [] })
       .then(d => {
         const pf: PessoaFisica[] = (d.data ?? [])
