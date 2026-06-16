@@ -690,7 +690,8 @@ export default function TitularesPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <p className="text-xs text-white/50 font-mono">{t.codigo_titular}</p>
+                      {t.codigo_interno && <p className="text-xs text-white/70 font-mono">{t.codigo_interno}</p>}
+                      <p className="text-xs text-white/40 font-mono">{t.codigo_titular}</p>
                       {docNum && <p className="text-xs text-white/30 font-mono">{docNum}</p>}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
