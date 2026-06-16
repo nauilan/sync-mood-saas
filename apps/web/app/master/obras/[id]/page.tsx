@@ -576,9 +576,10 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
                         onChange={e => setResumoDraft(p => ({ ...p, status_iswc: e.target.value }))}
                       >
                         <option value="pendente">Pendente</option>
+                        <option value="aguardando_retorno">Aguardando Retorno</option>
                         <option value="aguardando_registro">Aguardando Registro</option>
                         <option value="recebido">Registrado</option>
-                        <option value="conflito_iswc">Conflito</option>
+                        <option value="conflito_iswc">Conflito de ISWC</option>
                       </select>
                     </div>
                   </div>

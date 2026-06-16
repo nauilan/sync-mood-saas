@@ -348,6 +348,15 @@ export async function POST(
 
     criadas.push({ obra_id: novaObra.id, codigo_obra: codigoObra, titulo: o.titulo })
 
+    // ── Vincular em contrato_obras (upsert para ser idempotente) ─────────────
+    const { error: errCO } = await sb
+      .from('contrato_obras')
+      .upsert(
+        { tenant_id, contrato_id: contrato.id, obra_id: novaObra.id },
+        { onConflict: 'contrato_id,obra_id', ignoreDuplicates: true }
+      )
+    if (errCO) console.error('[criar-obra] contrato_obras upsert:', errCO.message)
+
     await logAudit({
       tenant_id,
       acao:             'criar',

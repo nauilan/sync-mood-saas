@@ -51,3 +51,10 @@ ALTER TABLE fonogramas
   ADD COLUMN IF NOT EXISTS contrato_id UUID REFERENCES contratos(id) ON DELETE SET NULL;
 
 COMMIT;
+
+-- ── 4. Ampliar enum status_iswc ──────────────────────────────────────────────
+-- IMPORTANTE: ALTER TYPE ADD VALUE *não pode* rodar dentro de BEGIN/COMMIT.
+-- Executar essas linhas separadamente no Supabase, após o COMMIT acima:
+
+ALTER TYPE status_iswc ADD VALUE IF NOT EXISTS 'aguardando_registro';
+ALTER TYPE status_iswc ADD VALUE IF NOT EXISTS 'conflito_iswc';
