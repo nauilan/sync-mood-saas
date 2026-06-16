@@ -415,6 +415,10 @@ export default function NovoContratoObrasPage() {
   const [step, setStep] = useState(0)
   const [form, setForm] = useState<FormState>(INITIAL)
   const [buscaTitular, setBuscaTitular] = useState('')
+  const [showCadastroInline, setShowCadastroInline] = useState(false)
+  const [quickForm, setQuickForm] = useState({ nome: '', cpf: '', email: '', ipi: '' })
+  const [salvandoTitular, setSalvandoTitular] = useState(false)
+  const [erroTitular, setErroTitular] = useState<string | null>(null)
   const [obraAtiva, setObraAtiva] = useState(0)
   const [editContratoId, setEditContratoId] = useState<string | null>(null)
   const btnProximoRef = useRef<HTMLButtonElement>(null)
@@ -824,6 +828,45 @@ export default function NovoContratoObrasPage() {
   )
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Cadastro inline de titular PF no step 1
+  // ─────────────────────────────────────────────────────────────────────────
+  const criarTitularInline = async () => {
+    const nome = (quickForm.nome || buscaTitular).trim()
+    if (!nome) return
+    setSalvandoTitular(true)
+    setErroTitular(null)
+    try {
+      const body: Record<string, string> = { nome_completo: nome, tipo: 'autor', tipo_pessoa: 'PF' }
+      if (quickForm.cpf.trim()) body.cpf_cnpj = quickForm.cpf.trim()
+      if (quickForm.email.trim()) body.email = quickForm.email.trim()
+      if (quickForm.ipi.trim()) body.ipi = quickForm.ipi.trim()
+      const r = await authFetch('/api/titulares', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const json = await r.json()
+      if (!r.ok) { setErroTitular(json.error ?? 'Erro ao criar titular'); return }
+      const novo = {
+        id: json.id,
+        nome_completo: nome,
+        cpf: quickForm.cpf || undefined,
+        email: quickForm.email || undefined,
+        codigo_titular: json.codigo_titular,
+        pessoa: 'PF',
+      }
+      setTitulares(prev => [...prev, novo])
+      upd({ titular_id: json.id, titular_nome: nome, titular_email: quickForm.email ?? '', titular_cpf: quickForm.cpf ?? '' })
+      setShowCadastroInline(false)
+      setQuickForm({ nome: '', cpf: '', email: '', ipi: '' })
+    } catch {
+      setErroTitular('Erro de conexão')
+    } finally {
+      setSalvandoTitular(false)
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // STEP 1 — Titular PF + categoria Autor
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -877,8 +920,86 @@ export default function NovoContratoObrasPage() {
           </button>
         ))}
         {titularFiltrado.length === 0 && (
-          <div className="text-xs text-white/30 py-6 text-center">
-            Nenhum titular Pessoa Física / Autor encontrado. Cadastre pelo menu Titulares.
+          <div className="space-y-3">
+            <div className="text-xs text-white/30 py-3 text-center">
+              {buscaTitular ? `Nenhum resultado para "${buscaTitular}".` : 'Nenhum titular cadastrado.'}
+            </div>
+            {!showCadastroInline ? (
+              <button
+                onClick={() => {
+                  setShowCadastroInline(true)
+                  setQuickForm(f => ({ ...f, nome: buscaTitular }))
+                  setErroTitular(null)
+                }}
+                className="w-full flex items-center justify-center gap-2 h-10 rounded-xl border border-dashed border-violet-500/40 text-violet-400 text-sm hover:border-violet-500/60 hover:bg-violet-500/5 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                {buscaTitular ? `Cadastrar "${buscaTitular}" como novo titular` : 'Cadastrar novo titular'}
+              </button>
+            ) : (
+              <div className="bg-white/[0.03] border border-white/[0.08] rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-medium text-white/80">Novo Titular — Pessoa Física</p>
+                  <button onClick={() => setShowCadastroInline(false)} className="text-white/30 hover:text-white/60 transition-colors">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div>
+                  <label className="text-xs text-white/40 mb-1 block">Nome completo *</label>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={quickForm.nome}
+                    onChange={e => setQuickForm(f => ({ ...f, nome: e.target.value.toUpperCase() }))}
+                    className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-sm text-white/80 uppercase outline-none focus:border-violet-500/40"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-white/40 mb-1 block">CPF</label>
+                    <input
+                      type="text"
+                      value={quickForm.cpf}
+                      onChange={e => setQuickForm(f => ({ ...f, cpf: e.target.value }))}
+                      placeholder="000.000.000-00"
+                      className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-sm text-white/70 outline-none focus:border-violet-500/40"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-white/40 mb-1 block">IPI / CAE</label>
+                    <input
+                      type="text"
+                      value={quickForm.ipi}
+                      onChange={e => setQuickForm(f => ({ ...f, ipi: e.target.value }))}
+                      placeholder="opcional"
+                      className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-sm text-white/70 outline-none focus:border-violet-500/40"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-white/40 mb-1 block">E-mail (para assinatura eletrônica)</label>
+                  <input
+                    type="email"
+                    value={quickForm.email}
+                    onChange={e => setQuickForm(f => ({ ...f, email: e.target.value }))}
+                    placeholder="nome@email.com"
+                    className="w-full h-9 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 text-sm text-white/70 outline-none focus:border-violet-500/40"
+                  />
+                </div>
+                {erroTitular && (
+                  <p className="text-xs text-red-400 flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> {erroTitular}
+                  </p>
+                )}
+                <button
+                  onClick={criarTitularInline}
+                  disabled={salvandoTitular || !quickForm.nome.trim()}
+                  className="w-full h-9 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-sm font-medium transition-colors"
+                >
+                  {salvandoTitular ? 'Cadastrando...' : 'Cadastrar e selecionar'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
