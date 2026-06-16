@@ -708,7 +708,7 @@ export default function NovoContratoObrasPage() {
         observacoes:     form.observacoes || null,
         splits_direitos: form.direitos,
         status:          'rascunho',
-        numero:          `CTO-${Date.now()}`,
+        // numero gerado pelo backend (gerarNumeroContrato)
         // Obras vinculadas ao contrato
         obras: form.obras.map(o => ({
           titulo:             o.titulo,
@@ -766,8 +766,8 @@ export default function NovoContratoObrasPage() {
           body: JSON.stringify(payload),
         })
       } else {
-        // Modo criação: POST novo contrato
-        const createPayload = { ...payload, status: 'rascunho', numero: `CTO-${Date.now()}` }
+        // Modo criação: POST novo contrato — numero gerado pelo backend
+        const createPayload = { ...payload, status: 'rascunho' }
         res = await authFetch('/api/contratos', {
           method: 'POST',
           body: JSON.stringify(createPayload),
