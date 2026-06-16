@@ -52,6 +52,9 @@ export default function ContratoDetailPage() {
   const [wfResult, setWfResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [syncLoading, setSyncLoading] = useState(false)
   const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [obraLoading, setObraLoading] = useState(false)
+  const [obraResult, setObraResult] = useState<{ ok: boolean; message: string; obraId?: string } | null>(null)
+  const [obraMatch, setObraMatch] = useState<{ existentes: Array<{ titulo: string; obras: Array<{ id: string; codigo_obra: string; titulo: string }> }> } | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -135,6 +138,39 @@ export default function ContratoDetailPage() {
       setSyncResult({ ok: false, message: 'Erro de conexão.' })
     } finally {
       setSyncLoading(false)
+    }
+  }
+
+  // ── Criar obras no catálogo a partir do obras_json do contrato ──────────────
+  async function handleCriarObra(forcar = false) {
+    if (!id || obraLoading) return
+    setObraLoading(true)
+    setObraResult(null)
+    setObraMatch(null)
+    try {
+      const res = await authFetch(`/api/contratos/${id}/criar-obra`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ forcar }),
+      })
+      const json = await res.json()
+      if (res.status === 409 && json.match) {
+        // Obra com mesmo título já existe — perguntar ao usuário
+        setObraMatch({ existentes: json.existentes })
+      } else if (!res.ok) {
+        setObraResult({ ok: false, message: json.error ?? 'Erro ao criar obra.' })
+      } else {
+        const criadas = (json.criadas ?? []) as Array<{ obra_id: string; codigo_obra: string; titulo: string }>
+        setObraResult({ ok: true, message: json.message, obraId: criadas[0]?.obra_id })
+        // Redireciona para a primeira obra criada após 1.5s
+        if (criadas[0]?.obra_id) {
+          setTimeout(() => router.push(`/master/obras/${criadas[0].obra_id}`), 1500)
+        }
+      }
+    } catch {
+      setObraResult({ ok: false, message: 'Erro de conexão.' })
+    } finally {
+      setObraLoading(false)
     }
   }
 
@@ -962,12 +998,47 @@ export default function ContratoDetailPage() {
           <p className="text-xs text-teal-400/60 mt-0.5">
             Contrato validado. As obras mencionadas podem agora ser cadastradas no catálogo.
           </p>
-          <Link
-            href={`/master/obras/nova?contrato_id=${contrato.id}`}
-            className="mt-3 inline-flex items-center gap-1.5 h-8 px-3 text-xs bg-teal-600/20 hover:bg-teal-600/30 border border-teal-500/20 text-teal-300 rounded-lg transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" /> Iniciar Cadastro da Obra
-          </Link>
+          {obraResult?.ok && (
+            <p className="mt-2 text-xs text-emerald-400">{obraResult.message} Redirecionando…</p>
+          )}
+          {obraResult && !obraResult.ok && (
+            <p className="mt-2 text-xs text-rose-400">{obraResult.message}</p>
+          )}
+          {obraMatch && (
+            <div className="mt-2 space-y-1">
+              <p className="text-xs text-amber-400">Obra(s) com mesmo título já existem:</p>
+              {obraMatch.existentes.map((e, i) => (
+                <p key={i} className="text-xs text-white/60 font-mono">{e.titulo} — {e.obras.map((ob: { codigo_obra: string }) => ob.codigo_obra).join(', ')}</p>
+              ))}
+              <div className="flex gap-2 mt-1">
+                <button
+                  onClick={() => handleCriarObra(true)}
+                  disabled={obraLoading}
+                  className="h-7 px-2 text-[11px] bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Criar mesmo assim
+                </button>
+                <button
+                  onClick={() => setObraMatch(null)}
+                  className="h-7 px-2 text-[11px] bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+          {!obraResult?.ok && !obraMatch && (
+            <button
+              onClick={() => handleCriarObra()}
+              disabled={obraLoading}
+              className="mt-3 inline-flex items-center gap-1.5 h-8 px-3 text-xs bg-teal-600/20 hover:bg-teal-600/30 border border-teal-500/20 text-teal-300 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {obraLoading
+                ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Criando…</>
+                : <><Plus className="w-3.5 h-3.5" /> Iniciar Cadastro da Obra</>
+              }
+            </button>
+          )}
         </div>
       )}
 
@@ -1026,12 +1097,47 @@ export default function ContratoDetailPage() {
           <p className="text-xs text-emerald-400/60 mt-0.5">
             Contrato aprovado. As obras mencionadas podem agora ser cadastradas no catálogo oficial.
           </p>
-          <Link
-            href={`/master/obras/nova?contrato_id=${contrato.id}`}
-            className="mt-3 inline-flex items-center gap-1.5 h-8 px-3 text-xs bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/20 text-emerald-300 rounded-lg transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" /> Iniciar Cadastro da Obra
-          </Link>
+          {obraResult?.ok && (
+            <p className="mt-2 text-xs text-emerald-400">{obraResult.message} Redirecionando…</p>
+          )}
+          {obraResult && !obraResult.ok && (
+            <p className="mt-2 text-xs text-rose-400">{obraResult.message}</p>
+          )}
+          {obraMatch && (
+            <div className="mt-2 space-y-1">
+              <p className="text-xs text-amber-400">Obra(s) com mesmo título já existem:</p>
+              {obraMatch.existentes.map((e, i) => (
+                <p key={i} className="text-xs text-white/60 font-mono">{e.titulo} — {e.obras.map((ob: { codigo_obra: string }) => ob.codigo_obra).join(', ')}</p>
+              ))}
+              <div className="flex gap-2 mt-1">
+                <button
+                  onClick={() => handleCriarObra(true)}
+                  disabled={obraLoading}
+                  className="h-7 px-2 text-[11px] bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Criar mesmo assim
+                </button>
+                <button
+                  onClick={() => setObraMatch(null)}
+                  className="h-7 px-2 text-[11px] bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+          {!obraResult?.ok && !obraMatch && (
+            <button
+              onClick={() => handleCriarObra()}
+              disabled={obraLoading}
+              className="mt-3 inline-flex items-center gap-1.5 h-8 px-3 text-xs bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/20 text-emerald-300 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {obraLoading
+                ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Criando…</>
+                : <><Plus className="w-3.5 h-3.5" /> Iniciar Cadastro da Obra</>
+              }
+            </button>
+          )}
         </div>
       )}
 
