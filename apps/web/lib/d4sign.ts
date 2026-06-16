@@ -241,18 +241,27 @@ export async function getDocumentStatus(docUuid: string): Promise<D4SignDocument
   const res = await fetch(
     `${BASE_URL}/documents/${docUuid}?tokenAPI=${tokenAPI}&cryptKey=${cryptKey}`
   )
-  const json = await res.json() as Record<string, unknown>
+
+  // D4Sign às vezes retorna array, às vezes objeto — normalizar
+  const raw = await res.json() as unknown
+  const json = (Array.isArray(raw) ? raw[0] : raw) as Record<string, unknown>
+
+  console.log(`[d4sign] getDocumentStatus uuid=${docUuid} HTTP=${res.status}`, JSON.stringify(json).slice(0, 400))
 
   if (!res.ok) {
     throw new Error(`D4Sign getStatus falhou (${res.status}): ${JSON.stringify(json)}`)
   }
 
+  // Campo pode aparecer como "statusId", "status_id" ou "uuidDoc" aninhado
+  const statusId = Number(json.statusId ?? json.status_id ?? (json.uuidDoc as Record<string, unknown>)?.statusId ?? -1)
+  const statusName = (json.statusName ?? json.status_name ?? '') as string
+
   return {
-    uuid:         json.uuid as string,
-    statusId:     Number(json.statusId),
-    statusName:   json.statusName as string,
+    uuid:         (json.uuid ?? docUuid) as string,
+    statusId,
+    statusName,
     nameOriginal: json.nameOriginal as string,
-    safeUUID:     json.safeUUID as string,
+    safeUUID:     (json.safeUUID ?? '') as string,
   }
 }
 
