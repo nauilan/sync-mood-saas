@@ -195,6 +195,37 @@ function ObraDrawer({ obra: obraInicial, onClose, editoras = [] }: { obra: any; 
   // ── Fonogramas reais da obra ─────────────────────────────────────────────
   const [fonogramas, setFonogramas] = useState<Fonograma[]>([])
   const [loadingFonogramas, setLoadingFonogramas] = useState(false)
+  const [showAddFono, setShowAddFono] = useState(false)
+  const [newFono, setNewFono] = useState({ titulo_fonograma: '', isrc: '', interprete: '', versao: 'original', gravadora: '' })
+  const [savingFono, setSavingFono] = useState(false)
+
+  const addFonograma = async () => {
+    if (!newFono.interprete.trim() || !newFono.isrc.trim()) return
+    setSavingFono(true)
+    try {
+      const res = await authFetch(`/api/obras/${obra.id}/fonogramas`, {
+        method: 'POST',
+        body: JSON.stringify(newFono),
+      })
+      const d = await res.json()
+      if (d.data) {
+        setFonogramas(prev => [...prev, d.data])
+        setNewFono({ titulo_fonograma: '', isrc: '', interprete: '', versao: 'original', gravadora: '' })
+        setShowAddFono(false)
+      }
+    } catch {}
+    finally { setSavingFono(false) }
+  }
+
+  // ── Contrato vinculado ──────────────────────────────────────────────────
+  const [contratoInfo, setContratoInfo] = useState<any>(null)
+  useEffect(() => {
+    if (tab !== 'info' || !obra.contrato_origem_id) return
+    authFetch(`/api/contratos/${obra.contrato_origem_id}`)
+      .then(r => r.json())
+      .then(d => setContratoInfo(d.contrato ?? null))
+      .catch(() => {})
+  }, [tab, obra.contrato_origem_id])
   useEffect(() => {
     if (tab !== 'fonogramas') return
     setLoadingFonogramas(true)
@@ -295,7 +326,7 @@ function ObraDrawer({ obra: obraInicial, onClose, editoras = [] }: { obra: any; 
     const rows: string[] = []
     rows.push('CADASTRO DE OBRA')
     rows.push(`Título;${obra.titulo}`)
-    rows.push(`Código Sync Mood;${obra.codigo}`)
+    rows.push(`Código Sync Mood;${obra.codigo_obra ?? obra.codigo ?? ''}`)
     rows.push(`Cód. Legado;${obra.codigo_interno_legado||''}`)
     rows.push(`ISWC;${obra.iswc||''}`)
     rows.push(`Idioma;${obra.idioma||''}`)
@@ -381,7 +412,7 @@ td{padding:4px 6px;border:1px solid #eee;font-size:10px}
 tfoot td{background:#f7f7f7;font-weight:bold}
 @media print{@page{size:A4 landscape;margin:12mm}}</style></head><body>
 <h1>${obra.titulo}</h1>
-<p style="color:#555;font-size:10px">Código: ${obra.codigo} | ISWC: ${obra.iswc||'Pendente'} | Status: ${obra.status||''}</p>
+<p style="color:#555;font-size:10px">Código: ${obra.codigo_obra ?? obra.codigo ?? ''} | ISWC: ${obra.iswc||'Pendente'} | Status: ${obra.status||''}</p>
 <div class="meta">
   <div><label>Cód. Legado</label>${obra.codigo_interno_legado||'—'}</div>
   <div><label>Idioma</label>${obra.idioma||'—'}</div>
@@ -421,7 +452,7 @@ tfoot td{background:#f7f7f7;font-weight:bold}
           <div className="flex-1 min-w-0">
             <h2 className="text-base font-bold text-white truncate">{obra.titulo}</h2>
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-              <span className="text-xs font-mono text-white/35">{obra.codigo}</span>
+              <span className="text-xs font-mono text-white/35">{obra.codigo_obra ?? obra.codigo}</span>
               {obra.codigo_interno_legado && obra.codigo_interno_legado !== obra.codigo && (
                 <span className="inline-flex items-center gap-0.5 text-[10px] font-mono bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded">
                   <Tag className="w-2.5 h-2.5" />{obra.codigo_interno_legado}
@@ -582,13 +613,34 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                   <div className="h-full rounded-full bg-violet-500" style={{ width: `${Math.min(pctControladoCalc, 100)}%` }} />
                 </div>
               </div>
-              <div className={`rounded-xl p-4 flex items-center gap-3 ${obra.contrato_file ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-white/[0.03]'}`}>
-                <FileCheck2 className={`w-5 h-5 shrink-0 ${obra.contrato_file ? 'text-emerald-400' : 'text-white/20'}`} />
-                <div>
-                  <p className={`text-sm font-semibold ${obra.contrato_file ? 'text-emerald-400' : 'text-white/30'}`}>
-                    {obra.contrato_file ? obra.contrato_file : 'Sem contrato anexado'}
-                  </p>
-                  <p className="text-xs text-white/30">{obra.contrato_file ? 'PDF assinado verificado' : 'Necessário para validação'}</p>
+              <div className={`rounded-xl p-4 flex items-center gap-3 ${obra.contrato_origem_id ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-white/[0.03]'}`}>
+                <FileCheck2 className={`w-5 h-5 shrink-0 ${obra.contrato_origem_id ? 'text-emerald-400' : 'text-white/20'}`} />
+                <div className="flex-1 min-w-0">
+                  {obra.contrato_origem_id ? (
+                    <>
+                      <p className="text-sm font-semibold text-emerald-400">
+                        {contratoInfo?.codigo ?? contratoInfo?.numero_contrato ?? 'Contrato vinculado'}
+                      </p>
+                      <p className="text-xs text-white/30">{contratoInfo?.status ? `Status: ${contratoInfo.status}` : 'Contrato de origem'}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Link href={`/master/contratos/${obra.contrato_origem_id}`}
+                          className="flex items-center gap-1.5 h-6 px-2.5 rounded-lg bg-emerald-500/15 text-xs text-emerald-300 hover:bg-emerald-500/25 transition-colors">
+                          <ExternalLink className="w-3 h-3" /> Ver Contrato
+                        </Link>
+                        {contratoInfo?.d4sign_pdf_url && (
+                          <a href={contratoInfo.d4sign_pdf_url} target="_blank" rel="noreferrer"
+                            className="flex items-center gap-1.5 h-6 px-2.5 rounded-lg bg-sky-500/15 text-xs text-sky-300 hover:bg-sky-500/25 transition-colors">
+                            <FileText className="w-3 h-3" /> Download PDF
+                          </a>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold text-white/30">Sem contrato anexado</p>
+                      <p className="text-xs text-white/30">Necessário para validação</p>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -769,13 +821,66 @@ tfoot td{background:#f7f7f7;font-weight:bold}
           })()}
 
           {tab === 'fonogramas' && (
-            <div className="space-y-2">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-white/40">{fonogramas.length} fonograma{fonogramas.length !== 1 ? 's' : ''}</p>
+                <button onClick={() => setShowAddFono(v => !v)}
+                  className="flex items-center gap-1.5 h-7 px-3 rounded-lg bg-sky-500/20 border border-sky-500/30 text-xs text-sky-300 hover:bg-sky-500/30 transition-colors">
+                  <Plus className="w-3.5 h-3.5" /> Adicionar
+                </button>
+              </div>
+              {showAddFono && (
+                <div className="bg-sky-500/5 border border-sky-500/20 rounded-xl p-4 space-y-3">
+                  <p className="text-xs font-semibold text-sky-300">Novo Fonograma</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="col-span-2">
+                      <label className="text-[10px] text-white/30 mb-1 block">Intérprete <span className="text-rose-400">*</span></label>
+                      <input type="text" value={newFono.interprete}
+                        onChange={e => setNewFono(p => ({ ...p, interprete: e.target.value.toUpperCase() }))}
+                        placeholder="NOME DO INTERPRETE"
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white uppercase placeholder-white/20 focus:outline-none focus:border-sky-500/60" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-[10px] text-white/30 mb-1 flex items-center gap-1">ISRC <span className="text-rose-400">*</span></label>
+                      <input type="text" value={newFono.isrc}
+                        onChange={e => setNewFono(p => ({ ...p, isrc: e.target.value.toUpperCase() }))}
+                        placeholder="BR-XXX-00-00000"
+                        className={`w-full bg-white/5 border rounded-lg px-3 py-2 text-sm text-white font-mono placeholder-white/20 focus:outline-none ${!newFono.isrc.trim() ? 'border-rose-500/40' : 'border-white/10 focus:border-sky-500/60'}`} />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-white/30 mb-1 block">Título da Gravação</label>
+                      <input type="text" value={newFono.titulo_fonograma}
+                        onChange={e => setNewFono(p => ({ ...p, titulo_fonograma: e.target.value }))}
+                        placeholder="Opcional"
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-sky-500/60" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-white/30 mb-1 block">Versão</label>
+                      <select value={newFono.versao} onChange={e => setNewFono(p => ({ ...p, versao: e.target.value }))}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
+                        <option value="original">Original</option>
+                        <option value="ao_vivo">Ao Vivo</option>
+                        <option value="acustico">Acústico</option>
+                        <option value="remix">Remix</option>
+                        <option value="outro">Outro</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setShowAddFono(false)} className="flex-1 h-8 rounded-lg bg-white/5 text-xs text-white/50 hover:text-white/70 transition-colors">Cancelar</button>
+                    <button onClick={addFonograma} disabled={!newFono.interprete.trim() || !newFono.isrc.trim() || savingFono}
+                      className="flex-1 h-8 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-semibold text-white transition-colors disabled:opacity-40">
+                      {savingFono ? 'Salvando...' : 'Salvar Fonograma'}
+                    </button>
+                  </div>
+                </div>
+              )}
               {loadingFonogramas && (
                 <div className="flex justify-center py-10 text-white/25">
                   <Loader2 className="w-6 h-6 animate-spin" />
                 </div>
               )}
-              {!loadingFonogramas && fonogramas.length === 0 && (
+              {!loadingFonogramas && fonogramas.length === 0 && !showAddFono && (
                 <div className="flex flex-col items-center gap-2 py-10 text-white/25">
                   <Mic2 className="w-8 h-8" />
                   <p className="text-sm">Nenhum fonograma cadastrado</p>
@@ -787,11 +892,11 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                     <Mic2 className="w-4 h-4 text-sky-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white/80 font-medium truncate">{f.titulo_fonograma || `Fonograma ${i + 1}`}</p>
+                    <p className="text-sm text-white/80 font-medium truncate">{f.titulo_fonograma || f.interprete || `Fonograma ${i + 1}`}</p>
                     <div className="flex items-center gap-3 mt-0.5">
                       {f.isrc && <span className="text-[10px] font-mono text-emerald-400">{f.isrc}</span>}
+                      {f.interprete && <span className="text-[10px] text-white/50 uppercase">{f.interprete}</span>}
                       {f.duracao_segundos && <span className="text-[10px] text-white/30">{Math.floor(f.duracao_segundos/60)}:{String(f.duracao_segundos%60).padStart(2,'0')}</span>}
-                      {f.interprete && <span className="text-[10px] text-white/30">{f.interprete}</span>}
                     </div>
                   </div>
                   {f.ano_gravacao && <span className="text-xs text-white/30 shrink-0">{f.ano_gravacao}</span>}
