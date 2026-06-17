@@ -1038,14 +1038,10 @@ export default function ContratoDetailPage() {
           )}
           {!obraResult?.ok && !obraMatch && (
             <button
-              onClick={() => handleCriarObra()}
-              disabled={obraLoading}
-              className="mt-3 inline-flex items-center gap-1.5 h-8 px-3 text-xs bg-teal-600/20 hover:bg-teal-600/30 border border-teal-500/20 text-teal-300 rounded-lg transition-colors disabled:opacity-50"
+              onClick={() => router.push(`/master/contratos/${contrato.id}/nova-obra`)}
+              className="mt-3 inline-flex items-center gap-1.5 h-8 px-3 text-xs bg-teal-600/20 hover:bg-teal-600/30 border border-teal-500/20 text-teal-300 rounded-lg transition-colors"
             >
-              {obraLoading
-                ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Criando…</>
-                : <><Plus className="w-3.5 h-3.5" /> Iniciar Cadastro da Obra</>
-              }
+              <Plus className="w-3.5 h-3.5" /> Iniciar Cadastro da Obra
             </button>
           )}
         </div>

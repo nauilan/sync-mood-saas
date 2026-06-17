@@ -148,6 +148,9 @@ export async function POST(
   const { id } = await params
   const body = await req.json().catch(() => ({}))
   const forcar: boolean = body.forcar ?? false
+  const iswcInput: string | undefined = body.iswc || undefined
+  const interpretesInput: Array<{ nome_artistico: string; nome_civil?: string; tipo?: string }> = body.interpretes ?? []
+  const fonogramasInput: Array<Record<string, unknown>> = body.fonogramas ?? []
 
   // ── 1. Buscar contrato ────────────────────────────────────────────────────
   const { data: contrato, error: errContrato } = await sb
@@ -302,6 +305,7 @@ export async function POST(
         codigo_obra:        codigoObra,
         titulo:             (o.titulo ?? '').trim(),
         titulo_alternativo: o.titulo_alternativo ?? null,
+        iswc:               iswcInput ?? null,
         status:             'pre_cadastro',
         origem_cadastro:    'contrato_sistema',
         contrato_origem_id: contrato.id,
@@ -422,6 +426,45 @@ export async function POST(
     }
 
     criadas.push({ obra_id: novaObra.id, codigo_obra: codigoObra, titulo: o.titulo })
+
+    // ── Inserir intérpretes ──────────────────────────────────────────────────
+    for (const interp of interpretesInput) {
+      if (!interp.nome_artistico?.trim()) continue
+      await sb.from('obras_interpretes').insert({
+        tenant_id,
+        obra_id:        novaObra.id,
+        nome_artistico: interp.nome_artistico.trim(),
+        nome_civil:     interp.nome_civil?.trim() || null,
+        tipo:           interp.tipo ?? 'principal',
+        origem:         'manual',
+      })
+    }
+
+    // ── Inserir fonogramas ───────────────────────────────────────────────────
+    for (const fono of fonogramasInput) {
+      if (!fono.titulo_fonograma && !fono.isrc) continue
+      await sb.from('fonogramas').insert({
+        tenant_id,
+        obra_id:         novaObra.id,
+        titulo_fonograma: fono.titulo_fonograma ?? '',
+        isrc:            fono.isrc || null,
+        interprete:      fono.interprete || null,
+        versao:          fono.versao || null,
+        titulo_versao:   fono.titulo_versao || null,
+        gravadora:       fono.gravadora || null,
+        duracao_segundos: fono.duracao_segundos || null,
+        data_lancamento: fono.data_lancamento || null,
+        titulo_album:    fono.titulo_album || null,
+        produtor_album:  fono.produtor_album || null,
+        codigo_catalogo: fono.codigo_catalogo || null,
+        ean:             fono.ean || null,
+        formato_audio:   fono.formato_audio ?? true,
+        tecnica_digital: fono.tecnica_digital ?? true,
+        tipo_midia:      fono.tipo_midia || null,
+        origem:          'manual',
+        contrato_id:     contrato.id,
+      })
+    }
 
     // ── Vincular em contrato_obras (upsert para ser idempotente) ─────────────
     const { error: errCO } = await sb
