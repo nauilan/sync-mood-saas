@@ -66,10 +66,26 @@ export async function GET(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // Mapa CWR funcao_no_link → papel normalizado (mesmo que /api/obras)
+  const CWR_ROLE_MAP: Record<string, string> = {
+    E:  'editora_original',
+    SE: 'subeditora', SA: 'subeditora',
+    AM: 'administradora',
+    CA: 'compositor', C: 'compositor', CE: 'compositor',
+    A:  'autor',      T:  'autor',
+    V:  'versionista', AD: 'adaptador',
+    I:  'interprete_referencia',
+  }
+
   // Normaliza para o formato esperado pelo componente
   const links = (data ?? []).map((l: any) => ({
     ...l,
-    titulares: l.obras_links_titulares ?? [],
+    titulares: (l.obras_links_titulares ?? []).map((t: any) => {
+      const fn = (t.funcao_no_link ?? '').toUpperCase()
+      const papel = fn ? (CWR_ROLE_MAP[fn] ?? t.papel ?? 'autor') : (t.papel ?? 'autor')
+      return { ...t, papel }
+    }),
+    obras_links_titulares: undefined,
   }))
 
   return NextResponse.json({ data: links, total: links.length })

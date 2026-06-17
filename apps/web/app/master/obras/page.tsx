@@ -1206,7 +1206,7 @@ export default function ObrasPage() {
               const p = t.papel ?? ''
               const isEdi = PAPEIS_EDITORA_RECALC.includes(p) || PAPEIS_EDITORA_ABREV.includes(p.toUpperCase())
               if (!isEdi) return s
-              return s + (t.percentual_fonomecanico ?? t.percentual_exec_publica ?? t.percentual ?? 0)
+              return s + (t.percentual_fonomecanico || t.percentual_exec_publica || t.percentual || 0)
             }, 0)
           }, 0).toFixed(2)
         )
