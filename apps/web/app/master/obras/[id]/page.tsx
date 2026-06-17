@@ -393,6 +393,44 @@ export default function ObraDetailPage() {
 
       {/* Status bar */}
       <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4 space-y-3">
+
+        {/* ── ID INTERNO DA OBRA ─────────────────────────────────────────── */}
+        <div className="flex flex-wrap items-start gap-x-6 gap-y-2 pb-3 border-b border-white/[0.06]">
+          <div>
+            <p className="text-[9px] font-semibold text-white/30 uppercase tracking-widest mb-0.5">ID Interno da Obra</p>
+            <p className="text-base font-mono font-bold text-white tracking-wide">{obra.codigo_obra ?? obra.codigo ?? '—'}</p>
+          </div>
+          <div>
+            <p className="text-[9px] text-white/30 uppercase tracking-widest mb-0.5">ISWC</p>
+            <p className={`text-sm font-mono font-semibold ${obra.iswc ? 'text-emerald-400' : 'text-amber-400/60'}`}>{obra.iswc ?? 'Pendente'}</p>
+          </div>
+          {obra.codigo_interno_legado && obra.codigo_interno_legado !== (obra.codigo ?? obra.codigo_obra) && (
+            <div>
+              <p className="text-[9px] text-white/30 uppercase tracking-widest mb-0.5">Cód. Legado</p>
+              <p className="text-sm font-mono text-violet-300">{obra.codigo_interno_legado}</p>
+            </div>
+          )}
+          {obra.codigo_obra_cwr_original && (
+            <div>
+              <p className="text-[9px] text-white/30 uppercase tracking-widest mb-0.5">Cód. CWR Original</p>
+              <p className="text-sm font-mono text-white/50">{obra.codigo_obra_cwr_original}</p>
+            </div>
+          )}
+          {obra.backoffice_song_id && (
+            <div>
+              <p className="text-[9px] text-white/30 uppercase tracking-widest mb-0.5">BackOffice Song ID</p>
+              <p className="text-sm font-mono text-sky-300">{obra.backoffice_song_id}</p>
+            </div>
+          )}
+          {obra.backoffice_work_id && (
+            <div>
+              <p className="text-[9px] text-white/30 uppercase tracking-widest mb-0.5">BackOffice Work ID</p>
+              <p className="text-sm font-mono text-sky-300">{obra.backoffice_work_id}</p>
+            </div>
+          )}
+        </div>
+        {/* ────────────────────────────────────────────────────────────────── */}
+
         <div className="flex flex-wrap items-center gap-2.5">
           <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${STATUS_OBRA_COLORS[obra.status as StatusObra] ?? 'bg-white/10 text-white/50'}`}>
             {STATUS_OBRA_LABELS[obra.status as StatusObra] ?? obra.status}
@@ -410,13 +448,6 @@ export default function ObraDetailPage() {
           {editoraNome && (
             <><span className="text-xs text-white/30">|</span>
             <span className="text-xs text-white/40">Editora: <span className="text-white/60">{editoraNome}</span></span></>
-          )}
-          {obra.codigo_interno_legado && obra.codigo_interno_legado !== (obra.codigo ?? obra.codigo_obra) && (
-            <><span className="text-xs text-white/30">|</span>
-            <span className="text-[10px] font-mono bg-violet-500/10 text-violet-300 rounded px-1.5 py-0.5"
-              title="Código interno legado (CWR/sistema antigo)">
-              {obra.codigo_interno_legado}
-            </span></>
           )}
           {obra.backoffice_status && obra.backoffice_status !== 'nao_enviada' && (
             <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
