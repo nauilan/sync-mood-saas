@@ -337,30 +337,11 @@ export default function NovaObraPage() {
               <input
                 type="text"
                 value={novaArtista.nome_artistico}
-                onChange={e => setNovaArtista(p => ({ ...p, nome_artistico: e.target.value }))}
+                onChange={e => setNovaArtista(p => ({ ...p, nome_artistico: e.target.value.toUpperCase() }))}
                 onKeyDown={e => e.key === 'Enter' && addInterprete()}
-                placeholder="Nome artistico"
-                className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-emerald-500/50"
+                placeholder="NOME ARTISTICO"
+                className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-emerald-500/50 uppercase"
               />
-              <input
-                type="text"
-                value={novaArtista.nome_civil}
-                onChange={e => setNovaArtista(p => ({ ...p, nome_civil: e.target.value }))}
-                placeholder="Nome civil (opcional)"
-                className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-emerald-500/50"
-              />
-              <select
-                value={novaArtista.tipo}
-                onChange={e => setNovaArtista(p => ({ ...p, tipo: e.target.value }))}
-                className="bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500/50"
-              >
-                <option value="principal">Principal</option>
-                <option value="feat">Feat.</option>
-                <option value="participacao">Participacao</option>
-                <option value="grupo">Grupo</option>
-                <option value="banda">Banda</option>
-                <option value="convidado">Convidado</option>
-              </select>
               <button
                 onClick={addInterprete}
                 disabled={!novaArtista.nome_artistico.trim()}
@@ -570,15 +551,18 @@ export default function NovaObraPage() {
                 />
               </div>
 
-              {/* ISRC */}
+              {/* ISRC — obrigatório */}
               <div>
-                <label className="text-xs text-white/40 mb-1 block">ISRC</label>
+                <label className="text-xs mb-1 flex items-center gap-1">
+                  <span className="text-white/40">ISRC</span>
+                  <span className="text-rose-400">*</span>
+                </label>
                 <input
                   type="text"
                   value={modal.fono.isrc}
                   onChange={e => setModal(p => ({ ...p, fono: { ...p.fono, isrc: e.target.value.toUpperCase() } }))}
                   placeholder="BR-XXX-00-00000"
-                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-sky-500/50 font-mono"
+                  className={`w-full bg-white/[0.04] border rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none font-mono ${!modal.fono.isrc.trim() ? 'border-rose-500/40 focus:border-rose-500/70' : 'border-white/[0.08] focus:border-sky-500/50'}`}
                 />
               </div>
 
@@ -593,14 +577,17 @@ export default function NovaObraPage() {
                 />
               </div>
 
-              {/* Intérprete */}
+              {/* Intérprete — obrigatório */}
               <div>
-                <label className="text-xs text-white/40 mb-1 block">Interprete</label>
+                <label className="text-xs mb-1 flex items-center gap-1">
+                  <span className="text-white/40">Interprete</span>
+                  <span className="text-rose-400">*</span>
+                </label>
                 <input
                   type="text"
                   value={modal.fono.interprete}
-                  onChange={e => setModal(p => ({ ...p, fono: { ...p.fono, interprete: e.target.value } }))}
-                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-sky-500/50"
+                  onChange={e => setModal(p => ({ ...p, fono: { ...p.fono, interprete: e.target.value.toUpperCase() } }))}
+                  className={`w-full bg-white/[0.04] border rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none ${!modal.fono.interprete.trim() ? 'border-rose-500/40 focus:border-rose-500/70' : 'border-white/[0.08] focus:border-sky-500/50'}`}
                 />
               </div>
 
@@ -708,7 +695,7 @@ export default function NovaObraPage() {
               </button>
               <button
                 onClick={salvarFonograma}
-                disabled={!modal.fono.titulo_fonograma.trim() && !modal.fono.isrc.trim()}
+                disabled={!modal.fono.interprete.trim() || !modal.fono.isrc.trim()}
                 className="flex items-center gap-1.5 h-9 px-5 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-40"
               >
                 <Check className="w-4 h-4" />
