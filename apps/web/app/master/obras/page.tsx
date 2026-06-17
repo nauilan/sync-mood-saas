@@ -41,6 +41,7 @@ const AVATARES_CORES = [
 ]
 
 function AvatarTitular({ nome, idx }: { nome: string; idx: number }) {
+  if (!nome) return null
   const initials = nome.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
   return (
     <span title={nome}
@@ -96,6 +97,7 @@ const STATUS_OPTIONS: { value: StatusObra | ''; label: string }[] = [
 
 // ─── Highlight texto da busca ─────────────────────────────────────────────────
 function Highlight({ text, query }: { text: string; query: string }) {
+  if (!text) return <></>
   if (!query) return <>{text}</>
   const idx = text.toLowerCase().indexOf(query.toLowerCase())
   if (idx === -1) return <>{text}</>
@@ -1159,7 +1161,7 @@ export default function ObrasPage() {
                       key={obra.id}
                       onMouseDown={e => e.preventDefault()}
                       onClick={() => {
-                        setSearch(obra.titulo)
+                        setSearch(obra.titulo ?? '')
                         setShowSuggestions(false)
                       }}
                       className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-violet-500/10 transition-colors text-left group"
@@ -1169,13 +1171,13 @@ export default function ObrasPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-white/80 truncate">
-                          <Highlight text={obra.titulo} query={search} />
+                          <Highlight text={obra.titulo ?? ''} query={search} />
                         </p>
                         <p className="text-[10px] text-white/35 font-mono">
-                          <Highlight text={obra.codigo} query={search} />
+                          <Highlight text={obra.codigo ?? obra.codigo_obra ?? ''} query={search} />
                           {autores.length > 0 && (
                             <span className="font-sans ml-2 text-white/25">
-                              · {autores.slice(0, 2).map((a: any) => a.nome.split(' ')[0]).join(', ')}
+                              · {autores.slice(0, 2).map((a: any) => (a.nome ?? '').split(' ')[0]).join(', ')}
                               {autores.length > 2 && ` +${autores.length - 2}`}
                             </span>
                           )}
