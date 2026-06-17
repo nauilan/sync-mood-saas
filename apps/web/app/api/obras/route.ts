@@ -90,12 +90,13 @@ export async function GET(req: NextRequest) {
 
   // Mapeamento CWR funcao_no_link → papel editorial normalizado
   const CWR_ROLE_MAP: Record<string, string> = {
-    E: 'editora_original', E1: 'editora_original', ES: 'editora_original', PA: 'editora_original',
-    SE: 'subeditora', AQ: 'subeditora', SA: 'subeditora',
+    E: 'editora_original',
+    SE: 'subeditora', SA: 'subeditora',
     AM: 'administradora',
     CA: 'compositor', C: 'compositor', CE: 'compositor',
-    A: 'autor', AL: 'autor',
+    A: 'autor', T: 'autor',
     V: 'versionista', AD: 'adaptador',
+    I: 'interprete_referencia',
   }
 
   // Mapear obras_links → _links (formato esperado pelo frontend)
