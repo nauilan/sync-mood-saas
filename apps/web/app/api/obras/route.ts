@@ -95,7 +95,11 @@ export async function GET(req: NextRequest) {
       ...rest,
       _links: (obras_links ?? []).map((l: any) => ({
         ...l,
-        titulares:           l.obras_links_titulares ?? [],
+        titulares: (l.obras_links_titulares ?? []).map((t: any) => ({
+          ...t,
+          // garante compatibilidade: funcao_no_link ('E','AM','CA'...) serve como papel
+          papel: t.papel ?? t.funcao_no_link,
+        })),
         obras_links_titulares: undefined,
       })),
       _fonogramas_count: (fono ?? []).length,

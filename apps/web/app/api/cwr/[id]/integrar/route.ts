@@ -862,6 +862,18 @@ export async function POST(
     .update({ relatorio: { ...relAtual, integracao }, updated_at: new Date().toISOString() })
     .eq('id', id)
 
+  // ── 10b. Promover status das obras integradas para 'ativa' ───────────────
+  if (obraIds.length > 0) {
+    const CHUNK = 200
+    for (let i = 0; i < obraIds.length; i += CHUNK) {
+      await client
+        .from('obras')
+        .update({ status: 'ativa', updated_at: new Date().toISOString() })
+        .in('id', obraIds.slice(i, i + CHUNK))
+        .eq('status', 'pre_cadastro')
+    }
+  }
+
   // ── 11. Resposta ──────────────────────────────────────────────────────────
   return NextResponse.json({
     ok:                     true,
