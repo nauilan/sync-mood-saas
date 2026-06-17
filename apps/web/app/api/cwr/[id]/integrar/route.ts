@@ -182,6 +182,7 @@ export async function POST(
     chave: string; papel: string
     pr_pct: number; mr_pct: number; sr_pct: number
     controlled: boolean; obraId: string
+    link_number: number  // derivado de pwr_links; fallback = 1 se sem PWR
   }
   const obraParticipacoes: PartObra[] = []
 
@@ -224,6 +225,24 @@ export async function POST(
     obraIdToTitulo[obraId]       = obraTit
     obraIdToSnapshotDate[obraId] = (row as any).created_at ?? ''
 
+    // ── Fix 1: Mapear pwr_links → link_number por escritor e editora ─────────
+    // Cada publisher_ip distinto cria um link_number sequencial.
+    // O writer_ip (autor) herda o link_number do publisher que o representa.
+    // Se pwr_links[] estiver vazio, todos ficam no LINK 1 (fallback).
+    const pwrLinks = (snap.pwr_links as any[]) ?? []
+    const pubIpToLinkNum = new Map<string, number>()
+    const wrtIpToLinkNum = new Map<string, number>()
+    let nextLinkNum = 1
+    for (const pwr of pwrLinks) {
+      const pubIp = ((pwr.publisher_ip as string | null) ?? '').replace(/\s/g, '').trim()
+      const wrtIp = ((pwr.writer_ip   as string | null) ?? '').replace(/\s/g, '').trim()
+      if (!pubIp) continue
+      if (!pubIpToLinkNum.has(pubIp)) pubIpToLinkNum.set(pubIp, nextLinkNum++)
+      if (wrtIp && !wrtIpToLinkNum.has(wrtIp)) {
+        wrtIpToLinkNum.set(wrtIp, pubIpToLinkNum.get(pubIp)!)
+      }
+    }
+
     for (const a of ((snap.autores as any[]) ?? [])) {
       if (!(a.nome as string)?.trim()) continue
       const chave = chaveTitular(a.ipi, a.nome)
@@ -238,6 +257,7 @@ export async function POST(
         sr_pct:     Number(a.sr_pct)  || 0,
         controlled: a.controlled ?? false,
         obraId,
+        link_number: wrtIpToLinkNum.get(((a.ipi as string | null) ?? '').replace(/\s/g,'').trim()) ?? 1,
       })
       // Registrar no staging (todos os autores, independente de pct)
       stagingEntries.push({
@@ -320,6 +340,7 @@ export async function POST(
         sr_pct:     Number(e.sr_pct) || 0,
         controlled: e.controlled ?? false,
         obraId,
+        link_number: pubIpToLinkNum.get(((e.ipi as string | null) ?? '').replace(/\s/g,'').trim()) ?? 1,
       })
     }
 
@@ -558,16 +579,35 @@ export async function POST(
 
   const obraIds = [...new Set(impObras.map(r => r.obra_id as string))]
 
-  // ── Upsert obras_links (idempotente — ignora duplicatas) ──────────────────
+  // ── Fix 1: Upsert obras_links por link distinto (pwr_links) ──────────────
+  // Coletar todos os pares (obraId, link_number) distintos das participações.
   const CHUNK = 500
-  for (let i = 0; i < obraIds.length; i += CHUNK) {
+  const obraLinkCombos: { obraId: string; linkNum: number }[] = []
+  const seenObraLinks = new Set<string>()
+  for (const p of obraParticipacoes) {
+    const k = `${p.obraId}:${p.link_number}`
+    if (!seenObraLinks.has(k)) {
+      seenObraLinks.add(k)
+      obraLinkCombos.push({ obraId: p.obraId, linkNum: p.link_number })
+    }
+  }
+  // Garantir pelo menos LINK 1 para obras sem pwr_links
+  for (const obraId of obraIds) {
+    const k = `${obraId}:1`
+    if (!seenObraLinks.has(k)) {
+      seenObraLinks.add(k)
+      obraLinkCombos.push({ obraId, linkNum: 1 })
+    }
+  }
+
+  for (let i = 0; i < obraLinkCombos.length; i += CHUNK) {
     const { error: linkErr } = await client
       .from('obras_links')
       .upsert(
-        obraIds.slice(i, i + CHUNK).map(oid => ({
-          obra_id:         oid,
+        obraLinkCombos.slice(i, i + CHUNK).map(({ obraId, linkNum }) => ({
+          obra_id:         obraId,
           tenant_id:       usuario.tenantId,
-          numero_link:     1,
+          numero_link:     linkNum,
           percentual_link: 100,
           tipo_link:       'controlado',
           status:          'ativo',
@@ -582,16 +622,17 @@ export async function POST(
     }
   }
 
-  // Carregar IDs dos links (novos + já existentes)
-  const obraIdToLinkId: Record<string, string> = {}
+  // Carregar IDs dos links indexados por "obraId:linkNum"
+  const obraLinkNumToId: Record<string, string> = {}
   const obrasLinksIds: string[] = []
   for (let i = 0; i < obraIds.length; i += CHUNK) {
     const { data: lks } = await client
       .from('obras_links')
-      .select('id, obra_id')
+      .select('id, obra_id, numero_link')
       .in('obra_id', obraIds.slice(i, i + CHUNK))
     for (const l of (lks ?? [])) {
-      obraIdToLinkId[l.obra_id as string] = l.id as string
+      const key = `${l.obra_id}:${l.numero_link}`
+      obraLinkNumToId[key] = l.id as string
       obrasLinksIds.push(l.id as string)
     }
   }
@@ -616,10 +657,26 @@ export async function POST(
 
   const titPayloads: Record<string, unknown>[] = []
   for (const [obraId, partics] of partByObra) {
-    const linkId = obraIdToLinkId[obraId]
-    if (!linkId) continue
+    // Fix 2: pré-calcular MR da AM = soma de pr_pct dos participantes controlled (excl. própria AM)
+    const amChaves = new Set(partics.filter(p => p.papel === 'AM').map(p => p.chave))
+    const totalControlledPr = partics
+      .filter(p => p.controlled && !amChaves.has(p.chave))
+      .reduce((sum, p) => sum + p.pr_pct, 0)
+
     for (const p of partics) {
+      // Fix 1: resolver link correto via pwr_links; fallback = LINK 1
+      const linkId =
+        obraLinkNumToId[`${obraId}:${p.link_number}`] ??
+        obraLinkNumToId[`${obraId}:1`]
+      if (!linkId) continue
+
       const info = autoresUnicos.get(p.chave) ?? editorasUnicas.get(p.chave)
+
+      // Fix 2: para AM — preferir mr_pct do CWR (se > 0); senão, usar soma dos controlados
+      const mr_final = (p.papel === 'AM' && (p.mr_pct ?? 0) === 0 && totalControlledPr > 0)
+        ? totalControlledPr
+        : (p.mr_pct ?? 0)
+
       titPayloads.push({
         obra_link_id:             linkId,
         obra_id:                  obraId,
@@ -628,7 +685,7 @@ export async function POST(
         nome:                     info?.nome ?? '',
         funcao_no_link:           p.papel,
         percentual_exec_publica:  p.pr_pct  ?? 0,
-        percentual_fonomecanico:  p.mr_pct  ?? 0,
+        percentual_fonomecanico:  mr_final,
         percentual_sincronizacao: p.sr_pct  ?? 0,
         ipi:                      info?.ipi ?? null,
         status_controle:          p.controlled ? 'controlado' : 'nao_controlado',
@@ -825,7 +882,7 @@ export async function POST(
       duplicatas_removidas:  impObrasRaw.length - impObras.length,
       obraParticipacoes_len: obraParticipacoes.length,
       titPayloads_len:       titPayloads.length,
-      obraIdToLinkId_len:    Object.keys(obraIdToLinkId).length,
+      obraIdToLinkId_len:    Object.keys(obraLinkNumToId).length,
       insert_error:          insertError,
     },
     editoras_criadas:          editorasCriadas,
