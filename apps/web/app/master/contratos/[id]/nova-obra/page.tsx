@@ -114,7 +114,7 @@ export default function NovaObraPage() {
       const res = await authFetch(`/api/contratos/${contratoId}`)
       if (res.ok) {
         const d = await res.json()
-        setContrato(d.data ?? null)
+        setContrato(d.contrato ?? null)
       }
       setLoading(false)
     }
@@ -123,7 +123,7 @@ export default function NovaObraPage() {
 
   // ── Derived ──────────────────────────────────────────────────────────────────
   const obrasJson: ObraJson[] = (contrato?.obras_json as ObraJson[]) ?? []
-  const titularNome: string = (contrato?.titular_nome as string) ?? ''
+  const titularNome: string = (contrato?.titular_principal as string) ?? ''
   const primeiraObra: ObraJson | undefined = obrasJson[0]
 
   // ── Handlers — intérpretes ───────────────────────────────────────────────────
