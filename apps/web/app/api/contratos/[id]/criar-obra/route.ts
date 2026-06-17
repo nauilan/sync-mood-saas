@@ -94,6 +94,47 @@ type ObraJson = {
   co_autores?: Array<{ nome: string; papel: string; pct?: number }>
 }
 
+function normNome(nome: string): string {
+  return (nome ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Mn}/gu, '')
+    .trim()
+}
+
+type MatchTipo = 'duplicata_exata' | 'homonima' | 'nenhum'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function classificarMatchAutores(
+  sb: any,
+  existingObraId: string,
+  novosAutores: Array<{ titular_id?: string | null; nome: string }>
+): Promise<MatchTipo> {
+  const { data: existingLinks } = await sb
+    .from('obras_links_titulares')
+    .select('titular_id, nome')
+    .eq('obra_id', existingObraId)
+    .in('papel', ['compositor', 'autor', 'letrista', 'compositor_letrista'])
+
+  const existingAutores: Array<{ titular_id: string | null; nome: string | null }> =
+    existingLinks ?? []
+
+  if (existingAutores.length === 0 || novosAutores.length === 0) return 'nenhum'
+
+  let matches = 0
+  for (const novo of novosAutores) {
+    const found = existingAutores.some(ea =>
+      (novo.titular_id && ea.titular_id && novo.titular_id === ea.titular_id) ||
+      normNome(novo.nome) === normNome(ea.nome ?? '')
+    )
+    if (found) matches++
+  }
+
+  if (matches === novosAutores.length && matches === existingAutores.length) return 'duplicata_exata'
+  if (matches > 0) return 'homonima'
+  return 'nenhum'
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -180,7 +221,13 @@ export async function POST(
 
   // ── 6. Verificar obras existentes (antes de criar) ────────────────────────
   if (!forcar) {
-    const existentes: Array<{ titulo: string; obras: unknown[] }> = []
+    type ExistenteItem = {
+      titulo: string
+      obras: unknown[]
+      match_type: 'duplicata_exata' | 'homonima'
+    }
+    const existentes: ExistenteItem[] = []
+    let piorMatchType: 'duplicata_exata' | 'homonima' | null = null
 
     for (const o of obrasJson) {
       const tituloNorm = (o.titulo ?? '').toLowerCase().trim()
@@ -191,15 +238,43 @@ export async function POST(
         .eq('titulo_normalizado', tituloNorm)
         .is('deleted_at', null)
 
-      if (existingList && existingList.length > 0) {
-        existentes.push({ titulo: o.titulo, obras: existingList })
+      if (!existingList || existingList.length === 0) continue
+
+      // Montar lista de autores CA da nova obra para comparação
+      const novosAutores: Array<{ titular_id?: string | null; nome: string }> = []
+      if (contrato.titular_id) novosAutores.push({ titular_id: contrato.titular_id, nome: titularNome })
+      for (const co of o.co_autores ?? []) {
+        const { data: coTit } = await sb
+          .from('titulares')
+          .select('id')
+          .eq('tenant_id', tenant_id)
+          .ilike('nome_completo', co.nome.trim())
+          .limit(1)
+        novosAutores.push({ titular_id: coTit?.[0]?.id ?? null, nome: co.nome })
       }
+
+      // Classificar match para cada obra existente
+      let worstMatch: MatchTipo = 'nenhum'
+      for (const ex of existingList as Array<{ id: string; codigo_obra: string; titulo: string; status: string }>) {
+        const m = await classificarMatchAutores(sb, ex.id, novosAutores)
+        if (m === 'duplicata_exata') { worstMatch = 'duplicata_exata'; break }
+        if (m === 'homonima') worstMatch = 'homonima'
+      }
+
+      if (worstMatch === 'nenhum') continue // autores diferentes, sem conflito
+
+      existentes.push({ titulo: o.titulo, obras: existingList, match_type: worstMatch })
+      if (worstMatch === 'duplicata_exata') piorMatchType = 'duplicata_exata'
+      else if (!piorMatchType) piorMatchType = 'homonima'
     }
 
     if (existentes.length > 0) {
       return NextResponse.json({
         match: true,
-        message: 'Obra(s) com o mesmo título já existem no catálogo. Confirme para criar mesmo assim.',
+        match_type: piorMatchType,
+        message: piorMatchType === 'duplicata_exata'
+          ? 'Obra duplicada: mesmo título e mesmos autores já existem no catálogo.'
+          : 'Obra homônima: mesmo título com autores parcialmente iguais.',
         existentes,
       }, { status: 409 })
     }

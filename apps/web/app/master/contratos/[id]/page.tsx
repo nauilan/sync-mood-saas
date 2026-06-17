@@ -54,7 +54,7 @@ export default function ContratoDetailPage() {
   const [syncResult, setSyncResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [obraLoading, setObraLoading] = useState(false)
   const [obraResult, setObraResult] = useState<{ ok: boolean; message: string; obraId?: string } | null>(null)
-  const [obraMatch, setObraMatch] = useState<{ existentes: Array<{ titulo: string; obras: Array<{ id: string; codigo_obra: string; titulo: string }> }> } | null>(null)
+  const [obraMatch, setObraMatch] = useState<{ match_type: 'duplicata_exata' | 'homonima' | null; existentes: Array<{ titulo: string; match_type: 'duplicata_exata' | 'homonima'; obras: Array<{ id: string; codigo_obra: string; titulo: string }> }> } | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -155,8 +155,8 @@ export default function ContratoDetailPage() {
       })
       const json = await res.json()
       if (res.status === 409 && json.match) {
-        // Obra com mesmo título já existe — perguntar ao usuário
-        setObraMatch({ existentes: json.existentes })
+        // Obra com mesmo título — classificar por tipo de match
+        setObraMatch({ match_type: json.match_type ?? null, existentes: json.existentes })
       } else if (!res.ok) {
         setObraResult({ ok: false, message: json.error ?? 'Erro ao criar obra.' })
       } else {
@@ -1006,18 +1006,27 @@ export default function ContratoDetailPage() {
           )}
           {obraMatch && (
             <div className="mt-2 space-y-1">
-              <p className="text-xs text-amber-400">Obra(s) com mesmo título já existem:</p>
+              {obraMatch.match_type === 'duplicata_exata' ? (
+                <p className="text-xs text-rose-400 font-semibold">Obra duplicada: mesmo titulo e mesmos autores ja existem no catalogo. Nao e possivel criar duplicata.</p>
+              ) : (
+                <p className="text-xs text-amber-400">Obra homonima: mesmo titulo com autores parcialmente iguais.</p>
+              )}
               {obraMatch.existentes.map((e, i) => (
-                <p key={i} className="text-xs text-white/60 font-mono">{e.titulo} — {e.obras.map((ob: { codigo_obra: string }) => ob.codigo_obra).join(', ')}</p>
+                <p key={i} className="text-xs text-white/60 font-mono">
+                  {e.titulo} — {e.obras.map((ob: { codigo_obra: string }) => ob.codigo_obra).join(', ')}
+                  {' '}<span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${e.match_type === 'duplicata_exata' ? 'bg-rose-500/20 text-rose-300' : 'bg-amber-500/20 text-amber-300'}`}>{e.match_type === 'duplicata_exata' ? 'Duplicata' : 'Homonima'}</span>
+                </p>
               ))}
               <div className="flex gap-2 mt-1">
-                <button
-                  onClick={() => handleCriarObra(true)}
-                  disabled={obraLoading}
-                  className="h-7 px-2 text-[11px] bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  Criar mesmo assim
-                </button>
+                {obraMatch.match_type !== 'duplicata_exata' && (
+                  <button
+                    onClick={() => handleCriarObra(true)}
+                    disabled={obraLoading}
+                    className="h-7 px-2 text-[11px] bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Criar como Homonima
+                  </button>
+                )}
                 <button
                   onClick={() => setObraMatch(null)}
                   className="h-7 px-2 text-[11px] bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 rounded-lg transition-colors"
@@ -1105,18 +1114,27 @@ export default function ContratoDetailPage() {
           )}
           {obraMatch && (
             <div className="mt-2 space-y-1">
-              <p className="text-xs text-amber-400">Obra(s) com mesmo título já existem:</p>
+              {obraMatch.match_type === 'duplicata_exata' ? (
+                <p className="text-xs text-rose-400 font-semibold">Obra duplicada: mesmo titulo e mesmos autores ja existem no catalogo. Nao e possivel criar duplicata.</p>
+              ) : (
+                <p className="text-xs text-amber-400">Obra homonima: mesmo titulo com autores parcialmente iguais.</p>
+              )}
               {obraMatch.existentes.map((e, i) => (
-                <p key={i} className="text-xs text-white/60 font-mono">{e.titulo} — {e.obras.map((ob: { codigo_obra: string }) => ob.codigo_obra).join(', ')}</p>
+                <p key={i} className="text-xs text-white/60 font-mono">
+                  {e.titulo} — {e.obras.map((ob: { codigo_obra: string }) => ob.codigo_obra).join(', ')}
+                  {' '}<span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${e.match_type === 'duplicata_exata' ? 'bg-rose-500/20 text-rose-300' : 'bg-amber-500/20 text-amber-300'}`}>{e.match_type === 'duplicata_exata' ? 'Duplicata' : 'Homonima'}</span>
+                </p>
               ))}
               <div className="flex gap-2 mt-1">
-                <button
-                  onClick={() => handleCriarObra(true)}
-                  disabled={obraLoading}
-                  className="h-7 px-2 text-[11px] bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  Criar mesmo assim
-                </button>
+                {obraMatch.match_type !== 'duplicata_exata' && (
+                  <button
+                    onClick={() => handleCriarObra(true)}
+                    disabled={obraLoading}
+                    className="h-7 px-2 text-[11px] bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Criar como Homonima
+                  </button>
+                )}
                 <button
                   onClick={() => setObraMatch(null)}
                   className="h-7 px-2 text-[11px] bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 rounded-lg transition-colors"
