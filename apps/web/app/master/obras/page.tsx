@@ -1100,22 +1100,15 @@ export default function ObrasPage() {
       const linksRaw = normalizarLinksObra(o._links ?? MOCK_OBRAS_LINKS[o.id] ?? [])
       if (linksRaw.length > 0) {
         const PAPEIS_EDITORA_RECALC = ['editora_original', 'administradora', 'subeditora']
-        const isOwrLk = (titulares: any[]) => {
-          const autores = titulares.filter((t: any) => PAPEIS_AUTOR_RECALC.includes(t.papel ?? ''))
-          if (autores.length === 0) return false
-          const hasEditora = titulares.some((t: any) =>
-            PAPEIS_EDITORA_RECALC.includes(t.papel ?? '') ||
-            ['E', 'AM', 'SE', 'AQ'].includes((t.papel ?? '').toUpperCase())
-          )
-          return !hasEditora
-        }
+        const PAPEIS_EDITORA_ABREV  = ['E', 'AM', 'SE', 'AQ']
         const pctCtrl = parseFloat(
           linksRaw.reduce((total: number, link: any) => {
-            const lt = link.titulares ?? []
-            if (isOwrLk(lt)) return total
-            // Soma TODOS os participantes do link não-OWR (cadeia controlada)
-            return total + lt.reduce((s: number, t: any) =>
-              s + (t.percentual_exec_publica ?? t.percentual ?? 0), 0)
+            return total + (link.titulares ?? []).reduce((s: number, t: any) => {
+              const p = t.papel ?? ''
+              const isEdi = PAPEIS_EDITORA_RECALC.includes(p) || PAPEIS_EDITORA_ABREV.includes(p.toUpperCase())
+              if (!isEdi) return s
+              return s + (t.percentual_fonomecanico ?? t.percentual_exec_publica ?? t.percentual ?? 0)
+            }, 0)
           }, 0).toFixed(2)
         )
         o = { ...o, _percentual_controlado: pctCtrl }
@@ -1200,22 +1193,23 @@ export default function ObrasPage() {
         }
       />
 
-      {/* KPIs */}
+      {/* KPIs clicáveis */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
-          { label: 'Total Obras', value: kpis.total, color: 'text-white/80', icon: Music },
-          { label: 'Ativas', value: kpis.ativas, color: 'text-emerald-400', icon: CheckCircle2 },
-          { label: 'Pre-cadastro', value: kpis.pre_cadastro, color: 'text-violet-400', icon: AlertCircle },
-          { label: 'Sem ISWC', value: kpis.sem_iswc, color: 'text-amber-400', icon: AlertCircle },
-          { label: 'Com Fonograma', value: kpis.com_fonograma, color: 'text-sky-400', icon: Mic2 },
+          { label: 'Total Obras',   value: kpis.total,        color: 'text-white/80',   icon: Music,        action: () => { setFilterStatus(''); setFilterIswc('todos'); setFilterFono('todos') } },
+          { label: 'Ativas',        value: kpis.ativas,       color: 'text-emerald-400', icon: CheckCircle2, action: () => setFilterStatus('ativa' as StatusObra) },
+          { label: 'Pre-cadastro',  value: kpis.pre_cadastro, color: 'text-violet-400',  icon: AlertCircle,  action: () => setFilterStatus('pre_cadastro' as StatusObra) },
+          { label: 'Sem ISWC',      value: kpis.sem_iswc,     color: 'text-amber-400',   icon: AlertCircle,  action: () => setFilterIswc('sem') },
+          { label: 'Com Fonograma', value: kpis.com_fonograma, color: 'text-sky-400',    icon: Mic2,         action: () => setFilterFono('com') },
         ].map(stat => (
-          <div key={stat.label} className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4 flex flex-col gap-1">
+          <button key={stat.label} onClick={stat.action}
+            className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4 flex flex-col gap-1 text-left hover:border-white/[0.14] hover:bg-white/[0.02] transition-colors cursor-pointer">
             <div className="flex items-center gap-1.5">
               <stat.icon className={`w-3.5 h-3.5 ${stat.color}`} />
               <p className="text-[11px] text-white/40">{stat.label}</p>
             </div>
             <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -1343,12 +1337,16 @@ export default function ObrasPage() {
             <tbody className="divide-y divide-white/[0.04]">
               {obras.map(obra => {
                 const links = normalizarLinksObra(obra._links ?? MOCK_OBRAS_LINKS[obra.id] ?? [])
+                const todosParticipantes = links.flatMap((l: any) => l.titulares ?? [])
+                const PAPEIS_EDI = ['editora_original', 'administradora', 'subeditora', 'E', 'AM', 'SE', 'AQ']
+                const autores = todosParticipantes.filter((t: any) =>
+                  !PAPEIS_EDI.includes(t.papel ?? '') && !PAPEIS_EDI.includes((t.papel ?? '').toUpperCase())
+                )
+                const editorasLinks = todosParticipantes.filter((t: any) =>
+                  PAPEIS_EDI.includes(t.papel ?? '') || PAPEIS_EDI.includes((t.papel ?? '').toUpperCase())
+                )
                 const editora = editoras.find(e => e.id === obra.editora_id)
-                const editoraNome = editora?.nome_fantasia
-                  ?? links.flatMap((l: any) => l.titulares ?? [])
-                      .find((t: any) => ['editora_original', 'administradora'].includes(t.papel))?.nome
-                  ?? null
-                const autores = links.flatMap((l: any) => l.titulares?.filter((t: any) => ['compositor', 'autor', 'CA'].includes(t.papel)) ?? [])
+                const editoraNome = editora?.nome_fantasia ?? editorasLinks[0]?.nome ?? null
                 const isAtiva = obraAtiva?.id === obra.id
 
                 return (
@@ -1359,10 +1357,14 @@ export default function ObrasPage() {
                       ${isAtiva ? 'bg-violet-500/10 border-l-2 border-violet-500' : ''}`}
                   >
                     <td className="px-5 py-3.5">
-                      <div>
-                        <span className="text-xs font-mono text-white/40">{obra.codigo}</span>
-                        {obra.codigo_interno_legado && obra.codigo_interno_legado !== obra.codigo && (
-                          <div className="mt-0.5">
+                      <div className="space-y-0.5">
+                        {(obra.codigo_obra ?? obra.codigo) ? (
+                          <span className="text-xs font-mono text-white/60">{obra.codigo_obra ?? obra.codigo}</span>
+                        ) : (
+                          <span className="text-xs text-white/20">—</span>
+                        )}
+                        {obra.codigo_interno_legado && (
+                          <div>
                             <span className="text-[9px] font-mono bg-amber-500/10 text-amber-400 px-1 py-0.5 rounded">
                               {obra.codigo_interno_legado}
                             </span>
