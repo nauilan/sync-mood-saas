@@ -702,7 +702,7 @@ export async function POST(
       obraIds_len: obraIds.length,
       chaveToId_len: Object.keys(chaveToId).length,
       partByObra_len: partByObra.size,
-      obraIdToLinkId_len: Object.keys(obraIdToLinkId).length,
+      obraIdToLinkId_len: Object.keys(obraLinkNumToId).length,
       titPayloads_len: 0,
     }, { status: 422 })
   }
