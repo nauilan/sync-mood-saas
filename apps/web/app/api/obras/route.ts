@@ -88,6 +88,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // Mapeamento CWR funcao_no_link → papel editorial normalizado
+  const CWR_ROLE_MAP: Record<string, string> = {
+    E: 'editora_original', E1: 'editora_original', ES: 'editora_original', PA: 'editora_original',
+    SE: 'subeditora', AQ: 'subeditora', SA: 'subeditora',
+    AM: 'administradora',
+    CA: 'compositor', C: 'compositor', CE: 'compositor',
+    A: 'autor', AL: 'autor',
+    V: 'versionista', AD: 'adaptador',
+  }
+
   // Mapear obras_links → _links (formato esperado pelo frontend)
   const mapped = (data ?? []).map((obra: Record<string, unknown>) => {
     const { obras_links, fonogramas: fono, ...rest } = obra as any
@@ -97,8 +107,10 @@ export async function GET(req: NextRequest) {
         ...l,
         titulares: (l.obras_links_titulares ?? []).map((t: any) => ({
           ...t,
-          // garante compatibilidade: funcao_no_link ('E','AM','CA'...) serve como papel
-          papel: t.papel ?? t.funcao_no_link,
+          // se funcao_no_link preenchido, deriva papel correto (sobrescreve DEFAULT 'autor' do DB)
+          papel: t.funcao_no_link
+            ? (CWR_ROLE_MAP[t.funcao_no_link.toUpperCase()] ?? t.papel)
+            : t.papel,
         })),
         obras_links_titulares: undefined,
       })),
