@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { PageHeader } from '@/components/ui/page-header'
 import {
   Edit, AlignLeft, Mic2, FileText, Link2, Activity, AlertTriangle,
@@ -107,8 +107,10 @@ function ControleBadge({ pct, label, color }: { pct: number; label: string; colo
   )
 }
 
-export default function ObraDetailPage({ params }: { params: { id: string } }) {
+export default function ObraDetailPage() {
   const router = useRouter()
+  const rawParams = useParams()
+  const obraId = rawParams?.id as string
   const [obra, setObra] = useState<any>(null)
   const [links, setLinks] = useState<any[]>([])
   const [fonogramas, setFonogramas] = useState<any[]>([])
@@ -168,7 +170,7 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
   async function loadCompletude() {
     setCompletudeLdg(true)
     try {
-      const res = await authFetch(`/api/obras/${params.id}/completude`)
+      const res = await authFetch(`/api/obras/${obraId}/completude`)
       if (res.ok) {
         const d = await res.json()
         setCompletude(d.data)
@@ -181,7 +183,7 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
   async function loadHistorico() {
     setHistoricoLdg(true)
     try {
-      const res = await authFetch(`/api/obras/${params.id}/historico`)
+      const res = await authFetch(`/api/obras/${obraId}/historico`)
       if (res.ok) { const d = await res.json(); setHistorico(d.data ?? []) }
     } catch (e) { console.error('[historico]', e) }
     finally { setHistoricoLdg(false) }
@@ -190,7 +192,7 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
   async function loadExportacoes() {
     setExportacoesLdg(true)
     try {
-      const res = await authFetch(`/api/exportacoes?obra_id=${params.id}`)
+      const res = await authFetch(`/api/exportacoes?obra_id=${obraId}`)
       if (res.ok) { const d = await res.json(); setExportacoesObra(d.data ?? []) }
       setExportacoesCarregado(true)
     } catch (e) { console.error('[exportacoes]', e) }
@@ -204,7 +206,7 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
     if (!ok) return
     setAtivando(true)
     try {
-      const res = await authFetch(`/api/obras/${params.id}`, {
+      const res = await authFetch(`/api/obras/${obraId}`, {
         method: 'PATCH',
         body: JSON.stringify({ status_catalogo: 'catalogo_ativo' }),
       })
@@ -222,7 +224,7 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
   async function loadInterpretes() {
     setInterpretesLdg(true)
     try {
-      const res = await authFetch(`/api/obras/${params.id}/interpretes`)
+      const res = await authFetch(`/api/obras/${obraId}/interpretes`)
       if (res.ok) { const d = await res.json(); setInterpretes(d.data ?? []) }
       setInterpretesCarregado(true)
     } catch (e) { console.error('[interpretes]', e) }
@@ -233,7 +235,7 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
     if (!novoInterp.nome_artistico.trim() || interpSaving) return
     setInterpSaving(true)
     try {
-      const res = await authFetch(`/api/obras/${params.id}/interpretes`, {
+      const res = await authFetch(`/api/obras/${obraId}/interpretes`, {
         method: 'POST',
         body: JSON.stringify(novoInterp),
       })
@@ -247,7 +249,7 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
 
   async function removeInterprete(iid: string) {
     if (!window.confirm('Remover este intérprete?')) return
-    const res = await authFetch(`/api/obras/${params.id}/interpretes?iid=${iid}`, { method: 'DELETE' })
+    const res = await authFetch(`/api/obras/${obraId}/interpretes?iid=${iid}`, { method: 'DELETE' })
     if (res.ok) setInterpretes(prev => prev.filter((i: any) => i.id !== iid))
     else { const d = await res.json(); alert(d.error ?? 'Erro ao remover') }
   }
@@ -258,7 +260,7 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
     setFonoErr('')
     setFonoSaving(true)
     try {
-      const res = await authFetch(`/api/obras/${params.id}/fonogramas`, {
+      const res = await authFetch(`/api/obras/${obraId}/fonogramas`, {
         method: 'POST',
         body: JSON.stringify(novoFono),
       })
@@ -273,7 +275,7 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
 
   async function removeFonograma(fid: string) {
     if (!window.confirm('Remover este fonograma?')) return
-    const res = await authFetch(`/api/obras/${params.id}/fonogramas?fid=${fid}`, { method: 'DELETE' })
+    const res = await authFetch(`/api/obras/${obraId}/fonogramas?fid=${fid}`, { method: 'DELETE' })
     if (res.ok) setFonogramas(prev => prev.filter((f: any) => f.id !== fid))
     else { const d = await res.json(); alert(d.error ?? 'Erro ao remover') }
   }
@@ -283,7 +285,7 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
     if (resumoSaving) return
     setResumoSaving(true)
     try {
-      const res = await authFetch(`/api/obras/${params.id}`, {
+      const res = await authFetch(`/api/obras/${obraId}`, {
         method: 'PATCH',
         body: JSON.stringify(resumoDraft),
       })
@@ -301,9 +303,9 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
       setLoading(true)
       try {
         const [obraRes, linksRes, fonoRes] = await Promise.all([
-          authFetch(`/api/obras/${params.id}`),
-          authFetch(`/api/obras/${params.id}/links`),
-          authFetch(`/api/obras/${params.id}/fonogramas`),
+          authFetch(`/api/obras/${obraId}`),
+          authFetch(`/api/obras/${obraId}/links`),
+          authFetch(`/api/obras/${obraId}/fonogramas`),
         ])
         if (obraRes.ok) {
           const d = await obraRes.json()
@@ -324,7 +326,7 @@ export default function ObraDetailPage({ params }: { params: { id: string } }) {
       }
     }
     load()
-  }, [params.id])
+  }, [obraId])
 
   if (loading) {
     return (
