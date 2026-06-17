@@ -1045,13 +1045,13 @@ export default function ObrasPage() {
     if (!search || search.length < 1) return []
     const q = search.toLowerCase()
     return catalogoCompleto.filter(o =>
-      o.titulo.toLowerCase().includes(q) || o.codigo.toLowerCase().includes(q)
+      (o.titulo ?? '').toLowerCase().includes(q) || (o.codigo ?? o.codigo_obra ?? '').toLowerCase().includes(q)
     ).slice(0, 8)
   }, [search, catalogoCompleto])
 
   const obras = useMemo(() => {
     return catalogoCompleto.filter(o => {
-      if (search && !o.titulo.toLowerCase().includes(search.toLowerCase()) && !o.codigo.toLowerCase().includes(search.toLowerCase())) return false
+      if (search && !(o.titulo ?? '').toLowerCase().includes(search.toLowerCase()) && !(o.codigo ?? o.codigo_obra ?? '').toLowerCase().includes(search.toLowerCase())) return false
       if (filterStatus && (o.status || o.status_catalogo) !== filterStatus) return false
       if (filterEditora && o.editora_id !== filterEditora) return false
       if (filterIswc === 'com' && !o.iswc) return false
