@@ -664,10 +664,10 @@ export async function POST(
 
   const titPayloads: Record<string, unknown>[] = []
   for (const [obraId, partics] of partByObra) {
-    // Fix 2: pré-calcular MR da AM = soma de pr_pct dos participantes controlled (excl. própria AM)
-    const amChaves = new Set(partics.filter(p => p.papel === 'AM').map(p => p.chave))
+    // Fix 2: pré-calcular MR/SR da AM = soma de pr_pct de TODOS os participantes controlled
+    // incluindo a própria cota da AM (ex: Top Show 5% + Roberto 37.5% + Lojas Mil 7.5% = 50%)
     const totalControlledPr = partics
-      .filter(p => p.controlled && !amChaves.has(p.chave))
+      .filter(p => p.controlled)
       .reduce((sum, p) => sum + p.pr_pct, 0)
 
     for (const p of partics) {
