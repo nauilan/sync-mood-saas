@@ -226,8 +226,9 @@ export async function POST(
     obraIdToSnapshotDate[obraId] = (row as any).created_at ?? ''
 
     // ── Fix 1: Mapear pwr_links → link_number por escritor e editora ─────────
-    // Cada publisher_ip distinto cria um link_number sequencial.
-    // O writer_ip (SWR/controlado) herda o link_number do publisher via PWR.
+    // Estratégia dupla:
+    // A) lookup por IP Name Number (funciona quando SWR.ipi_nome == PWR.writer_ip)
+    // B) lookup posicional (fallback robusto: Nth SWR controlado ↔ Nth PWR, por ordem no CWR)
     // OWR (não controlado) nunca tem PWR → ganha link próprio após os links PWR.
     const pwrLinks = (snap.pwr_links as any[]) ?? []
     const pubIpToLinkNum = new Map<string, number>()
@@ -242,8 +243,26 @@ export async function POST(
         wrtIpToLinkNum.set(wrtIp, pubIpToLinkNum.get(pubIp)!)
       }
     }
+
+    // Mapa posicional: chave do autor → link_number via ordem de aparição no CWR.
+    // Usado quando IP Name Numbers divergem entre SWR e PWR (CWRs com IDs inconsistentes).
+    const wrtChaveToLinkNum = new Map<string, number>()
+    const controlledAutors = ((snap.autores as any[]) ?? []).filter(
+      (a: any) => (a.controlled as boolean | null) ?? false
+    )
+    const pwrsWithPub = pwrLinks.filter(
+      (pwr: any) => !!((pwr.publisher_ip as string | null)?.trim())
+    )
+    for (let i = 0; i < Math.min(controlledAutors.length, pwrsWithPub.length); i++) {
+      const swr = controlledAutors[i]
+      const pwr = pwrsWithPub[i]
+      const chave = chaveTitular(swr.ipi, swr.nome)
+      const pubIp = ((pwr.publisher_ip as string | null) ?? '').replace(/\s/g, '').trim()
+      const linkNum = pubIpToLinkNum.get(pubIp) ?? 1
+      if (!wrtChaveToLinkNum.has(chave)) wrtChaveToLinkNum.set(chave, linkNum)
+    }
+
     // owrNextLink: cada OWR recebe um link exclusivo após os links definidos por PWR.
-    // Garante que autores não controlados fiquem em links separados dos controlados.
     let owrNextLink = nextLinkNum
 
     for (const a of ((snap.autores as any[]) ?? [])) {
@@ -253,8 +272,9 @@ export async function POST(
         autoresUnicos.set(chave, { nome: (a.nome as string).trim(), ipi: a.ipi ?? null, tipo: 'autor' })
       }
       const isControlled = (a.controlled as boolean | null) ?? false
+      const authorIpKey = ((a.ipi_nome ?? a.ipi ?? '') as string).replace(/\s/g, '').trim()
       const authorLinkNum = isControlled
-        ? (wrtIpToLinkNum.get(((a.ipi_nome ?? a.ipi ?? '') as string).replace(/\s/g,'').trim()) ?? 1)
+        ? (wrtIpToLinkNum.get(authorIpKey) ?? wrtChaveToLinkNum.get(chave) ?? 1)
         : owrNextLink++
       obraParticipacoes.push({
         chave,
