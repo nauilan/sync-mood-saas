@@ -227,8 +227,8 @@ export async function POST(
 
     // ── Fix 1: Mapear pwr_links → link_number por escritor e editora ─────────
     // Cada publisher_ip distinto cria um link_number sequencial.
-    // O writer_ip (autor) herda o link_number do publisher que o representa.
-    // Se pwr_links[] estiver vazio, todos ficam no LINK 1 (fallback).
+    // O writer_ip (SWR/controlado) herda o link_number do publisher via PWR.
+    // OWR (não controlado) nunca tem PWR → ganha link próprio após os links PWR.
     const pwrLinks = (snap.pwr_links as any[]) ?? []
     const pubIpToLinkNum = new Map<string, number>()
     const wrtIpToLinkNum = new Map<string, number>()
@@ -242,6 +242,9 @@ export async function POST(
         wrtIpToLinkNum.set(wrtIp, pubIpToLinkNum.get(pubIp)!)
       }
     }
+    // owrNextLink: cada OWR recebe um link exclusivo após os links definidos por PWR.
+    // Garante que autores não controlados fiquem em links separados dos controlados.
+    let owrNextLink = nextLinkNum
 
     for (const a of ((snap.autores as any[]) ?? [])) {
       if (!(a.nome as string)?.trim()) continue
@@ -249,15 +252,19 @@ export async function POST(
       if (!autoresUnicos.has(chave)) {
         autoresUnicos.set(chave, { nome: (a.nome as string).trim(), ipi: a.ipi ?? null, tipo: 'autor' })
       }
+      const isControlled = (a.controlled as boolean | null) ?? false
+      const authorLinkNum = isControlled
+        ? (wrtIpToLinkNum.get(((a.ipi_nome ?? a.ipi ?? '') as string).replace(/\s/g,'').trim()) ?? 1)
+        : owrNextLink++
       obraParticipacoes.push({
         chave,
         papel:      mapPapelAutor(a.papel ?? ''),
         pr_pct:     Number(a.pr_pct)  || 0,
         mr_pct:     Number(a.mr_pct)  || 0,
         sr_pct:     Number(a.sr_pct)  || 0,
-        controlled: a.controlled ?? false,
+        controlled: isControlled,
         obraId,
-        link_number: wrtIpToLinkNum.get(((a.ipi_nome ?? a.ipi ?? '') as string).replace(/\s/g,'').trim()) ?? 1,
+        link_number: authorLinkNum,
       })
       // Registrar no staging (todos os autores, independente de pct)
       stagingEntries.push({
@@ -270,11 +277,11 @@ export async function POST(
         ip_name_number:     (a as any).ip_name_number ?? null,
         papel_cwr:          (a.papel as string | null) ?? '',
         tipo_cwr:           'autor',
-        controlled:         (a.controlled as boolean | null) ?? false,
+        controlled:         isControlled,
         pr_pct:             Number(a.pr_pct) || 0,
         mr_pct:             Number(a.mr_pct) || 0,
         sr_pct:             Number(a.sr_pct) || 0,
-        fonte_percentual:   'SWR',
+        fonte_percentual:   isControlled ? 'SWR' : 'OWR',
         dados_raw:          a as Record<string, unknown>,
       })
     }
@@ -672,8 +679,9 @@ export async function POST(
 
       const info = autoresUnicos.get(p.chave) ?? editorasUnicas.get(p.chave)
 
-      // Fix 2: para AM — preferir mr_pct do CWR (se > 0); senão, usar soma dos controlados
-      const mr_final = (p.papel === 'AM' && (p.mr_pct ?? 0) === 0 && totalControlledPr > 0)
+      // Fix 2: para AM — sempre usar soma dos pr_pct controlados como MR administrado.
+      // SPT pode declarar MR=100% para AM, mas o correto é o percentual efetivamente controlado.
+      const mr_final = (p.papel === 'AM' && totalControlledPr > 0)
         ? totalControlledPr
         : (p.mr_pct ?? 0)
 
