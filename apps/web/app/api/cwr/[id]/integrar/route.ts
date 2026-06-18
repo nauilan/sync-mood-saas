@@ -257,7 +257,7 @@ export async function POST(
         sr_pct:     Number(a.sr_pct)  || 0,
         controlled: a.controlled ?? false,
         obraId,
-        link_number: wrtIpToLinkNum.get(((a.ipi as string | null) ?? '').replace(/\s/g,'').trim()) ?? 1,
+        link_number: wrtIpToLinkNum.get(((a.ipi_nome ?? a.ipi ?? '') as string).replace(/\s/g,'').trim()) ?? 1,
       })
       // Registrar no staging (todos os autores, independente de pct)
       stagingEntries.push({
@@ -340,7 +340,7 @@ export async function POST(
         sr_pct:     Number(e.sr_pct) || 0,
         controlled: e.controlled ?? false,
         obraId,
-        link_number: pubIpToLinkNum.get(((e.ipi as string | null) ?? '').replace(/\s/g,'').trim()) ?? 1,
+        link_number: pubIpToLinkNum.get(((e.ip_name_no ?? e.ipi ?? '') as string).replace(/\s/g,'').trim()) ?? 1,
       })
     }
 
