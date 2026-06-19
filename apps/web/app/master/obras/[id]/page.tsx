@@ -156,6 +156,9 @@ export default function ObraDetailPage() {
   const [boDraft,   setBoDraft]   = useState<Record<string,string>>({})
   const [boSaving,  setBoSaving]  = useState(false)
 
+  // ── Modo Analítico/Sintético (aba Integrantes) ───────────────────────────────
+  const [modoAnalitico, setModoAnalitico] = useState(false)
+
   // ── Completude ──────────────────────────────────────────────────────────────
   const [completude, setCompletude] = useState<any>(null)
   const [completudeLoading, setCompletudeLdg] = useState(false)
@@ -733,8 +736,18 @@ export default function ObraDetailPage() {
           </div>
 
           <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-white/[0.06] bg-white/[0.02]">
+            <div className="px-5 py-3 border-b border-white/[0.06] bg-white/[0.02] flex items-center justify-between">
               <h3 className="text-sm font-semibold text-white">Integrantes da Obra</h3>
+              <div className="flex items-center gap-0.5 bg-white/[0.06] rounded-lg p-0.5">
+                <button
+                  onClick={() => setModoAnalitico(false)}
+                  className={`px-3 py-1 text-[11px] font-semibold rounded-md transition-colors ${!modoAnalitico ? 'bg-violet-600 text-white shadow' : 'text-white/40 hover:text-white/70'}`}
+                >Sintético</button>
+                <button
+                  onClick={() => setModoAnalitico(true)}
+                  className={`px-3 py-1 text-[11px] font-semibold rounded-md transition-colors ${modoAnalitico ? 'bg-violet-600 text-white shadow' : 'text-white/40 hover:text-white/70'}`}
+                >Analítico</button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[820px]">
@@ -745,16 +758,31 @@ export default function ObraDetailPage() {
                     <th className="text-center px-3 py-2.5 text-white/30 font-semibold text-xs w-16">Cat.</th>
                     <th className="text-center px-3 py-2.5 text-white/30 font-semibold text-xs w-16">Controle</th>
                     <th className="text-right px-3 py-2.5 text-white/30 font-semibold text-xs w-20">PR</th>
-                    <th className="text-right px-3 py-2.5 text-white/30 font-semibold text-xs w-20">MR</th>
-                    <th className="text-right px-3 py-2.5 text-white/30 font-semibold text-xs w-20">SR</th>
+                    <th className="text-right px-3 py-2.5 text-white/30 font-semibold text-xs w-20">{modoAnalitico ? 'MR (anal.)' : 'MR'}</th>
+                    <th className="text-right px-3 py-2.5 text-white/30 font-semibold text-xs w-20">{modoAnalitico ? 'SR (anal.)' : 'SR'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.04]">
-                  {links.flatMap((link: any) =>
-                    (link.titulares ?? []).map((t: any) => {
+                  {links.flatMap((link: any) => {
+                    const titulares = link.titulares ?? []
+                    // ── Cálculo analítico por link ──────────────────────────────
+                    const totalPR_ctrl = titulares
+                      .filter((x: any) => x.status_controle === 'controlado')
+                      .reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
+                    const amRow = titulares.find((x: any) => x.funcao_no_link === 'AM')
+                    const mandato_MR = amRow?.percentual_fonomecanico ?? 0
+                    const mandato_SR = amRow?.percentual_sincronizacao ?? 0
+
+                    return titulares.map((t: any) => {
                       const sc = t.status_controle ?? ''
                       const scColor = sc === 'controlado' ? 'text-emerald-400' : sc === 'nao_controlado' ? 'text-white/35' : 'text-amber-400'
                       const scLabel = sc === 'controlado' ? 'Controlado' : sc === 'nao_controlado' ? 'Não ctrl.' : sc === 'contrato_pendente' ? 'Pendente' : sc || '—'
+                      const mr_display = modoAnalitico
+                        ? (sc === 'controlado' && totalPR_ctrl > 0 ? (t.percentual_exec_publica / totalPR_ctrl) * mandato_MR : 0)
+                        : (t.percentual_fonomecanico ?? 0)
+                      const sr_display = modoAnalitico
+                        ? (sc === 'controlado' && totalPR_ctrl > 0 ? (t.percentual_exec_publica / totalPR_ctrl) * mandato_SR : 0)
+                        : (t.percentual_sincronizacao ?? 0)
                       return (
                         <tr key={t.id} className="hover:bg-white/[0.02] transition-colors">
                           <td className="px-3 py-3 text-center">
@@ -783,18 +811,18 @@ export default function ObraDetailPage() {
                           </td>
                           <td className="px-3 py-3 text-right">
                             <span className="font-semibold tabular-nums text-violet-300/90 text-xs">
-                              {t.percentual_fonomecanico != null ? formatarPercentual(t.percentual_fonomecanico) : <span className="text-white/25">—</span>}
+                              {formatarPercentual(mr_display)}
                             </span>
                           </td>
                           <td className="px-3 py-3 text-right">
                             <span className="font-semibold tabular-nums text-teal-300/70 text-xs">
-                              {t.percentual_sincronizacao != null ? formatarPercentual(t.percentual_sincronizacao) : <span className="text-white/25">—</span>}
+                              {formatarPercentual(sr_display)}
                             </span>
                           </td>
                         </tr>
                       )
                     })
-                  )}
+                  })}
                   {links.length === 0 && (
                     <tr>
                       <td colSpan={7} className="px-4 py-8 text-center text-xs text-white/30">
@@ -810,10 +838,24 @@ export default function ObraDetailPage() {
                       {formatarPercentual(links.flatMap((l: any) => l.titulares ?? []).reduce((s: number, t: any) => s + (t.percentual_exec_publica ?? 0), 0))}
                     </td>
                     <td className="px-3 py-2 text-right text-xs font-bold tabular-nums text-violet-300/70">
-                      {formatarPercentual(links.flatMap((l: any) => l.titulares ?? []).reduce((s: number, t: any) => s + (t.percentual_fonomecanico ?? 0), 0))}
+                      {modoAnalitico
+                        ? formatarPercentual(links.flatMap((l: any) => {
+                            const tits = l.titulares ?? []
+                            const totalPR = tits.filter((x: any) => x.status_controle === 'controlado').reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
+                            const mand = tits.find((x: any) => x.funcao_no_link === 'AM')?.percentual_fonomecanico ?? 0
+                            return tits.map((t: any) => t.status_controle === 'controlado' && totalPR > 0 ? (t.percentual_exec_publica / totalPR) * mand : 0)
+                          }).reduce((s: number, v: number) => s + v, 0))
+                        : formatarPercentual(links.flatMap((l: any) => l.titulares ?? []).reduce((s: number, t: any) => s + (t.percentual_fonomecanico ?? 0), 0))}
                     </td>
                     <td className="px-3 py-2 text-right text-xs font-bold tabular-nums text-teal-300/60">
-                      {formatarPercentual(links.flatMap((l: any) => l.titulares ?? []).reduce((s: number, t: any) => s + (t.percentual_sincronizacao ?? 0), 0))}
+                      {modoAnalitico
+                        ? formatarPercentual(links.flatMap((l: any) => {
+                            const tits = l.titulares ?? []
+                            const totalPR = tits.filter((x: any) => x.status_controle === 'controlado').reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
+                            const mand = tits.find((x: any) => x.funcao_no_link === 'AM')?.percentual_sincronizacao ?? 0
+                            return tits.map((t: any) => t.status_controle === 'controlado' && totalPR > 0 ? (t.percentual_exec_publica / totalPR) * mand : 0)
+                          }).reduce((s: number, v: number) => s + v, 0))
+                        : formatarPercentual(links.flatMap((l: any) => l.titulares ?? []).reduce((s: number, t: any) => s + (t.percentual_sincronizacao ?? 0), 0))}
                     </td>
                   </tr>
                 </tfoot>
