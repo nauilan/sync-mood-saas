@@ -682,6 +682,15 @@ export async function POST(
     partByObra.get(p.obraId)!.push(p)
   }
 
+  // ── Guarda defensiva: roles que NUNCA devem ter percentual_fonomecanico > 0 ─
+  // Inclui variantes CWR (SWR/OWR) e nomes normalizados internos.
+  // A AM/editora coleta MR em nome dos autores; gravar MR no autor duplicaria o valor.
+  const ROLES_AUTOR_MR_ZERO = new Set([
+    'CA','C','CE','A','T','V','AD','I',   // roles internos normalizados
+    'SWR','OWR',                           // records CWR brutos (autor controlado / não controlado)
+    'PWR',                                 // publisher-writer relation (não deveria aparecer aqui, mas por segurança)
+  ])
+
   const titPayloads: Record<string, unknown>[] = []
   for (const [obraId, partics] of partByObra) {
     // Fix 2: pré-calcular MR/SR da AM = soma de pr_pct de TODOS os participantes controlled
@@ -705,6 +714,10 @@ export async function POST(
         ? totalControlledPr
         : (p.mr_pct ?? 0)
 
+      // Autores (CA/C/CE/A/T/V/AD/I) não coletam MR diretamente no BackOffice —
+      // a AM/editora coleta em nome deles. Forçar 0 para evitar duplicidade.
+      const mr_gravado = ROLES_AUTOR_MR_ZERO.has(p.papel?.toUpperCase() ?? '') ? 0 : mr_final
+
       titPayloads.push({
         obra_link_id:             linkId,
         obra_id:                  obraId,
@@ -722,7 +735,7 @@ export async function POST(
           I: 'interprete_referencia',
         } as Record<string, string>)[p.papel?.toUpperCase() ?? ''] ?? 'autor',
         percentual_exec_publica:  p.pr_pct  ?? 0,
-        percentual_fonomecanico:  mr_final,
+        percentual_fonomecanico:  mr_gravado,
         percentual_sincronizacao: p.sr_pct  ?? 0,
         ipi:                      info?.ipi ?? null,
         status_controle:          p.controlled ? 'controlado' : 'nao_controlado',

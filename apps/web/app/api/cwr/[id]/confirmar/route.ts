@@ -195,7 +195,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           titular_id: null,
           nome: (a.nome as string)?.trim() ?? '',
           funcao_no_link: sanitizeFuncaoAutor(a.papel ?? ''),
-          percentual_exec_publica: a.pr_pct ?? 0, percentual_fonomecanico: a.mr_pct ?? 0,
+          percentual_exec_publica: a.pr_pct ?? 0,
+          // GUARDA DEFENSIVA: autores nunca coletam MR diretamente (SWR/OWR/CA/C/A/V/AD)
+          // AM coleta em nome deles — gravar aqui duplicaria o valor no BackOffice.
+          percentual_fonomecanico: 0,
           percentual_sincronizacao: a.sr_pct ?? 0,
           ipi: a.ipi ?? null,
           status_controle: a.controlled ? 'controlado' : 'nao_controlado',
