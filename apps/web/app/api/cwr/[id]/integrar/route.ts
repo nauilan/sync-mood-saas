@@ -682,13 +682,13 @@ export async function POST(
     partByObra.get(p.obraId)!.push(p)
   }
 
-  // ── Guarda defensiva: roles que NUNCA devem ter percentual_fonomecanico > 0 ─
-  // Inclui variantes CWR (SWR/OWR) e nomes normalizados internos.
-  // A AM/editora coleta MR em nome dos autores; gravar MR no autor duplicaria o valor.
+  // ── Guarda defensiva: apenas AM coleta MR ────────────────────────────────
+  // E, SE, SA, autores (CA/C/SWR/OWR) ficam com MR=0.
+  // A AM concentra o percentual total controlado em nome de todos.
   const ROLES_AUTOR_MR_ZERO = new Set([
-    'CA','C','CE','A','T','V','AD','I',   // roles internos normalizados
-    'SWR','OWR',                           // records CWR brutos (autor controlado / não controlado)
-    'PWR',                                 // publisher-writer relation (não deveria aparecer aqui, mas por segurança)
+    'CA','C','CE','A','T','V','AD','I',   // autores (roles internos)
+    'SWR','OWR','PWR',                    // autores CWR brutos (controlado / não controlado / relação)
+    'E','SE','SA',                        // editora original e subeditoras: AM coleta MR em nome delas
   ])
 
   const titPayloads: Record<string, unknown>[] = []

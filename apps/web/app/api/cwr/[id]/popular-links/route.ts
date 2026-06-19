@@ -156,16 +156,19 @@ export async function POST(
 
     for (const e of editoras) {
       if (!e.nome?.trim()) continue
+      const papelEd = mapPapelEditora(e.tipo ?? '', e.papel ?? '')
+      // Apenas administradora coleta MR. editora_original e subeditora ficam com MR=0.
+      const mrEd = papelEd === 'administradora' ? (e.mr_pct ?? 0) : 0
       allTitulares.push({
         obra_link_id:           linkId,
         obra_id:                row.obra_id,
         tenant_id:              usuario.tenantId,
         titular_id:             null,
         nome:                   (e.nome as string).trim(),
-        papel:                  mapPapelEditora(e.tipo ?? '', e.papel ?? ''),
-        funcao_no_link:         mapPapelEditora(e.tipo ?? '', e.papel ?? ''),
+        papel:                  papelEd,
+        funcao_no_link:         papelEd,
         percentual_exec_publica:  e.pr_pct ?? 0,
-        percentual_fonomecanico:  e.mr_pct ?? 0,
+        percentual_fonomecanico:  mrEd,
         percentual_sincronizacao: e.sr_pct ?? 0,
         controlado:             e.controlled ?? false,
         ipi:                    e.ipi   ?? null,
