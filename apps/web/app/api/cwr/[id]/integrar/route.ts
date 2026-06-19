@@ -117,6 +117,12 @@ export async function POST(
   const { id } = await params
   const client = sb()
 
+  // Filtro opcional: quando fornecido, reintegra apenas as obras especificadas
+  // (sem afetar as demais obras da mesma importação)
+  const body = await req.json().catch(() => ({}))
+  const obraIdsFilter: string[] | null =
+    Array.isArray(body.obra_ids) && body.obra_ids.length > 0 ? body.obra_ids : null
+
   // ── 0. Verificar importação ───────────────────────────────────────────────
   const { data: imp } = await client
     .from('cwr_importacoes')
@@ -126,7 +132,9 @@ export async function POST(
     .single()
 
   if (!imp) return NextResponse.json({ error: 'Importação não encontrada' }, { status: 404 })
-  if (imp.status !== 'confirmado') {
+  // Modo unitário (obra_ids fornecido): permite reintegrar obras de importação já integrada
+  const statusPermitidos = obraIdsFilter ? ['confirmado', 'integrado'] : ['confirmado']
+  if (!statusPermitidos.includes(imp.status as string)) {
     return NextResponse.json(
       { error: 'A importação precisa estar confirmada antes de integrar.' },
       { status: 400 }
@@ -136,22 +144,53 @@ export async function POST(
   // ── 1. Limpar execução anterior (idempotência) ────────────────────────────
   // Titulares e editoras NÃO são deletados — são dados de referência compartilhada.
   // Apenas participações e fonogramas criados por esta importação são refeitos.
-  const relAnterior = (imp.relatorio as Record<string, unknown>)?.integracao as Record<string, unknown> | undefined
-  if (relAnterior) {
-    const partIds = (relAnterior.participacoes_ids as string[]) ?? []
-    const fgIds   = (relAnterior.fonogramas_criados_ids as string[]) ?? []
+  if (obraIdsFilter) {
+    // Modo unitário: limpar apenas as obras especificadas
+    const { data: linksToDelete } = await client
+      .from('obras_links')
+      .select('id')
+      .eq('tenant_id', usuario.tenantId)
+      .in('obra_id', obraIdsFilter)
+    const linkIds = (linksToDelete ?? []).map((r: any) => r.id as string)
+
+    const { data: partsToDelete } = await client
+      .from('obras_links_titulares')
+      .select('id')
+      .in('obra_link_id', linkIds.length > 0 ? linkIds : ['_noop'])
+    const partIds = (partsToDelete ?? []).map((r: any) => r.id as string)
+
+    const { data: fgToDelete } = await client
+      .from('fonogramas')
+      .select('id')
+      .eq('tenant_id', usuario.tenantId)
+      .in('obra_id', obraIdsFilter)
+    const fgIds = (fgToDelete ?? []).map((r: any) => r.id as string)
+
     if (partIds.length > 0) await deleteInChunks(client, 'obras_links_titulares', partIds)
     if (fgIds.length   > 0) await deleteInChunks(client, 'fonogramas', fgIds)
+    if (linkIds.length > 0) await deleteInChunks(client, 'obras_links', linkIds)
+  } else {
+    // Modo completo: usar IDs salvos no relatório anterior
+    const relAnterior = (imp.relatorio as Record<string, unknown>)?.integracao as Record<string, unknown> | undefined
+    if (relAnterior) {
+      const partIds = (relAnterior.participacoes_ids as string[]) ?? []
+      const fgIds   = (relAnterior.fonogramas_criados_ids as string[]) ?? []
+      if (partIds.length > 0) await deleteInChunks(client, 'obras_links_titulares', partIds)
+      if (fgIds.length   > 0) await deleteInChunks(client, 'fonogramas', fgIds)
+    }
   }
 
   // ── 2. Carregar snapshots ─────────────────────────────────────────────────
-  // Incluir `id` da linha em cwr_importacoes_obras para rastreabilidade no staging.
-  const { data: impObrasRaw } = await client
+  let snapshotQuery = client
     .from('cwr_importacoes_obras')
     .select('id, obra_id, snapshot_cwr, created_at')
     .eq('importacao_id', id)
     .not('obra_id', 'is', null)
     .order('created_at', { ascending: false })
+
+  if (obraIdsFilter) snapshotQuery = snapshotQuery.in('obra_id', obraIdsFilter)
+
+  const { data: impObrasRaw } = await snapshotQuery
 
   if (!impObrasRaw?.length) {
     return NextResponse.json({ error: 'Nenhuma obra encontrada nesta importação.' }, { status: 404 })
