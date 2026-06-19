@@ -1170,7 +1170,8 @@ export default function ObraDetailPage() {
         const edits   = allTit.filter((t: any) => (t.funcao_no_link ?? '').toUpperCase() === 'E')
         const adms    = allTit.filter((t: any) => (t.funcao_no_link ?? '').toUpperCase() === 'AM')
         const ctrl    = allTit.some((t: any) => t.status_controle === 'controlado')
-        const sumPR   = autores.reduce((s: number, t: any) => s + Number(t.percentual_exec_publica || 0), 0)
+        // COPYRIGHT_SHARE deve fechar 100% considerando TODOS os participantes (autores + E + AM)
+        const sumPR   = allTit.reduce((s: number, t: any) => s + Number(t.percentual_exec_publica || 0), 0)
         const adm0    = adms[0]
         const stCfg   = BO_STATUS_CFG[obra?.backoffice_status ?? 'nao_enviada'] ?? BO_STATUS_CFG.nao_enviada
 
@@ -1188,7 +1189,7 @@ export default function ObraDetailPage() {
           { label: 'SONG_CODE',            desc: 'ID Interno · obrigatório · imutável',                 status: obra?.codigo_obra ? 'pronto' : 'erro',     valor: obra?.codigo_obra ?? '—' },
           { label: 'SONG_TITLE',           desc: 'Título da obra — obrigatório',                        status: obra?.titulo ? 'pronto' : 'pendente',       valor: obra?.titulo ?? '' },
           { label: 'WRITER (≥1)',          desc: 'Autores cadastrados (CA/C/A/V/AD)',                   status: autores.length > 0 ? 'pronto' : 'pendente', valor: `${autores.length} autor(es)` },
-          { label: 'COPYRIGHT_SHARE=100%', desc: 'Soma dos percentuais de PR dos autores',              status: autores.length === 0 ? 'pendente' : Math.abs(sumPR-100)<0.1 ? 'pronto' : 'erro', valor: `${sumPR.toFixed(2)}%` },
+          { label: 'COPYRIGHT_SHARE=100%', desc: 'Soma PR de todos os participantes (autores + E + AM)', status: allTit.length === 0 ? 'pendente' : Math.abs(sumPR-100)<0.1 ? 'pronto' : 'erro', valor: `${sumPR.toFixed(2)}%` },
           { label: 'ORI_PUBLISHER',        desc: 'Editora original vinculada (E)',                      status: edits.length > 0 ? 'pronto' : 'alerta',     valor: edits.length > 0 ? (edits[0].nome ?? '✓') : 'Ausente' },
           { label: 'ADM_PUBLISHER',        desc: 'Administradora local quando há controle (AM)',        status: !ctrl ? 'info' : adms.length > 0 ? 'pronto' : 'alerta', valor: adms.length > 0 ? (adms[0].nome ?? '✓') : ctrl ? 'Ausente' : 'N/A' },
           { label: 'ADM_PR_COLLECT',       desc: 'Percentual execução pública da ADM',                  status: !ctrl ? 'info' : adm0 && Number(adm0.percentual_exec_publica||0)>0 ? 'pronto' : 'pendente', valor: adm0 ? `${Number(adm0.percentual_exec_publica||0).toFixed(2)}%` : '—' },
