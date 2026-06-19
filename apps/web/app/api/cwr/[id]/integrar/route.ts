@@ -271,16 +271,20 @@ export async function POST(
     // B) lookup posicional (fallback robusto: Nth SWR controlado ↔ Nth PWR, por ordem no CWR)
     // OWR (não controlado) nunca tem PWR → ganha link próprio após os links PWR.
     const pwrLinks = (snap.pwr_links as any[]) ?? []
-    const pubIpToLinkNum = new Map<string, number>()
-    const wrtIpToLinkNum = new Map<string, number>()
+    // pubIpToLinkNums: mesmo publisher pode aparecer em N chains → N links distintos
+    const pubIpToLinkNums = new Map<string, number[]>()   // ip → [link1, link2, ...]
+    const wrtIpToLinkNum  = new Map<string, number>()
     let nextLinkNum = 1
     for (const pwr of pwrLinks) {
       const pubIp = ((pwr.publisher_ip as string | null) ?? '').replace(/\s/g, '').trim()
       const wrtIp = ((pwr.writer_ip   as string | null) ?? '').replace(/\s/g, '').trim()
       if (!pubIp) continue
-      if (!pubIpToLinkNum.has(pubIp)) pubIpToLinkNum.set(pubIp, nextLinkNum++)
+      const existing  = pubIpToLinkNums.get(pubIp) ?? []
+      const thisLink  = nextLinkNum++
+      existing.push(thisLink)
+      pubIpToLinkNums.set(pubIp, existing)
       if (wrtIp && !wrtIpToLinkNum.has(wrtIp)) {
-        wrtIpToLinkNum.set(wrtIp, pubIpToLinkNum.get(pubIp)!)
+        wrtIpToLinkNum.set(wrtIp, thisLink)
       }
     }
 
@@ -293,12 +297,19 @@ export async function POST(
     const pwrsWithPub = pwrLinks.filter(
       (pwr: any) => !!((pwr.publisher_ip as string | null)?.trim())
     )
+    // Positional fallback: Nth SWR controlado ↔ Nth PWR.
+    // Quando mesmo publisher aparece em N chains (ex: P3 em 2 PWRs),
+    // usa-se a Nth ocorrência de pubIp em pubIpToLinkNums para obter o link correto.
+    const pubIpSeenForWriters = new Map<string, number>()
     for (let i = 0; i < Math.min(controlledAutors.length, pwrsWithPub.length); i++) {
       const swr = controlledAutors[i]
       const pwr = pwrsWithPub[i]
       const chave = chaveTitular(swr.ipi, swr.nome)
       const pubIp = ((pwr.publisher_ip as string | null) ?? '').replace(/\s/g, '').trim()
-      const linkNum = pubIpToLinkNum.get(pubIp) ?? 1
+      const seen  = pubIpSeenForWriters.get(pubIp) ?? 0
+      pubIpSeenForWriters.set(pubIp, seen + 1)
+      const linksForPub = pubIpToLinkNums.get(pubIp) ?? []
+      const linkNum = linksForPub[seen] ?? (i + 1)
       if (!wrtChaveToLinkNum.has(chave)) wrtChaveToLinkNum.set(chave, linkNum)
     }
 
@@ -351,6 +362,9 @@ export async function POST(
     // Cenário B: E + AM com pct=0 → AM pendente (share por contrato)
     // Cenário C: AM e E são a mesma entidade (mesmo IPI/nome) → NÃO é pendência
     const editorasCwr: any[] = (snap.editoras as any[]) ?? []
+    // Occurrence counter para publishers: quando mesmo IP aparece em N chains
+    // cada ocorrência recebe o Nth link (mesmo comportamento do pubIpToLinkNums para autores)
+    const pubIpSeenForEditoras = new Map<string, number>()
 
     const isPendingAm = (e: any): boolean => {
       if (mapPapelEditora(e.tipo ?? '', e.papel ?? '') !== 'AM') return false
@@ -399,6 +413,11 @@ export async function POST(
         dados_raw:          e as Record<string, unknown>,
       })
       if (isPendingAm(e)) continue   // Cenário B sem pct: não criar participação editorial
+      const pubIpKeyEd = ((e.ip_name_no ?? e.ipi ?? '') as string).replace(/\s/g,'').trim()
+      const seenEd     = pubIpSeenForEditoras.get(pubIpKeyEd) ?? 0
+      pubIpSeenForEditoras.set(pubIpKeyEd, seenEd + 1)
+      const linksForEd = pubIpToLinkNums.get(pubIpKeyEd) ?? []
+      const edLinkNum  = linksForEd[seenEd] ?? (seenEd + 1)
       obraParticipacoes.push({
         chave,
         papel:      mapPapelEditora(e.tipo ?? '', e.papel ?? ''),
@@ -407,7 +426,7 @@ export async function POST(
         sr_pct:     Number(e.sr_pct) || 0,
         controlled: e.controlled ?? false,
         obraId,
-        link_number: pubIpToLinkNum.get(((e.ip_name_no ?? e.ipi ?? '') as string).replace(/\s/g,'').trim()) ?? 1,
+        link_number: edLinkNum,
       })
     }
 
