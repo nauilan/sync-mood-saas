@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { deveZerarMR } from '@/lib/backoffice-rules'
 
 const sanitize = (v: string | undefined) =>
   (v ?? '').replace(/[\uFEFF\u200B\u200C\u200D]/g, '').trim()
@@ -157,8 +158,8 @@ export async function POST(
     for (const e of editoras) {
       if (!e.nome?.trim()) continue
       const papelEd = mapPapelEditora(e.tipo ?? '', e.papel ?? '')
-      // Apenas administradora coleta MR. editora_original e subeditora ficam com MR=0.
-      const mrEd = papelEd === 'administradora' ? (e.mr_pct ?? 0) : 0
+      // Regra BackOffice (lib/backoffice-rules.ts): apenas AM/administradora coleta MR.
+      const mrEd = deveZerarMR(papelEd) ? 0 : (e.mr_pct ?? 0)
       allTitulares.push({
         obra_link_id:           linkId,
         obra_id:                row.obra_id,

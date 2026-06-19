@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { deveZerarMR } from '@/lib/backoffice-rules'
 
 const sanitize = (v: string | undefined) =>
   (v ?? '').replace(/[\uFEFF\u200B\u200C\u200D]/g, '').trim()
@@ -207,8 +208,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       for (const e of ((snap.editoras as any[]) ?? [])) {
         if (!(e.nome as string)?.trim()) continue
         const funcaoEd = sanitizeFuncaoEditora(e.tipo ?? '', e.papel ?? '')
-        // Apenas AM coleta MR. E e SE ficam com MR=0 — AM concentra o total controlado.
-        const mrEd = funcaoEd === 'AM' ? (e.mr_pct ?? 0) : 0
+        // Regra BackOffice (lib/backoffice-rules.ts): apenas AM coleta MR.
+        const mrEd = deveZerarMR(funcaoEd) ? 0 : (e.mr_pct ?? 0)
         allTitulares.push({
           obra_link_id: linkId, obra_id: obraId, tenant_id: usuario.tenantId,
           titular_id: null,

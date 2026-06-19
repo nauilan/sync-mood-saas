@@ -25,6 +25,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { deveZerarMR, calcularMrAM } from '@/lib/backoffice-rules'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -682,22 +683,13 @@ export async function POST(
     partByObra.get(p.obraId)!.push(p)
   }
 
-  // ── Guarda defensiva: apenas AM coleta MR ────────────────────────────────
-  // E, SE, SA, autores (CA/C/SWR/OWR) ficam com MR=0.
-  // A AM concentra o percentual total controlado em nome de todos.
-  const ROLES_AUTOR_MR_ZERO = new Set([
-    'CA','C','CE','A','T','V','AD','I',   // autores (roles internos)
-    'SWR','OWR','PWR',                    // autores CWR brutos (controlado / não controlado / relação)
-    'E','SE','SA',                        // editora original e subeditoras: AM coleta MR em nome delas
-  ])
+  // ── Regra BackOffice (ver lib/backoffice-rules.ts) ───────────────────────
+  // Apenas AM coleta MR. Todos os demais ficam com MR=0.
 
   const titPayloads: Record<string, unknown>[] = []
   for (const [obraId, partics] of partByObra) {
-    // Fix 2: pré-calcular MR/SR da AM = soma de pr_pct de TODOS os participantes controlled
-    // incluindo a própria cota da AM (ex: Top Show 5% + Roberto 37.5% + Lojas Mil 7.5% = 50%)
-    const totalControlledPr = partics
-      .filter(p => p.controlled)
-      .reduce((sum, p) => sum + p.pr_pct, 0)
+    // MR da AM = soma dos PR% controlados (OWR excluded automaticamente via controlled=false)
+    const totalControlledPr = calcularMrAM(partics)
 
     for (const p of partics) {
       // Fix 1: resolver link correto via pwr_links; fallback = LINK 1
@@ -708,15 +700,9 @@ export async function POST(
 
       const info = autoresUnicos.get(p.chave) ?? editorasUnicas.get(p.chave)
 
-      // Fix 2: para AM — sempre usar soma dos pr_pct controlados como MR administrado.
-      // SPT pode declarar MR=100% para AM, mas o correto é o percentual efetivamente controlado.
-      const mr_final = (p.papel === 'AM' && totalControlledPr > 0)
-        ? totalControlledPr
-        : (p.mr_pct ?? 0)
-
-      // Autores (CA/C/CE/A/T/V/AD/I) não coletam MR diretamente no BackOffice —
-      // a AM/editora coleta em nome deles. Forçar 0 para evitar duplicidade.
-      const mr_gravado = ROLES_AUTOR_MR_ZERO.has(p.papel?.toUpperCase() ?? '') ? 0 : mr_final
+      // Regra BackOffice: AM recebe totalControlledPr; todos os demais recebem 0.
+      const mr_final  = (p.papel === 'AM' && totalControlledPr > 0) ? totalControlledPr : (p.mr_pct ?? 0)
+      const mr_gravado = deveZerarMR(p.papel) ? 0 : mr_final
 
       titPayloads.push({
         obra_link_id:             linkId,
