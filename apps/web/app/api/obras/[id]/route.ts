@@ -101,6 +101,12 @@ export async function PATCH(
     'iswc_anterior', 'iswc_alternativo', 'iswc_origem', 'status_iswc',
     'territorio', 'prazo_inicio', 'prazo_fim', 'prazo_indeterminado',
     'direitos_administrados',
+    // Migration 059 — campos operacionais BackOffice
+    'backoffice_status', 'backoffice_song_id', 'backoffice_work_id',
+    'backoffice_data_ultimo_envio', 'backoffice_data_ultimo_retorno',
+    'backoffice_ultimo_arquivo', 'backoffice_ultimo_log',
+    'backoffice_song_linkages', 'backoffice_oni_codes',
+    'backoffice_counter_claims', 'backoffice_tickets', 'backoffice_alta_baixa',
   ]
 
   const update: Record<string, unknown> = {}
@@ -145,6 +151,8 @@ export async function PATCH(
     'iswc_anterior', 'iswc_alternativo', 'iswc_origem', 'status_iswc',
     'territorio', 'prazo_inicio', 'prazo_fim', 'prazo_indeterminado',
     'direitos_administrados',
+    // Migration 059 — BackOffice
+    'backoffice_status', 'backoffice_song_id', 'backoffice_work_id',
   ]
   const historico = CAMPOS_RASTREAR
     .filter(campo => campo in update && String(anterior[campo] ?? '') !== String(update[campo] ?? ''))

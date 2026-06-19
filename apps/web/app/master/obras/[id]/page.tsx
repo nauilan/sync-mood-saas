@@ -8,7 +8,7 @@ import {
   Edit, AlignLeft, Mic2, FileText, Link2, Activity, AlertTriangle,
   CheckCircle2, ChevronRight, ExternalLink, Music, Users2, Globe2, DollarSign, Users,
   BookOpen, Loader2, BarChart3, Clock, Plus, Headphones, X, Save, RefreshCw,
-  CheckSquare, Square,
+  CheckSquare, Square, Zap, Shield,
 } from 'lucide-react'
 import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, PAPEL_TITULAR_LABELS, PAPEL_TITULAR_COLORS, normalizarLinksObra, type StatusObra } from '@/lib/types-obras'
 import { formatarPercentual } from '@/lib/percentual'
@@ -24,10 +24,26 @@ const TABS = [
   { id: 'letra',          label: 'Letra',               icon: AlignLeft },
   { id: 'fonogramas',     label: 'Fonogramas',           icon: Mic2 },
   { id: 'contratos',      label: 'Contratos',            icon: FileText },
+  { id: 'backoffice',     label: 'BackOffice',           icon: Zap },
   { id: 'exportacoes',    label: 'Exportações',          icon: Activity },
   { id: 'historico',      label: 'Histórico',            icon: Clock },
   { id: 'divergencias',   label: 'Divergências',         icon: AlertTriangle },
 ]
+
+// BackOffice status config
+const BO_STATUS_CFG: Record<string, { label: string; cls: string }> = {
+  nao_enviada:       { label: 'Não enviada',       cls: 'bg-white/8 text-white/45' },
+  pronta_para_envio: { label: 'Pronta p/ envio',   cls: 'bg-sky-500/15 text-sky-400' },
+  enviada:           { label: 'Enviada',            cls: 'bg-violet-500/15 text-violet-400' },
+  processando:       { label: 'Processando',        cls: 'bg-amber-500/15 text-amber-400' },
+  aceita:            { label: 'Aceita',             cls: 'bg-emerald-500/15 text-emerald-400' },
+  aceita_com_alerta: { label: 'Aceita c/ alerta',  cls: 'bg-yellow-500/15 text-yellow-400' },
+  rejeitada:         { label: 'Rejeitada',          cls: 'bg-red-500/20 text-red-400' },
+  pendente_correcao: { label: 'Pendente correção',  cls: 'bg-orange-500/15 text-orange-400' },
+  em_conflito:       { label: 'Em conflito',        cls: 'bg-red-500/25 text-red-300' },
+  baixada:           { label: 'Baixada',            cls: 'bg-white/6 text-white/30' },
+  substituida:       { label: 'Substituída',        cls: 'bg-white/6 text-white/25' },
+}
 
 // Parseia o campo descricao em campos estruturados
 function parseDescricao(desc?: string) {
@@ -135,6 +151,10 @@ export default function ObraDetailPage() {
   const [editResumo, setEditResumo] = useState(false)
   const [resumoDraft, setResumoDraft] = useState<Record<string, any>>({})
   const [resumoSaving, setResumoSaving] = useState(false)
+  // BackOffice edit state
+  const [boEdit,    setBoEdit]    = useState(false)
+  const [boDraft,   setBoDraft]   = useState<Record<string,string>>({})
+  const [boSaving,  setBoSaving]  = useState(false)
 
   // ── Completude ──────────────────────────────────────────────────────────────
   const [completude, setCompletude] = useState<any>(null)
@@ -296,6 +316,24 @@ export default function ObraDetailPage() {
       setResumoDraft({})
     } catch (e) { alert('Erro: ' + String(e)) }
     finally { setResumoSaving(false) }
+  }
+
+  // ── Salvar campos BackOffice ─────────────────────────────────────────────────
+  async function saveBoFields() {
+    if (boSaving || !Object.keys(boDraft).length) return
+    setBoSaving(true)
+    try {
+      const res = await authFetch(`/api/obras/${obraId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(boDraft),
+      })
+      const d = await res.json()
+      if (!res.ok) { alert(d.error ?? 'Erro ao salvar'); return }
+      setObra((prev: any) => ({ ...prev, ...boDraft }))
+      setBoEdit(false)
+      setBoDraft({})
+    } catch (e) { alert('Erro: ' + String(e)) }
+    finally { setBoSaving(false) }
   }
 
   useEffect(() => {
@@ -1124,87 +1162,265 @@ export default function ObraDetailPage() {
         </div>
       )}
 
-      {/* Tab: Exportacoes (wired) */}
-      {activeTab === 'exportacoes' && (
-        <div className="space-y-4">
+      {/* ── TAB: BACKOFFICE ─────────────────────────────────────────────────── */}
+      {activeTab === 'backoffice' && (() => {
+        // ── Dados derivados ─────────────────────────────────────────────────
+        const allTit  = links.flatMap((l: any) => l.titulares ?? [])
+        const autores = allTit.filter((t: any) => ['CA','C','A','V','AD'].includes((t.funcao_no_link ?? '').toUpperCase()))
+        const edits   = allTit.filter((t: any) => (t.funcao_no_link ?? '').toUpperCase() === 'E')
+        const adms    = allTit.filter((t: any) => (t.funcao_no_link ?? '').toUpperCase() === 'AM')
+        const ctrl    = allTit.some((t: any) => t.status_controle === 'controlado')
+        const sumPR   = autores.reduce((s: number, t: any) => s + Number(t.percentual_exec_publica || 0), 0)
+        const adm0    = adms[0]
+        const stCfg   = BO_STATUS_CFG[obra?.backoffice_status ?? 'nao_enviada'] ?? BO_STATUS_CFG.nao_enviada
 
-          {/* Preparação BackOffice */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        type SI = 'pronto'|'pendente'|'erro'|'alerta'|'info'
+        const icon = (s: SI) => {
+          if (s === 'pronto')  return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          if (s === 'erro')    return <span className="w-3.5 h-3.5 text-red-400 font-bold text-[11px] flex items-center justify-center shrink-0">✗</span>
+          if (s === 'alerta')  return <span className="w-3.5 h-3.5 text-amber-400 text-[11px] flex items-center justify-center shrink-0">⚠</span>
+          if (s === 'info')    return <span className="w-3.5 h-3.5 text-sky-400 text-[11px] flex items-center justify-center shrink-0">ℹ</span>
+          return <span className="w-3.5 h-3.5 text-white/30 text-[11px] flex items-center justify-center shrink-0">○</span>
+        }
 
-            {/* SWI File */}
+        // ── SWI Checklist ───────────────────────────────────────────────────
+        const swiItems: { label: string; desc: string; status: SI; valor: string }[] = [
+          { label: 'SONG_CODE',            desc: 'ID Interno · obrigatório · imutável',                 status: obra?.codigo_obra ? 'pronto' : 'erro',     valor: obra?.codigo_obra ?? '—' },
+          { label: 'SONG_TITLE',           desc: 'Título da obra — obrigatório',                        status: obra?.titulo ? 'pronto' : 'pendente',       valor: obra?.titulo ?? '' },
+          { label: 'WRITER (≥1)',          desc: 'Autores cadastrados (CA/C/A/V/AD)',                   status: autores.length > 0 ? 'pronto' : 'pendente', valor: `${autores.length} autor(es)` },
+          { label: 'COPYRIGHT_SHARE=100%', desc: 'Soma dos percentuais de PR dos autores',              status: autores.length === 0 ? 'pendente' : Math.abs(sumPR-100)<0.1 ? 'pronto' : 'erro', valor: `${sumPR.toFixed(2)}%` },
+          { label: 'ORI_PUBLISHER',        desc: 'Editora original vinculada (E)',                      status: edits.length > 0 ? 'pronto' : 'alerta',     valor: edits.length > 0 ? (edits[0].nome ?? '✓') : 'Ausente' },
+          { label: 'ADM_PUBLISHER',        desc: 'Administradora local quando há controle (AM)',        status: !ctrl ? 'info' : adms.length > 0 ? 'pronto' : 'alerta', valor: adms.length > 0 ? (adms[0].nome ?? '✓') : ctrl ? 'Ausente' : 'N/A' },
+          { label: 'ADM_PR_COLLECT',       desc: 'Percentual execução pública da ADM',                  status: !ctrl ? 'info' : adm0 && Number(adm0.percentual_exec_publica||0)>0 ? 'pronto' : 'pendente', valor: adm0 ? `${Number(adm0.percentual_exec_publica||0).toFixed(2)}%` : '—' },
+          { label: 'ADM_MR_COLLECT',       desc: 'Percentual fonomecânico/digital da ADM',              status: !ctrl ? 'info' : adm0 && Number(adm0.percentual_fonomecanico||0)>0 ? 'pronto' : 'pendente', valor: adm0 ? `${Number(adm0.percentual_fonomecanico||0).toFixed(2)}%` : '—' },
+          { label: 'ORI_TERRITORY_CODE',   desc: 'Território de controle',                              status: obra?.territorio ? 'pronto' : 'alerta',     valor: obra?.territorio ?? 'Não definido' },
+          { label: 'ISWC (opcional)',       desc: 'Não obrigatório — recomendado quando disponível',     status: obra?.iswc ? 'pronto' : 'info',             valor: obra?.iswc ?? 'Não cadastrado' },
+          { label: 'PERFORMER_NAME (opc)', desc: 'Intérprete do fonograma — opcional',                  status: fonogramas.some((f: any)=>f.interprete) ? 'pronto' : 'info', valor: fonogramas.find((f: any)=>f.interprete)?.interprete ?? 'Não informado' },
+        ]
+        const swiOk  = swiItems.slice(0,9).every(c => c.status === 'pronto')
+        const swiErr = swiItems.some(c => c.status === 'erro')
+
+        // ── ISRC Checklist ──────────────────────────────────────────────────
+        const scOk  = !!obra?.codigo_obra
+        const titOk = !!obra?.titulo
+        const fonoC = fonogramas.map((f: any) => {
+          const isrcOk  = !!f.isrc
+          const intpOk  = !!f.interprete
+          const st = !isrcOk ? 'pendente_isrc' : !intpOk ? 'pendente_interprete' : 'pronto'
+          return { ...f, st, isrcOk, intpOk }
+        })
+        const isrcOk = scOk && titOk && fonoC.some((c: any) => c.st === 'pronto')
+
+        // ── IDs editáveis (boDraft sobrepõe obra) ───────────────────────────
+        const boVal = (k: string) => (boDraft[k] ?? (obra as any)?.[k] ?? '') as string
+
+        return (
+          <div className="space-y-4">
+
+            {/* Banner prontidão */}
+            <div className={`rounded-xl border px-5 py-3 flex items-center justify-between gap-4 ${swiErr ? 'border-red-500/30 bg-red-500/5' : swiOk ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/20 bg-amber-500/5'}`}>
+              <div>
+                <p className={`text-sm font-semibold ${swiErr ? 'text-red-400' : swiOk ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {swiErr ? '✗ Erros impedem envio SWI' : swiOk ? '✓ Obra pronta para SWI' : '○ Pendências para SWI'}
+                </p>
+                <p className="text-[11px] text-white/30 mt-0.5">
+                  {isrcOk ? `${fonoC.filter((c: any)=>c.st==='pronto').length} fonograma(s) prontos para ISRC` : fonogramas.length === 0 ? 'Sem fonogramas — ISRC indisponível' : 'Fonogramas com ISRC pendente'}
+                </p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold ${swiOk ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/8 text-white/35'}`}>SWI</span>
+                <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold ${isrcOk ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/8 text-white/35'}`}>ISRC</span>
+                <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold ${stCfg.cls}`}>{stCfg.label}</span>
+              </div>
+            </div>
+
+            {/* Bloco 1: Identificadores + Status */}
             <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
-                <div>
-                  <h3 className="text-sm font-semibold text-white">SWI File</h3>
-                  <p className="text-[11px] text-white/30 mt-0.5">Song Work Information — BackOffice</p>
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2"><Shield className="w-4 h-4 text-sky-400" /> Identificadores BackOffice</h3>
+                <div className="flex items-center gap-2">
+                  {boEdit
+                    ? <>
+                        <button onClick={() => { setBoEdit(false); setBoDraft({}) }} className="text-[11px] text-white/40 hover:text-white/70 px-2 py-1 rounded transition-colors"><X className="w-3 h-3" /></button>
+                        <button onClick={saveBoFields} disabled={boSaving} className="flex items-center gap-1.5 text-[11px] bg-violet-600 hover:bg-violet-500 text-white px-3 py-1 rounded transition-colors disabled:opacity-50">
+                          {boSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} Salvar
+                        </button>
+                      </>
+                    : <button onClick={() => { setBoEdit(true); setBoDraft({ backoffice_song_id: obra?.backoffice_song_id ?? '', backoffice_work_id: obra?.backoffice_work_id ?? '', backoffice_status: obra?.backoffice_status ?? 'nao_enviada' }) }} className="text-[11px] text-violet-400 hover:text-violet-300 flex items-center gap-1 transition-colors">
+                        <Edit className="w-3 h-3" /> Editar IDs
+                      </button>
+                  }
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 font-semibold tracking-wide">PLANEJADO</span>
               </div>
-              <div className="px-5 py-4 space-y-0 text-xs">
+
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-0">
                 {([
-                  { campo: 'SONG_CODE', fonte: 'codigo_obra',               valor: obra?.codigo_obra ?? '—' },
-                  { campo: 'TITLE',     fonte: 'titulo',                     valor: obra?.titulo ?? '—' },
-                  { campo: 'ISWC',      fonte: 'iswc',                       valor: obra?.iswc ?? 'Pendente' },
-                  { campo: 'TERRITORY', fonte: 'territorio',                  valor: obra?.territorio ?? 'Não definido' },
-                  { campo: 'AUTHORS',   fonte: 'obras_links_titulares (CA/C/A)',
-                    valor: `${links.flatMap((l: any) => l.titulares ?? []).filter((t: any) => ['CA','C','A','V','AD'].includes((t.funcao_no_link ?? t.papel ?? '').toUpperCase())).length} autor(es)` },
-                  { campo: 'PUBLISHERS',fonte: 'obras_links_titulares (E/AM)',
-                    valor: `${links.flatMap((l: any) => l.titulares ?? []).filter((t: any) => ['E','AM','SE'].includes((t.funcao_no_link ?? t.papel ?? '').toUpperCase())).length} editora(s)` },
-                ] as {campo: string; fonte: string; valor: string}[]).map(r => (
-                  <div key={r.campo} className="flex items-center gap-2 py-2 border-b border-white/[0.03] last:border-0">
-                    <span className="font-mono text-sky-300 w-28 shrink-0">{r.campo}</span>
-                    <span className="text-white/20 shrink-0 text-[10px]">←</span>
-                    <span className="text-white/35 flex-1 truncate">{r.fonte}</span>
-                    <span className="font-mono text-white/65 text-right shrink-0 max-w-[140px] truncate">{r.valor}</span>
+                  { label: 'ID Interno · SONG_CODE', val: obra?.codigo_obra ?? '—', mono: true, badge: 'imutável' },
+                  { label: 'ISWC', val: obra?.iswc ?? 'Não cadastrado', mono: true },
+                  { label: 'Código Legado', val: obra?.codigo_interno_legado ?? '—', mono: true },
+                  { label: 'Código CWR Original', val: obra?.codigo_obra_cwr_original ?? '—', mono: true },
+                ] as { label: string; val: string; mono?: boolean; badge?: string }[]).map(f => (
+                  <div key={f.label} className="px-4 py-3 border-r border-b border-white/[0.04] last:border-r-0">
+                    <p className="text-[10px] text-white/30 mb-0.5">{f.label}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className={`text-xs ${f.mono ? 'font-mono text-white/80' : 'text-white/70'}`}>{f.val}</p>
+                      {f.badge && <span className="text-[9px] text-white/20 border border-white/10 px-1 rounded">{f.badge}</span>}
+                    </div>
                   </div>
                 ))}
+                {/* Editáveis */}
+                <div className="px-4 py-3 border-r border-b border-white/[0.04]">
+                  <p className="text-[10px] text-white/30 mb-0.5">BackOffice Song ID</p>
+                  {boEdit
+                    ? <input value={boVal('backoffice_song_id')} onChange={e => setBoDraft(d => ({ ...d, backoffice_song_id: e.target.value }))} placeholder="—" className="text-xs font-mono bg-white/5 border border-white/10 rounded px-2 py-0.5 w-full text-white/80 outline-none focus:border-violet-500/50" />
+                    : <p className="text-xs font-mono text-white/80">{obra?.backoffice_song_id ?? '—'}</p>
+                  }
+                </div>
+                <div className="px-4 py-3 border-b border-white/[0.04]">
+                  <p className="text-[10px] text-white/30 mb-0.5">BackOffice Work ID</p>
+                  {boEdit
+                    ? <input value={boVal('backoffice_work_id')} onChange={e => setBoDraft(d => ({ ...d, backoffice_work_id: e.target.value }))} placeholder="—" className="text-xs font-mono bg-white/5 border border-white/10 rounded px-2 py-0.5 w-full text-white/80 outline-none focus:border-violet-500/50" />
+                    : <p className="text-xs font-mono text-white/80">{obra?.backoffice_work_id ?? '—'}</p>
+                  }
+                </div>
               </div>
-            </div>
 
-            {/* ISRC File */}
-            <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+              {/* Status BackOffice */}
+              <div className="px-5 py-3 border-t border-white/[0.04] flex items-center justify-between flex-wrap gap-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-white">ISRC File</h3>
-                  <p className="text-[11px] text-white/30 mt-0.5">International Standard Recording Code — BackOffice</p>
+                  <p className="text-[10px] text-white/30 mb-1">Status BackOffice</p>
+                  {boEdit
+                    ? <select value={boVal('backoffice_status') || 'nao_enviada'} onChange={e => setBoDraft(d => ({ ...d, backoffice_status: e.target.value }))} className="text-xs bg-[#0a0f1e] border border-white/10 rounded px-2 py-1 text-white/80 outline-none focus:border-violet-500/50">
+                        {Object.entries(BO_STATUS_CFG).map(([k,v]) => <option key={k} value={k}>{v.label}</option>)}
+                      </select>
+                    : <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold ${stCfg.cls}`}>{stCfg.label}</span>
+                  }
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 font-semibold tracking-wide">PLANEJADO</span>
-              </div>
-              <div className="px-5 py-4 text-xs">
-                {fonogramas.length === 0 ? (
-                  <p className="text-white/30 py-4 text-center">Nenhum fonograma cadastrado. Adicione na aba Fonogramas.</p>
-                ) : (
-                  <div className="space-y-0">
-                    {fonogramas.slice(0, 6).map((f: any) => (
-                      <div key={f.id} className="flex items-center gap-3 py-2 border-b border-white/[0.03] last:border-0">
-                        <span className={`font-mono shrink-0 ${f.isrc ? 'text-emerald-400' : 'text-amber-400'}`}>
-                          {f.isrc ?? 'ISRC pendente'}
-                        </span>
-                        <span className="text-white/45 flex-1 truncate">{f.titulo_fonograma ?? f.interprete ?? '—'}</span>
-                        <span className="text-white/25 shrink-0 text-[11px]">{f.versao ?? 'original'}</span>
-                      </div>
-                    ))}
-                    {fonogramas.length > 6 && (
-                      <p className="text-white/25 text-center pt-2">+ {fonogramas.length - 6} fonograma(s)</p>
-                    )}
-                  </div>
-                )}
-                <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center justify-between">
-                  <span className="text-white/30">SONG_CODE</span>
-                  <span className="font-mono text-sky-300">{obra?.codigo_obra ?? '—'}</span>
+                <div className="text-[10px] text-white/25 text-right space-y-0.5">
+                  {obra?.backoffice_data_ultimo_envio   && <p>Último envio: {new Date(obra.backoffice_data_ultimo_envio).toLocaleDateString('pt-BR')}</p>}
+                  {obra?.backoffice_data_ultimo_retorno && <p>Último retorno: {new Date(obra.backoffice_data_ultimo_retorno).toLocaleDateString('pt-BR')}</p>}
+                  {obra?.backoffice_ultimo_arquivo       && <p className="font-mono">Arquivo: {obra.backoffice_ultimo_arquivo}</p>}
                 </div>
               </div>
             </div>
 
-          </div>
+            {/* Bloco 2+3: SWI e ISRC */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-          {/* Nota de mapeamento */}
-          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl px-5 py-3">
-            <p className="text-[11px] text-white/30 leading-relaxed">
-              <span className="text-white/50 font-semibold">Código interno da obra</span> ({obra?.codigo_obra ?? '—'}) é o SONG_CODE principal do Sync Mood e será usado em exportações BackOffice, arquivos ISRC, retornos de pagamentos e conciliação.
-              Campos mantidos separados: <span className="font-mono text-white/45">ISWC</span> · <span className="font-mono text-white/45">Código Legado ({obra?.codigo_interno_legado ?? '—'})</span> · <span className="font-mono text-white/45">Código CWR ({obra?.codigo_obra_cwr_original ?? '—'})</span> · <span className="font-mono text-white/45">BackOffice Song ID ({obra?.backoffice_song_id ?? '—'})</span> · <span className="font-mono text-white/45">BackOffice Work ID ({obra?.backoffice_work_id ?? '—'})</span>.
-            </p>
+              {/* SWI Checklist */}
+              <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Checklist SWI</h3>
+                    <p className="text-[11px] text-white/30">Song Work Information</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    {swiOk
+                      ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold">PRONTA</span>
+                      : swiErr
+                        ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">COM ERROS</span>
+                        : <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-semibold">PENDENTE</span>
+                    }
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-white/25 font-semibold">GERAÇÃO EM BREVE</span>
+                  </div>
+                </div>
+                <div className="px-5 py-2">
+                  {swiItems.map((item, idx) => (
+                    <div key={idx} className="flex items-start gap-2.5 py-2 border-b border-white/[0.03] last:border-0">
+                      {icon(item.status)}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-mono text-white/70 leading-none">{item.label}</p>
+                        <p className="text-[10px] text-white/25 mt-0.5 leading-none">{item.desc}</p>
+                      </div>
+                      <span className={`text-[10px] text-right shrink-0 max-w-[120px] truncate font-mono ${item.status==='pronto'?'text-emerald-400':item.status==='erro'?'text-red-400':item.status==='alerta'?'text-amber-400':item.status==='info'?'text-sky-400':'text-white/30'}`}>
+                        {item.valor}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ISRC Checklist */}
+              <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">Checklist ISRC</h3>
+                    <p className="text-[11px] text-white/30">Por fonograma</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isrcOk
+                      ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold">PRONTA</span>
+                      : <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-semibold">PENDENTE</span>
+                    }
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-white/25 font-semibold">GERAÇÃO EM BREVE</span>
+                  </div>
+                </div>
+                {/* Campos globais */}
+                <div className="px-5 py-2 border-b border-white/[0.04]">
+                  {([
+                    { campo: 'SONGCODE',  ok: scOk,  val: obra?.codigo_obra ?? '—', mono: true },
+                    { campo: 'SONGTITLE', ok: titOk, val: obra?.titulo ?? '—',       mono: false },
+                  ] as { campo: string; ok: boolean; val: string; mono: boolean }[]).map(r => (
+                    <div key={r.campo} className="flex items-center gap-2 py-1.5">
+                      {r.ok ? <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" /> : <span className="w-3 h-3 text-amber-400 text-[10px] flex items-center justify-center shrink-0">○</span>}
+                      <span className="text-[11px] font-mono text-white/55 flex-1">{r.campo}</span>
+                      <span className={`text-[10px] ${r.mono ? 'font-mono text-emerald-400' : 'text-white/45'} max-w-[140px] truncate`}>{r.val}</span>
+                    </div>
+                  ))}
+                </div>
+                {/* Por fonograma */}
+                <div className="px-5 py-2">
+                  {fonogramas.length === 0
+                    ? <p className="text-[11px] text-white/30 py-4 text-center">Sem fonogramas. Adicione na aba Fonogramas.</p>
+                    : fonoC.map((f: any) => (
+                        <div key={f.id} className="py-2.5 border-b border-white/[0.03] last:border-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            {f.st === 'pronto' ? <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" /> : <span className="w-3 h-3 text-amber-400 text-[10px] flex items-center justify-center shrink-0">○</span>}
+                            <span className={`text-[11px] font-mono flex-1 ${f.isrcOk ? 'text-emerald-400' : 'text-amber-400'}`}>{f.isrc ?? 'ISRC pendente'}</span>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded ${f.st==='pronto'?'bg-emerald-500/10 text-emerald-400':f.st==='pendente_isrc'?'bg-amber-500/10 text-amber-400':'bg-amber-500/10 text-amber-300'}`}>
+                              {f.st==='pronto'?'pronto':f.st==='pendente_isrc'?'ISRC pendente':'intérprete pendente'}
+                            </span>
+                          </div>
+                          <div className="flex gap-3 pl-5 text-[10px] text-white/30">
+                            <span className="truncate max-w-[150px]">{f.titulo_fonograma ?? obra?.titulo ?? '—'}</span>
+                            <span className="truncate max-w-[120px]">{f.interprete ?? '—'}</span>
+                            <span className="ml-auto text-white/20">ISRC_SHARE {f.isrc_share ?? '100.00'}</span>
+                          </div>
+                        </div>
+                      ))
+                  }
+                </div>
+              </div>
+            </div>
+
+            {/* Stubs futuros */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {([
+                { title: 'Manual Song Linkage',         desc: 'Vinculação manual de obra ao BackOffice Work ID',             fields: 'SongCode · BO Work ID · ISRC · data · status · obs' },
+                { title: 'ONI — Obras Não Identificadas', desc: 'Associar ONI_CODE ao SongCode para identificação de usos',   fields: 'ONI_CODE · SUBMITTER_SONGCODE · ISRC · status · data' },
+                { title: 'Alta / Baixa de Catálogo',    desc: 'Formulários de início e encerramento de administração',       fields: 'território · obras · data · ticket · status' },
+                { title: 'Counter Claims / Disputas',   desc: 'Split Conflict, Copyright Conflict, Stop Payment, Dispute',   fields: 'tipo · território · % · partes · status · decisão' },
+                { title: 'Tickets BackOffice',          desc: 'Tracking e Copyright — abertura e acompanhamento',            fields: 'número · tipo (Track/CR) · área · status · datas' },
+                { title: 'Logs e Auditoria',            desc: 'Registro de todas as alterações e arquivos enviados/recebidos', fields: 'usuário · campo · valor anterior · novo valor · data' },
+              ]).map(s => (
+                <div key={s.title} className="bg-[#0d1526] border border-white/[0.04] rounded-xl px-4 py-3 opacity-60">
+                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                    <h4 className="text-xs font-semibold text-white/55">{s.title}</h4>
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-white/6 text-white/30 font-semibold shrink-0">EM BREVE</span>
+                  </div>
+                  <p className="text-[10px] text-white/25 mb-1">{s.desc}</p>
+                  <p className="text-[10px] font-mono text-white/15 leading-relaxed">{s.fields}</p>
+                </div>
+              ))}
+            </div>
+
           </div>
+        )
+      })()}
+
+      {/* ── TAB: EXPORTACOES ─────────────────────────────────────────────────── */}
+      {activeTab === 'exportacoes' && (
+        <div className="space-y-4">
 
           {/* Histórico de Exportações */}
           <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
