@@ -397,7 +397,7 @@ export default function ObraDetailPage() {
         {/* ── ID INTERNO DA OBRA ─────────────────────────────────────────── */}
         <div className="flex flex-wrap items-start gap-x-6 gap-y-2 pb-3 border-b border-white/[0.06]">
           <div>
-            <p className="text-[9px] font-semibold text-white/30 uppercase tracking-widest mb-0.5">ID Interno da Obra</p>
+            <p className="text-[9px] font-semibold text-white/30 uppercase tracking-widest mb-0.5">ID Interno · SONG_CODE</p>
             <p className="text-base font-mono font-bold text-white tracking-wide">{obra.codigo_obra ?? obra.codigo ?? '—'}</p>
           </div>
           <div>
@@ -657,10 +657,11 @@ export default function ObraDetailPage() {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 text-xs">
                   {[
                     { label: 'ISWC', value: obra.iswc ?? 'Pendente', color: obra.iswc ? 'text-emerald-400 font-mono' : 'text-amber-400' },
                     { label: 'ISWC Anterior', value: obra.iswc_anterior ?? '—', color: 'text-white/55 font-mono' },
+                    { label: 'ISWC Alternativo', value: obra.iswc_alternativo ?? '—', color: 'text-white/55 font-mono' },
                     { label: 'Status ISWC', value: obra.status_iswc ?? 'pendente', color: 'text-white/55' },
                     { label: 'Território', value: obra.territorio ?? 'Não definido', color: 'text-white/55' },
                   ].map(f => (
@@ -1126,6 +1127,86 @@ export default function ObraDetailPage() {
       {/* Tab: Exportacoes (wired) */}
       {activeTab === 'exportacoes' && (
         <div className="space-y-4">
+
+          {/* Preparação BackOffice */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+            {/* SWI File */}
+            <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">SWI File</h3>
+                  <p className="text-[11px] text-white/30 mt-0.5">Song Work Information — BackOffice</p>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 font-semibold tracking-wide">PLANEJADO</span>
+              </div>
+              <div className="px-5 py-4 space-y-0 text-xs">
+                {([
+                  { campo: 'SONG_CODE', fonte: 'codigo_obra',               valor: obra?.codigo_obra ?? '—' },
+                  { campo: 'TITLE',     fonte: 'titulo',                     valor: obra?.titulo ?? '—' },
+                  { campo: 'ISWC',      fonte: 'iswc',                       valor: obra?.iswc ?? 'Pendente' },
+                  { campo: 'TERRITORY', fonte: 'territorio',                  valor: obra?.territorio ?? 'Não definido' },
+                  { campo: 'AUTHORS',   fonte: 'obras_links_titulares (CA/C/A)',
+                    valor: `${links.flatMap((l: any) => l.titulares ?? []).filter((t: any) => ['CA','C','A','V','AD'].includes((t.funcao_no_link ?? t.papel ?? '').toUpperCase())).length} autor(es)` },
+                  { campo: 'PUBLISHERS',fonte: 'obras_links_titulares (E/AM)',
+                    valor: `${links.flatMap((l: any) => l.titulares ?? []).filter((t: any) => ['E','AM','SE'].includes((t.funcao_no_link ?? t.papel ?? '').toUpperCase())).length} editora(s)` },
+                ] as {campo: string; fonte: string; valor: string}[]).map(r => (
+                  <div key={r.campo} className="flex items-center gap-2 py-2 border-b border-white/[0.03] last:border-0">
+                    <span className="font-mono text-sky-300 w-28 shrink-0">{r.campo}</span>
+                    <span className="text-white/20 shrink-0 text-[10px]">←</span>
+                    <span className="text-white/35 flex-1 truncate">{r.fonte}</span>
+                    <span className="font-mono text-white/65 text-right shrink-0 max-w-[140px] truncate">{r.valor}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* ISRC File */}
+            <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">ISRC File</h3>
+                  <p className="text-[11px] text-white/30 mt-0.5">International Standard Recording Code — BackOffice</p>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 font-semibold tracking-wide">PLANEJADO</span>
+              </div>
+              <div className="px-5 py-4 text-xs">
+                {fonogramas.length === 0 ? (
+                  <p className="text-white/30 py-4 text-center">Nenhum fonograma cadastrado. Adicione na aba Fonogramas.</p>
+                ) : (
+                  <div className="space-y-0">
+                    {fonogramas.slice(0, 6).map((f: any) => (
+                      <div key={f.id} className="flex items-center gap-3 py-2 border-b border-white/[0.03] last:border-0">
+                        <span className={`font-mono shrink-0 ${f.isrc ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {f.isrc ?? 'ISRC pendente'}
+                        </span>
+                        <span className="text-white/45 flex-1 truncate">{f.titulo_fonograma ?? f.interprete ?? '—'}</span>
+                        <span className="text-white/25 shrink-0 text-[11px]">{f.versao ?? 'original'}</span>
+                      </div>
+                    ))}
+                    {fonogramas.length > 6 && (
+                      <p className="text-white/25 text-center pt-2">+ {fonogramas.length - 6} fonograma(s)</p>
+                    )}
+                  </div>
+                )}
+                <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center justify-between">
+                  <span className="text-white/30">SONG_CODE</span>
+                  <span className="font-mono text-sky-300">{obra?.codigo_obra ?? '—'}</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Nota de mapeamento */}
+          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl px-5 py-3">
+            <p className="text-[11px] text-white/30 leading-relaxed">
+              <span className="text-white/50 font-semibold">Código interno da obra</span> ({obra?.codigo_obra ?? '—'}) é o SONG_CODE principal do Sync Mood e será usado em exportações BackOffice, arquivos ISRC, retornos de pagamentos e conciliação.
+              Campos mantidos separados: <span className="font-mono text-white/45">ISWC</span> · <span className="font-mono text-white/45">Código Legado ({obra?.codigo_interno_legado ?? '—'})</span> · <span className="font-mono text-white/45">Código CWR ({obra?.codigo_obra_cwr_original ?? '—'})</span> · <span className="font-mono text-white/45">BackOffice Song ID ({obra?.backoffice_song_id ?? '—'})</span> · <span className="font-mono text-white/45">BackOffice Work ID ({obra?.backoffice_work_id ?? '—'})</span>.
+            </p>
+          </div>
+
+          {/* Histórico de Exportações */}
           <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
             <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
               <h3 className="text-sm font-semibold text-white">Histórico de Exportações</h3>
