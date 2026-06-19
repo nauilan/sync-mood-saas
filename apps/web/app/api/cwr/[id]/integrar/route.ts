@@ -685,11 +685,20 @@ export async function POST(
 
   // ── Regra BackOffice (ver lib/backoffice-rules.ts) ───────────────────────
   // Apenas AM coleta MR. Todos os demais ficam com MR=0.
+  // IMPORTANTE: calcular totalControlledPr por LINK, não por obra —
+  // quando a AM aparece em 2 links distintos, cada linha AM deve receber
+  // apenas o percentual controlado DO SEU LINK (evita duplicação).
 
   const titPayloads: Record<string, unknown>[] = []
   for (const [obraId, partics] of partByObra) {
-    // MR da AM = soma dos PR% controlados (OWR excluded automaticamente via controlled=false)
-    const totalControlledPr = calcularMrAM(partics)
+
+    // Agrupa participantes por link_number para calcular MR da AM por link
+    const linkNums = [...new Set(partics.map(p => p.link_number ?? 1))]
+    const mrAmPorLink = new Map<number, number>()
+    for (const ln of linkNums) {
+      const linkPartics = partics.filter(p => (p.link_number ?? 1) === ln)
+      mrAmPorLink.set(ln, calcularMrAM(linkPartics))
+    }
 
     for (const p of partics) {
       // Fix 1: resolver link correto via pwr_links; fallback = LINK 1
@@ -700,7 +709,8 @@ export async function POST(
 
       const info = autoresUnicos.get(p.chave) ?? editorasUnicas.get(p.chave)
 
-      // Regra BackOffice: AM recebe totalControlledPr; todos os demais recebem 0.
+      // Regra BackOffice: AM recebe MR do SEU link; todos os demais recebem 0.
+      const totalControlledPr = mrAmPorLink.get(p.link_number ?? 1) ?? 0
       const mr_final  = (p.papel === 'AM' && totalControlledPr > 0) ? totalControlledPr : (p.mr_pct ?? 0)
       const mr_gravado = deveZerarMR(p.papel) ? 0 : mr_final
 
