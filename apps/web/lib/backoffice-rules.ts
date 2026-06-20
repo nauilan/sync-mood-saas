@@ -1,12 +1,13 @@
 /**
- * REGRAS DEFINITIVAS BACKOFFICE — MR e LINKS
+ * REGRAS DEFINITIVAS BACKOFFICE — MR, LINKS E ANALÍTICO
  *
- * Fonte de verdade para toda importação CWR, reintegração, checklist SWI e
- * futura exportação. Qualquer alteração aqui se propaga automaticamente para
- * integrar, confirmar, popular-links e UI.
+ * Fonte de verdade para toda importação CWR, reintegração, checklist SWI,
+ * exportação e display financeiro. Qualquer alteração aqui se propaga
+ * automaticamente para integrar, confirmar, popular-links e UI.
  *
- * REGRA 1 — MR (Fono/Digital)
- * ─────────────────────────────
+ * ═══════════════════════════════════════════════════════════
+ * REGRA 1 — MR SINTÉTICO (Fono/Digital — cobrança externa)
+ * ═══════════════════════════════════════════════════════════
  * Somente a AM (administradora local) pode ter percentual_fonomecanico > 0.
  * Todos os demais recebem MR = 0:
  *   • autores controlados  (SWR / CA / C / CE)
@@ -14,22 +15,47 @@
  *   • editora original (E)
  *   • subeditoras (SE / SA)
  *
- * A AM recebe: soma dos PR% de todos os participantes controlled dessa obra.
+ * AM.MR = soma dos PR% de todos os participantes controlados DO LINK.
  * OWR (não controlado) NÃO entra nessa soma.
+ * Fonte: calcularMrAM(). NUNCA usar o valor bruto SPT do CWR.
  *
- * REGRA 2 — LINKS
- * ────────────────
+ * ═══════════════════════════════════════════════════════
+ * REGRA 2 — LINKS (separação de chains editoriais)
+ * ═══════════════════════════════════════════════════════
  * • SWR (controlado): entra no link definido por seu PWR correspondente.
  * • OWR (não controlado): ganha link exclusivo após os links PWR.
  * • E e AM: entram no mesmo link do SWR a que pertencem (via PWR / pubIpToLinkNum).
  * • OWR nunca compartilha link com SWR controlado.
  * • OWR não entra no cálculo de totalControlledPr da AM.
+ * Implementação: integrar/route.ts (pubIpToLinkNums + occurrence counter).
  *
- * REGRA 3 — CHECKLIST SWI
- * ────────────────────────
+ * ════════════════════════════════════════════════════════
+ * REGRA 3 — CHECKLIST SWI (validação para exportação)
+ * ════════════════════════════════════════════════════════
  * ADM_MR_COLLECT: lê percentual_fonomecanico da AM (deve ser = totalControlledPr).
  * Se ADM_MR_COLLECT = 0 → item pendente.
  * Autores e E não entram nessa validação como coletores de MR.
+ *
+ * ══════════════════════════════════════════════════════════════════════
+ * REGRA 4 — ANALÍTICO (divisão econômica interna do link)
+ * ══════════════════════════════════════════════════════════════════════
+ * Usado na aba Integrantes (modo Analítico), conta corrente e financeiro.
+ *
+ * Fórmula: percentual_analitico = (PR_participante / soma_PR_ctrl_do_link) × 100
+ *
+ * Regras:
+ * • Somente participantes com status_controle = 'controlado' recebem %.
+ * • Não-controlados (OWR / nao_controlado) → exibem — (não participam).
+ * • Cada link controlado fecha exatamente 100%.
+ * • Valor NÃO é armazenado no banco — calculado em runtime (frontend / financeiro).
+ * • O Sintético (percentual_fonomecanico/sincronizacao da AM) é o que vai para
+ *   CWR, SWI, BackOffice e integrações com sociedades.
+ *
+ * Exemplo "A CASA" — Link 1 (controlado, PR total = 50):
+ *   Roberto (CA) 37,5  → 37,5/50×100 = 75%
+ *   Lojas Mil (E) 7,5  → 7,5/50×100  = 15%
+ *   Top Show (AM) 5    → 5/50×100    = 10%
+ *   José Lazaro (OWR, link separado) → —
  */
 
 /**
@@ -66,9 +92,10 @@ export function deveZerarMR(papel: string): boolean {
 }
 
 /**
- * Calcula o MR que a AM deve receber para uma obra.
- * = soma dos PR% de todos os participantes controlados.
+ * Calcula o MR que a AM deve receber para uma obra/link.
+ * = soma dos PR% de todos os participantes controlados do link.
  * OWR (controlled=false) é excluído automaticamente.
+ * NUNCA usar o valor bruto SPT/MR do snapshot CWR.
  */
 export function calcularMrAM(
   partics: Array<{ pr_pct: number; controlled: boolean }>
@@ -76,4 +103,20 @@ export function calcularMrAM(
   return partics
     .filter(p => p.controlled)
     .reduce((sum, p) => sum + p.pr_pct, 0)
+}
+
+/**
+ * Calcula o percentual analítico de um participante dentro de um link.
+ * Implementa REGRA 4: (PR_participante / soma_PR_controlados_do_link) × 100.
+ * Retorna 0 se o denominador for zero (link sem controlados).
+ *
+ * Uso: frontend (modo Analítico da aba Integrantes), conta corrente, financeiro.
+ * NÃO armazenar no banco — calculado em runtime.
+ */
+export function calcularAnaliticoPct(
+  prParticipante: number,
+  somaPrControladosDoLink: number
+): number {
+  if (somaPrControladosDoLink <= 0) return 0
+  return (prParticipante / somaPrControladosDoLink) * 100
 }

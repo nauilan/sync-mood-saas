@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { deveZerarMR } from '@/lib/backoffice-rules'
+import { deveZerarMR, calcularMrAM } from '@/lib/backoffice-rules'
 
 const sanitize = (v: string | undefined) =>
   (v ?? '').replace(/[\uFEFF\u200B\u200C\u200D]/g, '').trim()
@@ -205,11 +205,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           status_controle: a.controlled ? 'controlado' : 'nao_controlado',
         })
       }
+      // AM MR = soma dos PR controlados do link (NUNCA o valor bruto SPT do CWR)
+      const autoresSnap = (snap.autores as any[]) ?? []
+      const mrAmCorreto = calcularMrAM(
+        autoresSnap.map((a: any) => ({ pr_pct: a.pr_pct ?? 0, controlled: a.controlled ?? false }))
+      )
       for (const e of ((snap.editoras as any[]) ?? [])) {
         if (!(e.nome as string)?.trim()) continue
         const funcaoEd = sanitizeFuncaoEditora(e.tipo ?? '', e.papel ?? '')
-        // Regra BackOffice (lib/backoffice-rules.ts): apenas AM coleta MR.
-        const mrEd = deveZerarMR(funcaoEd) ? 0 : (e.mr_pct ?? 0)
+        // Regra BackOffice: E/SE/SA → MR=0; AM → soma PR controlados (não valor bruto CWR)
+        const mrEd = deveZerarMR(funcaoEd) ? 0 : mrAmCorreto
         allTitulares.push({
           obra_link_id: linkId, obra_id: obraId, tenant_id: usuario.tenantId,
           titular_id: null,

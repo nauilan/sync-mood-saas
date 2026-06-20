@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { deveZerarMR } from '@/lib/backoffice-rules'
+import { deveZerarMR, calcularMrAM } from '@/lib/backoffice-rules'
 
 const sanitize = (v: string | undefined) =>
   (v ?? '').replace(/[\uFEFF\u200B\u200C\u200D]/g, '').trim()
@@ -150,16 +150,21 @@ export async function POST(
         percentual_fonomecanico:  0,
         percentual_sincronizacao: a.sr_pct ?? 0,
         controlado:             a.controlled ?? false,
+        status_controle:        (a.controlled ?? false) ? 'controlado' : 'nao_controlado',
         ipi:                    a.ipi   ?? null,
         cae:                    a.ipi   ?? null,
       })
     }
 
+    // AM MR = soma dos PR controlados do link (NUNCA o valor bruto SPT do CWR)
+    const mrAmCorreto = calcularMrAM(
+      autores.map((a: any) => ({ pr_pct: a.pr_pct ?? 0, controlled: a.controlled ?? false }))
+    )
     for (const e of editoras) {
       if (!e.nome?.trim()) continue
       const papelEd = mapPapelEditora(e.tipo ?? '', e.papel ?? '')
-      // Regra BackOffice (lib/backoffice-rules.ts): apenas AM/administradora coleta MR.
-      const mrEd = deveZerarMR(papelEd) ? 0 : (e.mr_pct ?? 0)
+      // Regra BackOffice: E/SE/SA → MR=0; AM → soma PR controlados (não valor bruto CWR)
+      const mrEd = deveZerarMR(papelEd) ? 0 : mrAmCorreto
       allTitulares.push({
         obra_link_id:           linkId,
         obra_id:                row.obra_id,
@@ -172,6 +177,7 @@ export async function POST(
         percentual_fonomecanico:  mrEd,
         percentual_sincronizacao: e.sr_pct ?? 0,
         controlado:             e.controlled ?? false,
+        status_controle:        (e.controlled ?? false) ? 'controlado' : 'nao_controlado',
         ipi:                    e.ipi   ?? null,
         cae:                    e.ipi   ?? null,
       })
