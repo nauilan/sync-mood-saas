@@ -798,49 +798,60 @@ export default function ObraDetailPage() {
                 <tbody className="divide-y divide-white/[0.04]">
                   {links.flatMap((link: any) => {
                     const titulares = link.titulares ?? []
-                    // ── REGRA 2: fatia editorial total = E + AM (base para redistribuição via negócio) ──
-                    const editorialPR = titulares
-                      .filter((x: any) => ['E', 'SE', 'AM', 'SA'].includes(x.funcao_no_link ?? ''))
-                      .reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
                     // ── Lookup por UUID com fallback por nome (contains) ──
                     // editora_id pode ser null em registros importados via CWR.
-                    const eTitular = titulares.find((x: any) =>
+                    const lookupNegLink = (eT: any) =>
+                      (eT.editora_id
+                        ? negocios.find((n: any) => n.editora_administrada_id === eT.editora_id)
+                        : undefined) ??
+                      (() => {
+                        const nLower = (eT.nome ?? '').toLowerCase()
+                        return nLower
+                          ? negocios.find((n: any) => {
+                              const admNome = (n.editora_administrada_nome ?? '').toLowerCase()
+                              return admNome && (nLower.includes(admNome) || admNome.includes(nLower))
+                            })
+                          : undefined
+                      })()
+                    const editorasLink = titulares.filter((x: any) =>
                       x.funcao_no_link === 'E' || x.funcao_no_link === 'SE'
                     )
-                    const negocio = eTitular
-                      ? (eTitular.editora_id
-                          ? negocios.find((n: any) => n.editora_administrada_id === eTitular.editora_id)
-                          : undefined) ??
-                        (() => {
-                          const nLower = (eTitular.nome ?? '').toLowerCase()
-                          return nLower
-                            ? negocios.find((n: any) => {
-                                const admNome = (n.editora_administrada_nome ?? '').toLowerCase()
-                                return admNome && (nLower.includes(admNome) || admNome.includes(nLower))
-                              })
-                            : undefined
-                        })()
-                      : undefined
+                    // AM: Σ E_i.exec × (negPctAM_i / negPctE_i) para cada E com negócio
+                    let totalExpectedAMLink = 0
+                    let hasNegLink = false
+                    for (const eT of editorasLink) {
+                      const neg = lookupNegLink(eT)
+                      if (neg) {
+                        const negPctE  = (neg.percentual_administrada  ?? 50) / 100
+                        const negPctAM = (neg.percentual_administradora ?? 50) / 100
+                        if (negPctE > 0) {
+                          totalExpectedAMLink += (eT.percentual_exec_publica ?? 0) * (negPctAM / negPctE)
+                          hasNegLink = true
+                        }
+                      }
+                    }
 
                     return titulares.map((t: any) => {
                       const sc = t.status_controle ?? ''
                       const fn = t.funcao_no_link ?? ''
                       const scColor = sc === 'controlado' ? 'text-emerald-400' : sc === 'nao_controlado' ? 'text-white/35' : 'text-amber-400'
                       const scLabel = sc === 'controlado' ? 'Controlado' : sc === 'nao_controlado' ? 'Não ctrl.' : sc === 'contrato_pendente' ? 'Pendente' : sc || '—'
-                      // REGRA 4: nao_controlado → —
-                      // REGRA 2: E/AM com negócio → redistribuição sobre fatia editorial absoluta
-                      // REGRA 1: demais → percentual_exec_publica do CWR (o que ficou pro autor)
+                      // REGRA nao_controlado → —
+                      // REGRA E: analítico = CWR próprio (já é a fatia correta por editora)
+                      // REGRA AM: Σ E_i.exec × (negPctAM_i / negPctE_i)
+                      // REGRA CA: percentual_exec_publica do CWR
                       let analitico_pct: number | null = null
                       let analitico_inconsistente = false
                       if (modoAnalitico && sc !== 'nao_controlado') {
                         const isE  = fn === 'E'  || fn === 'SE'
                         const isAM = fn === 'AM' || fn === 'SA'
-                        if (negocio && (isE || isAM)) {
-                          const negPctE  = (negocio.percentual_administrada  ?? 50) / 100
-                          const negPctAM = (negocio.percentual_administradora ?? 50) / 100
-                          analitico_pct = isE ? editorialPR * negPctE : editorialPR * negPctAM
-                          // Consistência: CWR deve bater com o esperado pelo negócio (±0.5%)
-                          analitico_inconsistente = Math.abs((t.percentual_exec_publica ?? 0) - analitico_pct) > 0.5
+                        if (isE) {
+                          analitico_pct = t.percentual_exec_publica ?? 0
+                          analitico_inconsistente = false
+                        } else if (isAM) {
+                          const cwrAM = t.percentual_exec_publica ?? 0
+                          analitico_pct = hasNegLink ? totalExpectedAMLink : cwrAM
+                          analitico_inconsistente = hasNegLink && Math.abs(cwrAM - totalExpectedAMLink) > 0.5
                         } else {
                           analitico_pct = t.percentual_exec_publica ?? t.percentual ?? 0
                         }

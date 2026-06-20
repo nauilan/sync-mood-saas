@@ -783,42 +783,45 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                 const isAM = fn === 'AM' || fn === 'SA'
 
                 if (isE || isAM) {
-                  // Pool editorial absoluto do link (E + AM + variantes)
-                  const editorialPR = lt
-                    .filter((x: any) => ['E','SE','AM','SA'].includes((x.funcao_no_link ?? '').toUpperCase()))
-                    .reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
-
-                  // Lookup por UUID (editora_id) com fallback por nome (contains).
-                  // editora_id pode ser null em registros importados via CWR.
-                  const eTitular = lt.find((x: any) =>
+                  // Lookup de negócio por UUID com fallback por nome (contains)
+                  const lookupNeg = (eT: any) =>
+                    (eT.editora_id
+                      ? negocios.find((n: any) => n.editora_administrada_id === eT.editora_id)
+                      : undefined) ??
+                    (() => {
+                      const nLower = (eT.nome ?? '').toLowerCase()
+                      return nLower
+                        ? negocios.find((n: any) => {
+                            const admNome = (n.editora_administrada_nome ?? '').toLowerCase()
+                            return admNome && (nLower.includes(admNome) || admNome.includes(nLower))
+                          })
+                        : undefined
+                    })()
+                  const editoras = lt.filter((x: any) =>
                     ['E','SE'].includes((x.funcao_no_link ?? '').toUpperCase())
                   )
-                  const negocio = eTitular
-                    ? (eTitular.editora_id
-                        ? negocios.find((n: any) => n.editora_administrada_id === eTitular.editora_id)
-                        : undefined) ??
-                      (() => {
-                        const nLower = (eTitular.nome ?? '').toLowerCase()
-                        return nLower
-                          ? negocios.find((n: any) => {
-                              const admNome = (n.editora_administrada_nome ?? '').toLowerCase()
-                              return admNome && (nLower.includes(admNome) || admNome.includes(nLower))
-                            })
-                          : undefined
-                      })()
-                    : undefined
-
-                  if (negocio) {
-                    const negPctE  = (negocio.percentual_administrada  ?? 50) / 100
-                    const negPctAM = (negocio.percentual_administradora ?? 50) / 100
-                    const computed = isE ? editorialPR * negPctE : editorialPR * negPctAM
-                    analiticoLinkPct.set(t, computed)
-                    // Consistência: CWR deve bater com o que o negócio prescreve (±0.5%)
-                    const cwrVal = t.percentual_exec_publica ?? 0
-                    analiticoInconsistente.set(t, Math.abs(cwrVal - computed) > 0.5)
+                  if (isE) {
+                    // E: analítico = CWR próprio (já é a fatia correta por editora)
+                    analiticoLinkPct.set(t, t.percentual_exec_publica ?? 0)
+                    analiticoInconsistente.set(t, false)
                   } else {
-                    // Sem negócio cadastrado: exibe CWR bruto (sem redistribuição)
-                    analiticoLinkPct.set(t, t.percentual_exec_publica ?? t.percentual ?? 0)
+                    // AM: Σ E_i.exec × (negPctAM_i / negPctE_i) para cada E com negócio
+                    let totalExpectedAM = 0
+                    let hasNeg = false
+                    for (const eT of editoras) {
+                      const neg = lookupNeg(eT)
+                      if (neg) {
+                        const negPctE  = (neg.percentual_administrada  ?? 50) / 100
+                        const negPctAM = (neg.percentual_administradora ?? 50) / 100
+                        if (negPctE > 0) {
+                          totalExpectedAM += (eT.percentual_exec_publica ?? 0) * (negPctAM / negPctE)
+                          hasNeg = true
+                        }
+                      }
+                    }
+                    const cwrAM = t.percentual_exec_publica ?? 0
+                    analiticoLinkPct.set(t, hasNeg ? totalExpectedAM : cwrAM)
+                    analiticoInconsistente.set(t, hasNeg && Math.abs(cwrAM - totalExpectedAM) > 0.5)
                   }
                 } else {
                   // CA, C, A, V: exibe exec_publica do CWR diretamente (o que ficou pro autor)
