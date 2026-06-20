@@ -776,11 +776,18 @@ tfoot td{background:#f7f7f7;font-weight:bold}
               if (isOwrLink(lt)) return 0
               return analiticoLinkPct.get(t) ?? 0
             }
-            const calcSinc = (t: any) => (t.percentual_sincronizacao ?? 0)
+            const calcSinc = (li: number, t: any) => {
+              // Sintético: mesma regra do fono (AM absorve total do link; CAs/E = 0)
+              // Analítico: percentual absoluto via analiticoLinkPct (evita inconsistência do banco)
+              if (modoView === 'sintetico') return sinteticoFono(li, t)
+              const lt = (links[li] as any)?.titulares ?? []
+              if (isOwrLink(lt)) return 0
+              return analiticoLinkPct.get(t) ?? 0
+            }
             const calcExec = (t: any) => (t.percentual_exec_publica ?? t.percentual ?? 0)
             const sumExec = rows.reduce((s: number, r: any) => s + calcExec(r.t), 0)
             const sumFono = rows.reduce((s: number, r: any) => s + calcFono(r.li, r.t), 0)
-            const sumSinc = rows.reduce((s: number, r: any) => s + calcSinc(r.t), 0)
+            const sumSinc = rows.reduce((s: number, r: any) => s + calcSinc(r.li, r.t), 0)
             const CAT_LABEL: Record<string, string> = {
               compositor: 'CA', compositorautor: 'CA', CA: 'CA', C: 'C', A: 'A',
               editora_original: 'E', administradora: 'AM', subeditora: 'SE',
@@ -837,7 +844,7 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                     {rows.map(({ li, t }: any, ri: number) => {
                       const ep = calcExec(t)
                       const fn = calcFono(li, t)
-                      const sr = calcSinc(t)
+                      const sr = calcSinc(li, t)
                       const catKey = CAT_LABEL[(t.papel ?? '').replace(/\s/g,'').toLowerCase()] ?? t.papel ?? '—'
                       return (
                         <tr key={t.id || ri}
