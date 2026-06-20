@@ -63,7 +63,20 @@ export async function GET(
       .single()
 
     if (error || !row) return NextResponse.json({ error: 'Obra não encontrada' }, { status: 404 })
-    return NextResponse.json({ data: row })
+
+    // Enrich com info do contrato para o modal de exclusão
+    let contrato_obras_count: number | null = null
+    let contrato_numero: string | null = null
+    if (row.contrato_origem_id) {
+      const [countRes, ctrRes] = await Promise.all([
+        sb.from('contrato_obras').select('*', { count: 'exact', head: true }).eq('contrato_id', row.contrato_origem_id),
+        sb.from('contratos').select('numero').eq('id', row.contrato_origem_id).single(),
+      ])
+      contrato_obras_count = countRes.count ?? null
+      contrato_numero = (ctrRes.data as { numero?: string } | null)?.numero ?? null
+    }
+
+    return NextResponse.json({ data: { ...row, contrato_obras_count, contrato_numero } })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
