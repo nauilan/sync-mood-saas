@@ -9,7 +9,7 @@ import {
   AlignLeft, Link2, Hash, Globe, Calendar, Clock,
   ExternalLink, Edit3, Copy, ChevronDown, ChevronUp,
   Send, Database, Tag, ShieldCheck, ShieldAlert, Loader2,
-  Save, FileSpreadsheet, FileText, Check, Calculator, RefreshCw,
+  Save, FileSpreadsheet, FileText, Check, Calculator, RefreshCw, Trash2,
 } from 'lucide-react'
 import { MOCK_OBRAS, MOCK_OBRAS_LINKS } from '@/lib/mock-obras'
 import { STORE_KEYS } from '@/lib/store'
@@ -17,6 +17,7 @@ import { authFetch } from '@/lib/supabase/client'
 import { createClient } from '@supabase/supabase-js'
 // MOCK_EDITORAS removido — editoras carregadas via /api/editoras
 import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, normalizarLinksObra } from '@/lib/types-obras'
+import { DeleteObraModal } from '@/components/ui/delete-obra-modal'
 import type { StatusObra, Fonograma } from '@/lib/types-obras'
 
 /** Distribui percentuais garantindo soma = 100,00 (algoritmo largest-remainder, 2 casas) */
@@ -120,6 +121,7 @@ function ObraDrawer({ obra: obraInicial, onClose, editoras = [] }: { obra: any; 
   const [obra, setObra] = useState<any>(obraInicial)
   const [editData, setEditData] = useState<any>({})
   const [modoView, setModoView] = useState<'sintetico' | 'analitico'>('sintetico')
+  const [showDeleteObra, setShowDeleteObra] = useState(false)
 
   // ── Carregamento real de links do banco ──────────────────────────────────
   const [realLinks, setRealLinks] = useState<any[] | null>(null)
@@ -514,6 +516,12 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                 <Edit3 className="w-4 h-4" />
               </button>
             )}
+            <button
+              onClick={() => setShowDeleteObra(true)}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-rose-500/10 text-white/30 hover:text-rose-400 transition-colors"
+              title="Apagar obra">
+              <Trash2 className="w-4 h-4" />
+            </button>
             <Link href={`/master/obras/${obra.id}`}
               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-sky-500/10 text-white/30 hover:text-sky-400 transition-colors"
               title="Abrir página completa (BackOffice, Titulares, Analítico...)">
@@ -525,6 +533,21 @@ tfoot td{background:#f7f7f7;font-weight:bold}
             </button>
           </div>
         </div>
+
+        {/* Modal de exclusão com 2 etapas */}
+        {showDeleteObra && (
+          <DeleteObraModal
+            obra={{
+              id: obra.id,
+              titulo: obra.titulo,
+              contrato_origem_id: obra.contrato_origem_id ?? null,
+              contrato_numero:    obra.contrato_numero ?? null,
+              contrato_obras_count: obra.contrato_obras_count ?? null,
+            }}
+            onClose={() => setShowDeleteObra(false)}
+            onDeleted={() => { setShowDeleteObra(false); onClose() }}
+          />
+        )}
 
         <div className="flex items-center gap-1 px-4 py-2 border-b border-white/[0.06]">
           {TABS.map(t => (

@@ -8,12 +8,13 @@ import {
   Edit, AlignLeft, Mic2, FileText, Link2, Activity, AlertTriangle,
   CheckCircle2, ChevronRight, ExternalLink, Music, Users2, Globe2, DollarSign, Users,
   BookOpen, Loader2, BarChart3, Clock, Plus, Headphones, X, Save, RefreshCw,
-  CheckSquare, Square, Zap, Shield,
+  CheckSquare, Square, Zap, Shield, Trash2,
 } from 'lucide-react'
 import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, PAPEL_TITULAR_LABELS, PAPEL_TITULAR_COLORS, normalizarLinksObra, type StatusObra } from '@/lib/types-obras'
 import { formatarPercentual } from '@/lib/percentual'
 import { authFetch } from '@/lib/supabase/client'
 import { fmtBRL, fmtDate } from '@/lib/mock-cc'
+import { DeleteObraModal } from '@/components/ui/delete-obra-modal'
 
 const TABS = [
   { id: 'resumo',         label: 'Resumo',              icon: Music },
@@ -133,6 +134,7 @@ export default function ObraDetailPage() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('resumo')
   const [ativando, setAtivando] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
 
   // ── Intérpretes ─────────────────────────────────────────────────────────────
   const [interpretes, setInterpretes] = useState<any[]>([])
@@ -423,6 +425,21 @@ export default function ObraDetailPage() {
 
   return (
     <div className="space-y-5">
+
+      {/* Modal de exclusão com 2 etapas */}
+      {showDelete && obra && (
+        <DeleteObraModal
+          obra={{
+            id: obraId,
+            titulo: obra.titulo,
+            contrato_origem_id: obra.contrato_origem_id ?? null,
+            contrato_numero:    obra.contrato_numero ?? null,
+            contrato_obras_count: obra.contrato_obras_count ?? null,
+          }}
+          onClose={() => setShowDelete(false)}
+        />
+      )}
+
       <PageHeader
         title={obra.titulo}
         description={`Codigo: ${obra.codigo ?? obra.codigo_obra}${obra.iswc ? '  |  ISWC: ' + obra.iswc : '  |  ISWC: Pendente'}`}
@@ -431,6 +448,13 @@ export default function ObraDetailPage() {
             <Link href="/master/obras" className="h-8 px-3 rounded-lg bg-white/5 border border-white/[0.06] text-xs text-white/60 hover:text-white/80 transition-colors flex items-center">
               Voltar
             </Link>
+            <button
+              onClick={() => setShowDelete(true)}
+              className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-xs text-rose-400 font-semibold transition-colors"
+              title="Apagar obra"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
             <button className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-violet-600 hover:bg-violet-500 text-xs text-white font-semibold transition-colors">
               <Edit className="w-3.5 h-3.5" /> Editar
             </button>

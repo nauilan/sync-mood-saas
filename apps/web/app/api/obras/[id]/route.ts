@@ -184,7 +184,8 @@ export async function PATCH(
   return NextResponse.json({ data })
 }
 
-// ── DELETE /api/obras/[id] — soft delete ────────────────────────────────────
+// ── DELETE /api/obras/[id] — hard delete em cascata ─────────────────────────
+// Query param: ?cascade=contrato  → apaga também o contrato e todas as suas obras
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -196,24 +197,79 @@ export async function DELETE(
   if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   const { id } = await params
+  const cascade = new URL(req.url).searchParams.get('cascade') // 'contrato' | null
 
+  // 1. Verificar que a obra pertence ao tenant
   const { data: obra } = await sb
     .from('obras')
-    .select('id, titulo')
+    .select('id, titulo, contrato_origem_id')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
-    .is('deleted_at', null)
     .single()
 
   if (!obra) return NextResponse.json({ error: 'Obra não encontrada' }, { status: 404 })
 
-  const { error } = await sb
-    .from('obras')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', id)
-    .eq('tenant_id', usuario.tenant_id)
+  const CHUNK = 200
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Função auxiliar: apaga obras em cascata (links + fonogramas + obra)
+  async function deleteObras(obraIds: string[]) {
+    for (let i = 0; i < obraIds.length; i += CHUNK) {
+      const sl = obraIds.slice(i, i + CHUNK)
+      await sb.from('obras_links_titulares').delete().in('obra_id', sl)
+      await sb.from('fonogramas').delete().in('obra_id', sl)
+      await sb.from('obras_links').delete().in('obra_id', sl)
+    }
+    let removed = 0
+    for (let i = 0; i < obraIds.length; i += CHUNK) {
+      const { count } = await sb.from('obras').delete({ count: 'exact' }).in('id', obraIds.slice(i, i + CHUNK))
+      removed += count ?? 0
+    }
+    return removed
+  }
 
-  return NextResponse.json({ ok: true, message: `Obra "${obra.titulo}" excluída.` })
+  let obrasRemovidas = 0
+  let contratoRemovido: string | null = null
+
+  if (cascade === 'contrato' && obra.contrato_origem_id) {
+    // ── Cascata: apagar contrato + todas as obras dele ────────────────────────
+    const contratoId = obra.contrato_origem_id
+
+    // Coletar todas as obras do contrato (junction + FK direto)
+    const [{ data: coRows }, { data: obrasDir }] = await Promise.all([
+      sb.from('contrato_obras').select('obra_id').eq('contrato_id', contratoId),
+      sb.from('obras').select('id').eq('contrato_origem_id', contratoId),
+    ])
+
+    const todasObras = [...new Set([
+      ...(coRows ?? []).map((r: any) => r.obra_id as string).filter(Boolean),
+      ...(obrasDir ?? []).map((r: any) => r.id as string).filter(Boolean),
+      id, // garantir que a obra clicada está incluída
+    ])]
+
+    obrasRemovidas = await deleteObras(todasObras)
+
+    // Apagar junction + contrato
+    await sb.from('contrato_obras').delete().eq('contrato_id', contratoId)
+    await sb.from('contratos').delete().eq('id', contratoId)
+    contratoRemovido = contratoId
+
+  } else {
+    // ── Apagar somente esta obra ──────────────────────────────────────────────
+    obrasRemovidas = await deleteObras([id])
+  }
+
+  await logAudit(sb, usuario.tenant_id, 'DELETE', {
+    tabela_afetada: 'obras',
+    registro_id: id,
+    dados_anteriores: { titulo: obra.titulo, cascade, contrato_origem_id: obra.contrato_origem_id },
+    dados_novos: null,
+    origem_execucao: 'usuario',
+  })
+
+  return NextResponse.json({
+    ok: true,
+    obras_removidas: obrasRemovidas,
+    contrato_removido: contratoRemovido,
+    titulo: obra.titulo,
+  })
 }
