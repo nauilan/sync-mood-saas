@@ -29,10 +29,12 @@ export async function POST(req: NextRequest) {
     { auth: { persistSession: false } }
   )
 
+  // Busca todas as importações que possuem obras integradas
+  // (status pode variar: 'integrado', 'confirmado', 'processado', etc.)
   const { data: importacoes, error } = await sb
     .from('cwr_importacoes')
     .select('id, status')
-    .in('status', ['integrado'])
+    .not('status', 'in', '("pendente","erro","cancelado")')
     .order('created_at', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
