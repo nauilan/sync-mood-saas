@@ -802,13 +802,24 @@ export default function ObraDetailPage() {
                     const editorialPR = titulares
                       .filter((x: any) => ['E', 'SE', 'AM', 'SA'].includes(x.funcao_no_link ?? ''))
                       .reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
-                    // ── Lookup por UUID (editora_id = editora_administrada_id) ──
-                    // Cada editora original tem seu próprio negócio — sem fallback por AM.
-                    const eEditoraId = titulares.find((x: any) =>
+                    // ── Lookup por UUID com fallback por nome (contains) ──
+                    // editora_id pode ser null em registros importados via CWR.
+                    const eTitular = titulares.find((x: any) =>
                       x.funcao_no_link === 'E' || x.funcao_no_link === 'SE'
-                    )?.editora_id
-                    const negocio = eEditoraId
-                      ? negocios.find((n: any) => n.editora_administrada_id === eEditoraId)
+                    )
+                    const negocio = eTitular
+                      ? (eTitular.editora_id
+                          ? negocios.find((n: any) => n.editora_administrada_id === eTitular.editora_id)
+                          : undefined) ??
+                        (() => {
+                          const nLower = (eTitular.nome ?? '').toLowerCase()
+                          return nLower
+                            ? negocios.find((n: any) => {
+                                const admNome = (n.editora_administrada_nome ?? '').toLowerCase()
+                                return admNome && (nLower.includes(admNome) || admNome.includes(nLower))
+                              })
+                            : undefined
+                        })()
                       : undefined
 
                     return titulares.map((t: any) => {

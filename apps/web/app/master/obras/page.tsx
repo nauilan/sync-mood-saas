@@ -788,13 +788,24 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                     .filter((x: any) => ['E','SE','AM','SA'].includes((x.funcao_no_link ?? '').toUpperCase()))
                     .reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
 
-                  // Lookup por UUID — usa editora_id do titular E para encontrar o negócio certo.
-                  // Sem fallback por AM: cada editora original tem negócio próprio com %.
-                  const eEditoraId = lt.find((x: any) =>
+                  // Lookup por UUID (editora_id) com fallback por nome (contains).
+                  // editora_id pode ser null em registros importados via CWR.
+                  const eTitular = lt.find((x: any) =>
                     ['E','SE'].includes((x.funcao_no_link ?? '').toUpperCase())
-                  )?.editora_id
-                  const negocio = eEditoraId
-                    ? negocios.find((n: any) => n.editora_administrada_id === eEditoraId)
+                  )
+                  const negocio = eTitular
+                    ? (eTitular.editora_id
+                        ? negocios.find((n: any) => n.editora_administrada_id === eTitular.editora_id)
+                        : undefined) ??
+                      (() => {
+                        const nLower = (eTitular.nome ?? '').toLowerCase()
+                        return nLower
+                          ? negocios.find((n: any) => {
+                              const admNome = (n.editora_administrada_nome ?? '').toLowerCase()
+                              return admNome && (nLower.includes(admNome) || admNome.includes(nLower))
+                            })
+                          : undefined
+                      })()
                     : undefined
 
                   if (negocio) {
