@@ -764,11 +764,12 @@ tfoot td{background:#f7f7f7;font-weight:bold}
               }
               return 0
             }
-            // Analítico: usa percentual_exec_publica absoluto de cada titular.
-            // Para E e AM: redistribui via negócio editorial (mesma lógica do [id]/page.tsx).
-            // NÃO normaliza por link — percentual_exec_publica já representa a fatia
-            // absoluta da obra, independente de quantos links existem.
-            const analiticoLinkPct = new Map<any, number>()
+            // Analítico: lê os % brutos do CWR e redistribui E/AM via negócio editorial.
+            // Lookup por UUID (editora_id = editora_administrada_id) — cada editora tem
+            // seu próprio negócio com percentual específico, sem fallback genérico por AM.
+            // analiticoInconsistente: marca E/AM cujo CWR difere do esperado pelo negócio.
+            const analiticoLinkPct       = new Map<any, number>()
+            const analiticoInconsistente = new Map<any, boolean>()
             if (modoView === 'analitico') {
               rows.forEach((r: any) => {
                 const lt: any[] = (links[r.li] as any)?.titulares ?? []
@@ -778,35 +779,38 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                 if (sc === 'nao_controlado') { analiticoLinkPct.set(t, 0); return }
 
                 const fn = (t.funcao_no_link ?? '').toUpperCase()
-                const isE  = fn === 'E'  || fn === 'SE'  || fn === 'AQ'
+                const isE  = fn === 'E'  || fn === 'SE'
                 const isAM = fn === 'AM' || fn === 'SA'
 
                 if (isE || isAM) {
-                  // Fatia editorial absoluta do link (E + AM + SE + SA)
+                  // Pool editorial absoluto do link (E + AM + variantes)
                   const editorialPR = lt
-                    .filter((x: any) => ['E','SE','AM','SA','AQ'].includes((x.funcao_no_link ?? '').toUpperCase()))
+                    .filter((x: any) => ['E','SE','AM','SA'].includes((x.funcao_no_link ?? '').toUpperCase()))
                     .reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
 
-                  // Buscar negócio por nome (mesmo fallback do [id]/page.tsx)
-                  const amNome = (lt.find((x: any) => (x.funcao_no_link ?? '').toUpperCase() === 'AM' || (x.funcao_no_link ?? '').toUpperCase() === 'SA')?.nome ?? '').trim().toUpperCase()
-                  const eNome  = (lt.find((x: any) => ['E','SE','AQ'].includes((x.funcao_no_link ?? '').toUpperCase()))?.nome ?? '').trim().toUpperCase()
-                  const negocio = negocios.find((n: any) =>
-                    (n.editora_administradora_nome ?? '').trim().toUpperCase() === amNome &&
-                    (n.editora_administrada_nome   ?? '').trim().toUpperCase() === eNome
-                  ) ?? (amNome ? negocios.find((n: any) =>
-                    (n.editora_administradora_nome ?? '').trim().toUpperCase() === amNome
-                  ) : undefined)
+                  // Lookup por UUID — usa editora_id do titular E para encontrar o negócio certo.
+                  // Sem fallback por AM: cada editora original tem negócio próprio com %.
+                  const eEditoraId = lt.find((x: any) =>
+                    ['E','SE'].includes((x.funcao_no_link ?? '').toUpperCase())
+                  )?.editora_id
+                  const negocio = eEditoraId
+                    ? negocios.find((n: any) => n.editora_administrada_id === eEditoraId)
+                    : undefined
 
                   if (negocio) {
                     const negPctE  = (negocio.percentual_administrada  ?? 50) / 100
                     const negPctAM = (negocio.percentual_administradora ?? 50) / 100
-                    analiticoLinkPct.set(t, isE ? editorialPR * negPctE : editorialPR * negPctAM)
+                    const computed = isE ? editorialPR * negPctE : editorialPR * negPctAM
+                    analiticoLinkPct.set(t, computed)
+                    // Consistência: CWR deve bater com o que o negócio prescreve (±0.5%)
+                    const cwrVal = t.percentual_exec_publica ?? 0
+                    analiticoInconsistente.set(t, Math.abs(cwrVal - computed) > 0.5)
                   } else {
-                    // Sem negócio cadastrado: mantém exec_publica como fallback
+                    // Sem negócio cadastrado: exibe CWR bruto (sem redistribuição)
                     analiticoLinkPct.set(t, t.percentual_exec_publica ?? t.percentual ?? 0)
                   }
                 } else {
-                  // CA, C, A, V, AR, etc.: usa exec_publica absoluto diretamente
+                  // CA, C, A, V: exibe exec_publica do CWR diretamente (o que ficou pro autor)
                   analiticoLinkPct.set(t, t.percentual_exec_publica ?? t.percentual ?? 0)
                 }
               })
@@ -905,7 +909,13 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                           </td>
                           <td className="px-3 py-2 font-mono text-white/40 text-[10px]">{fmtDoc(t.cpf_cnpj, t.tipo_pessoa)}</td>
                           <td className="text-center px-2 py-2 border-l border-white/[0.04] tabular-nums text-cyan-400 font-semibold">
-                            {ep.toFixed(2)}%
+                            <span className="flex items-center justify-center gap-1">
+                              {ep.toFixed(2)}%
+                              {modoView === 'analitico' && analiticoInconsistente.get(t) && (
+                                <span title={`CWR: ${(t.percentual_exec_publica ?? 0).toFixed(2)}% ≠ negócio esperado`}
+                                  className="text-amber-400 text-[9px] leading-none">⚠</span>
+                              )}
+                            </span>
                           </td>
                           <td className={`text-center px-2 py-2 border-l border-white/[0.04] tabular-nums font-semibold ${fn > 0 ? 'text-teal-400' : 'text-white/20'}`}>
                             {fn.toFixed(2)}%

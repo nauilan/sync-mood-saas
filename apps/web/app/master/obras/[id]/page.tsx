@@ -802,15 +802,14 @@ export default function ObraDetailPage() {
                     const editorialPR = titulares
                       .filter((x: any) => ['E', 'SE', 'AM', 'SA'].includes(x.funcao_no_link ?? ''))
                       .reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
-                    // ── Buscar negócio para este link (AM + E) ─────────────────
-                    const amNome = (titulares.find((x: any) => x.funcao_no_link === 'AM')?.nome ?? '').trim().toUpperCase()
-                    const eNome  = (titulares.find((x: any) => x.funcao_no_link === 'E')?.nome  ?? '').trim().toUpperCase()
-                    const negocio = negocios.find((n: any) =>
-                      (n.editora_administradora_nome ?? '').trim().toUpperCase() === amNome &&
-                      (n.editora_administrada_nome   ?? '').trim().toUpperCase() === eNome
-                    ) ?? (amNome ? negocios.find((n: any) =>
-                      (n.editora_administradora_nome ?? '').trim().toUpperCase() === amNome
-                    ) : undefined)
+                    // ── Lookup por UUID (editora_id = editora_administrada_id) ──
+                    // Cada editora original tem seu próprio negócio — sem fallback por AM.
+                    const eEditoraId = titulares.find((x: any) =>
+                      x.funcao_no_link === 'E' || x.funcao_no_link === 'SE'
+                    )?.editora_id
+                    const negocio = eEditoraId
+                      ? negocios.find((n: any) => n.editora_administrada_id === eEditoraId)
+                      : undefined
 
                     return titulares.map((t: any) => {
                       const sc = t.status_controle ?? ''
@@ -819,8 +818,9 @@ export default function ObraDetailPage() {
                       const scLabel = sc === 'controlado' ? 'Controlado' : sc === 'nao_controlado' ? 'Não ctrl.' : sc === 'contrato_pendente' ? 'Pendente' : sc || '—'
                       // REGRA 4: nao_controlado → —
                       // REGRA 2: E/AM com negócio → redistribuição sobre fatia editorial absoluta
-                      // REGRA 1: demais → percentual_exec_publica absoluto (sem normalizar por link)
+                      // REGRA 1: demais → percentual_exec_publica do CWR (o que ficou pro autor)
                       let analitico_pct: number | null = null
+                      let analitico_inconsistente = false
                       if (modoAnalitico && sc !== 'nao_controlado') {
                         const isE  = fn === 'E'  || fn === 'SE'
                         const isAM = fn === 'AM' || fn === 'SA'
@@ -828,6 +828,8 @@ export default function ObraDetailPage() {
                           const negPctE  = (negocio.percentual_administrada  ?? 50) / 100
                           const negPctAM = (negocio.percentual_administradora ?? 50) / 100
                           analitico_pct = isE ? editorialPR * negPctE : editorialPR * negPctAM
+                          // Consistência: CWR deve bater com o esperado pelo negócio (±0.5%)
+                          analitico_inconsistente = Math.abs((t.percentual_exec_publica ?? 0) - analitico_pct) > 0.5
                         } else {
                           analitico_pct = t.percentual_exec_publica ?? t.percentual ?? 0
                         }
@@ -856,8 +858,12 @@ export default function ObraDetailPage() {
                             <span className={`text-[10px] font-semibold ${scColor}`}>{scLabel}</span>
                           </td>
                           <td className="px-3 py-3 text-right">
-                            <span className="font-semibold tabular-nums text-sky-300/90 text-xs">
+                            <span className="inline-flex items-center justify-end gap-1 font-semibold tabular-nums text-sky-300/90 text-xs">
                               {t.percentual_exec_publica != null ? formatarPercentual(t.percentual_exec_publica) : <span className="text-white/25">—</span>}
+                              {modoAnalitico && analitico_inconsistente && (
+                                <span title={`CWR: ${(t.percentual_exec_publica ?? 0).toFixed(2)}% ≠ esperado pelo negócio`}
+                                  className="text-amber-400 text-[10px] leading-none cursor-help">⚠</span>
+                              )}
                             </span>
                           </td>
                           <td className="px-3 py-3 text-right">
