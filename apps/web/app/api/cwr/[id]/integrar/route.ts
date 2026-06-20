@@ -37,11 +37,34 @@ function sb() {
   )
 }
 
-async function getUser(req: NextRequest) {
+async function getUser(req: NextRequest, importacaoId?: string) {
   const token = (req.headers.get('authorization') ?? '')
     .replace('Bearer ', '')
     .replace(/[\uFEFF\u200B]/g, '')
     .trim()
+
+  const srvKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').replace(/[\uFEFF]/g, '').trim()
+
+  // Admin bypass: service role key permite reintegração sem user JWT.
+  // Usado pelo endpoint /api/admin/reintegrar-catalogo para mass reintegration.
+  if (srvKey && token === srvKey && importacaoId) {
+    const c = sb()
+    const { data: imp } = await c
+      .from('cwr_importacoes')
+      .select('id, tenant_id')
+      .eq('id', importacaoId)
+      .single()
+    if (!imp) return null
+    const tenantId = (imp as any).tenant_id as string
+    const { data: usr } = await c
+      .from('usuarios')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .limit(1)
+      .single()
+    return { userId: ((usr as any)?.id as string) ?? 'admin', tenantId }
+  }
+
   if (!token) return null
   const c = sb()
   const { data: { user } } = await c.auth.getUser(token)
@@ -111,10 +134,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const usuario = await getUser(req)
+  const { id } = await params            // params primeiro — necessário para admin bypass
+  const usuario = await getUser(req, id)
   if (!usuario) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
-
-  const { id } = await params
   const client = sb()
 
   // Filtro opcional: quando fornecido, reintegra apenas as obras especificadas
@@ -313,8 +335,14 @@ export async function POST(
       if (!wrtChaveToLinkNum.has(chave)) wrtChaveToLinkNum.set(chave, linkNum)
     }
 
-    // owrNextLink: cada OWR recebe um link exclusivo após os links definidos por PWR.
-    let owrNextLink = nextLinkNum
+    // owrNextLink: cada OWR recebe um link exclusivo após os links dos autores controlados.
+    // CRITICAL: quando não há PWR records, nextLinkNum=1. Sem a proteção abaixo,
+    // o OWR cai no Link 1 junto com os controlados — viola a separação obrigatória.
+    // Regra: se há ao menos 1 autor controlado, OWR começa no mínimo no Link 2.
+    const hasControlledAuthors = ((snap.autores as any[]) ?? []).some(
+      (a: any) => (a.controlled as boolean | null) ?? false
+    )
+    let owrNextLink = hasControlledAuthors ? Math.max(nextLinkNum, 2) : nextLinkNum
 
     for (const a of ((snap.autores as any[]) ?? [])) {
       if (!(a.nome as string)?.trim()) continue
