@@ -766,17 +766,18 @@ export default function ObraDetailPage() {
                   {links.flatMap((link: any) => {
                     const titulares = link.titulares ?? []
                     // ── Cálculo analítico por link ──────────────────────────────
-                    // Cada link fecha 100%: PR_participante / soma_PR_do_link × 100
-                    const totalPR_link = titulares
+                    // Apenas participantes controlados entram no analítico (fecha 100% sobre controlados)
+                    const totalPR_ctrl = titulares
+                      .filter((x: any) => x.status_controle === 'controlado')
                       .reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
 
                     return titulares.map((t: any) => {
                       const sc = t.status_controle ?? ''
                       const scColor = sc === 'controlado' ? 'text-emerald-400' : sc === 'nao_controlado' ? 'text-white/35' : 'text-amber-400'
                       const scLabel = sc === 'controlado' ? 'Controlado' : sc === 'nao_controlado' ? 'Não ctrl.' : sc === 'contrato_pendente' ? 'Pendente' : sc || '—'
-                      // Analítico: % econômica do participante dentro do link (fecha 100% por link)
-                      const analitico_pct = modoAnalitico && totalPR_link > 0
-                        ? (t.percentual_exec_publica / totalPR_link) * 100
+                      // Analítico: somente controlados; não-controlados exibem —
+                      const analitico_pct = modoAnalitico && sc === 'controlado' && totalPR_ctrl > 0
+                        ? (t.percentual_exec_publica / totalPR_ctrl) * 100
                         : null
                       const mr_display = modoAnalitico ? analitico_pct : (t.percentual_fonomecanico ?? 0)
                       const sr_display = modoAnalitico ? analitico_pct : (t.percentual_sincronizacao ?? 0)
