@@ -798,14 +798,10 @@ export default function ObraDetailPage() {
                 <tbody className="divide-y divide-white/[0.04]">
                   {links.flatMap((link: any) => {
                     const titulares = link.titulares ?? []
-                    // ── REGRA 1: TOTAL DO LINK = soma de TODOS os PR (fecha 100% por link) ──
-                    const totalPR_link = titulares
-                      .reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
-                    // ── REGRA 2: fatia editorial total = E + AM (base para redistribuição) ──
+                    // ── REGRA 2: fatia editorial total = E + AM (base para redistribuição via negócio) ──
                     const editorialPR = titulares
                       .filter((x: any) => ['E', 'SE', 'AM', 'SA'].includes(x.funcao_no_link ?? ''))
                       .reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
-                    const editorialPct = totalPR_link > 0 ? (editorialPR / totalPR_link) * 100 : 0
                     // ── Buscar negócio para este link (AM + E) ─────────────────
                     const amNome = (titulares.find((x: any) => x.funcao_no_link === 'AM')?.nome ?? '').trim().toUpperCase()
                     const eNome  = (titulares.find((x: any) => x.funcao_no_link === 'E')?.nome  ?? '').trim().toUpperCase()
@@ -822,18 +818,18 @@ export default function ObraDetailPage() {
                       const scColor = sc === 'controlado' ? 'text-emerald-400' : sc === 'nao_controlado' ? 'text-white/35' : 'text-amber-400'
                       const scLabel = sc === 'controlado' ? 'Controlado' : sc === 'nao_controlado' ? 'Não ctrl.' : sc === 'contrato_pendente' ? 'Pendente' : sc || '—'
                       // REGRA 4: nao_controlado → —
-                      // REGRA 2: E/AM com negócio → redistribuição sobre fatia editorial
-                      // REGRA 1: demais → PR / totalPR_link × 100
+                      // REGRA 2: E/AM com negócio → redistribuição sobre fatia editorial absoluta
+                      // REGRA 1: demais → percentual_exec_publica absoluto (sem normalizar por link)
                       let analitico_pct: number | null = null
-                      if (modoAnalitico && sc !== 'nao_controlado' && totalPR_link > 0) {
+                      if (modoAnalitico && sc !== 'nao_controlado') {
                         const isE  = fn === 'E'  || fn === 'SE'
                         const isAM = fn === 'AM' || fn === 'SA'
                         if (negocio && (isE || isAM)) {
                           const negPctE  = (negocio.percentual_administrada  ?? 50) / 100
                           const negPctAM = (negocio.percentual_administradora ?? 50) / 100
-                          analitico_pct = isE ? editorialPct * negPctE : editorialPct * negPctAM
+                          analitico_pct = isE ? editorialPR * negPctE : editorialPR * negPctAM
                         } else {
-                          analitico_pct = (t.percentual_exec_publica / totalPR_link) * 100
+                          analitico_pct = t.percentual_exec_publica ?? t.percentual ?? 0
                         }
                       }
                       const mr_display = modoAnalitico ? analitico_pct : (t.percentual_fonomecanico ?? 0)

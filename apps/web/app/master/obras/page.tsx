@@ -755,28 +755,19 @@ tfoot td{background:#f7f7f7;font-weight:bold}
               }
               return 0
             }
-            // Analítico: calcula pct econômico por link (PR / totalPR_link × 100)
+            // Analítico: usa percentual_exec_publica absoluto de cada titular.
+            // NÃO normaliza por link — percentual_exec_publica já representa a fatia
+            // absoluta da obra, independente de quantos links existem.
+            // Normalizar por link inflava valores quando autores estão em links separados
+            // (cada link de ~33% normalizava para 100%, somando 300% no total).
             const analiticoLinkPct = new Map<any, number>()
             if (modoView === 'analitico') {
-              const linkGroups = new Map<number, any[]>()
               rows.forEach((r: any) => {
-                if (!linkGroups.has(r.li)) linkGroups.set(r.li, [])
-                linkGroups.get(r.li)!.push(r.t)
-              })
-              linkGroups.forEach((titulares, li) => {
-                const lt = (links[li] as any)?.titulares ?? []
+                const lt = (links[r.li] as any)?.titulares ?? []
                 if (isOwrLink(lt)) return
-                const totalPR = titulares.reduce((s: number, t: any) =>
-                  s + (t.percentual_exec_publica ?? t.percentual ?? 0), 0)
-                if (totalPR <= 0) return
-                titulares.forEach((t: any) => {
-                  const sc = t.status_controle ?? (t.controlado === false ? 'nao_controlado' : 'controlado')
-                  if (sc === 'nao_controlado') {
-                    analiticoLinkPct.set(t, 0)
-                  } else {
-                    analiticoLinkPct.set(t, (t.percentual_exec_publica ?? t.percentual ?? 0) / totalPR * 100)
-                  }
-                })
+                const t = r.t
+                const sc = t.status_controle ?? (t.controlado === false ? 'nao_controlado' : 'controlado')
+                analiticoLinkPct.set(t, sc === 'nao_controlado' ? 0 : (t.percentual_exec_publica ?? t.percentual ?? 0))
               })
             }
             const calcFono = (li: number, t: any) => {
