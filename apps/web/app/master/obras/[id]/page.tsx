@@ -158,6 +158,7 @@ export default function ObraDetailPage() {
 
   // ── Modo Analítico/Sintético (aba Integrantes) ───────────────────────────────
   const [modoAnalitico, setModoAnalitico] = useState(false)
+  const [negocios, setNegocios] = useState<any[]>([])
 
   // ── Completude ──────────────────────────────────────────────────────────────
   const [completude, setCompletude] = useState<any>(null)
@@ -343,10 +344,11 @@ export default function ObraDetailPage() {
     async function load() {
       setLoading(true)
       try {
-        const [obraRes, linksRes, fonoRes] = await Promise.all([
+        const [obraRes, linksRes, fonoRes, negociosRes] = await Promise.all([
           authFetch(`/api/obras/${obraId}`),
           authFetch(`/api/obras/${obraId}/links`),
           authFetch(`/api/obras/${obraId}/fonogramas`),
+          authFetch('/api/negocios-editoriais?status=ativo&limit=500'),
         ])
         if (obraRes.ok) {
           const d = await obraRes.json()
@@ -359,6 +361,10 @@ export default function ObraDetailPage() {
         if (fonoRes.ok) {
           const d = await fonoRes.json()
           setFonogramas(d.data ?? [])
+        }
+        if (negociosRes.ok) {
+          const d = await negociosRes.json()
+          setNegocios(d.negocios ?? [])
         }
       } catch (e) {
         console.error('[obra/detail]', e)
@@ -758,27 +764,51 @@ export default function ObraDetailPage() {
                     <th className="text-center px-3 py-2.5 text-white/30 font-semibold text-xs w-16">Cat.</th>
                     <th className="text-center px-3 py-2.5 text-white/30 font-semibold text-xs w-16">Controle</th>
                     <th className="text-right px-3 py-2.5 text-white/30 font-semibold text-xs w-20">PR</th>
-                    <th className="text-right px-3 py-2.5 text-white/30 font-semibold text-xs w-20">{modoAnalitico ? 'MR (anal.)' : 'MR'}</th>
-                    <th className="text-right px-3 py-2.5 text-white/30 font-semibold text-xs w-20">{modoAnalitico ? 'SR (anal.)' : 'SR'}</th>
+                    <th className="text-right px-3 py-2.5 text-white/30 font-semibold text-xs w-20">{modoAnalitico ? '% Ecôn.' : 'MR'}</th>
+                    <th className="text-right px-3 py-2.5 text-white/30 font-semibold text-xs w-20">{modoAnalitico ? '% Ecôn.' : 'SR'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.04]">
                   {links.flatMap((link: any) => {
                     const titulares = link.titulares ?? []
-                    // ── Cálculo analítico por link ──────────────────────────────
-                    // Apenas participantes controlados entram no analítico (fecha 100% sobre controlados)
-                    const totalPR_ctrl = titulares
-                      .filter((x: any) => x.status_controle === 'controlado')
+                    // ── REGRA 1: TOTAL DO LINK = soma de TODOS os PR (fecha 100% por link) ──
+                    const totalPR_link = titulares
                       .reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
+                    // ── REGRA 2: fatia editorial total = E + AM (base para redistribuição) ──
+                    const editorialPR = titulares
+                      .filter((x: any) => ['E', 'SE', 'AM', 'SA'].includes(x.funcao_no_link ?? ''))
+                      .reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
+                    const editorialPct = totalPR_link > 0 ? (editorialPR / totalPR_link) * 100 : 0
+                    // ── Buscar negócio para este link (AM + E) ─────────────────
+                    const amNome = (titulares.find((x: any) => x.funcao_no_link === 'AM')?.nome ?? '').trim().toUpperCase()
+                    const eNome  = (titulares.find((x: any) => x.funcao_no_link === 'E')?.nome  ?? '').trim().toUpperCase()
+                    const negocio = negocios.find((n: any) =>
+                      (n.editora_administradora_nome ?? '').trim().toUpperCase() === amNome &&
+                      (n.editora_administrada_nome   ?? '').trim().toUpperCase() === eNome
+                    ) ?? (amNome ? negocios.find((n: any) =>
+                      (n.editora_administradora_nome ?? '').trim().toUpperCase() === amNome
+                    ) : undefined)
 
                     return titulares.map((t: any) => {
                       const sc = t.status_controle ?? ''
+                      const fn = t.funcao_no_link ?? ''
                       const scColor = sc === 'controlado' ? 'text-emerald-400' : sc === 'nao_controlado' ? 'text-white/35' : 'text-amber-400'
                       const scLabel = sc === 'controlado' ? 'Controlado' : sc === 'nao_controlado' ? 'Não ctrl.' : sc === 'contrato_pendente' ? 'Pendente' : sc || '—'
-                      // Analítico: somente controlados; não-controlados exibem —
-                      const analitico_pct = modoAnalitico && sc === 'controlado' && totalPR_ctrl > 0
-                        ? (t.percentual_exec_publica / totalPR_ctrl) * 100
-                        : null
+                      // REGRA 4: nao_controlado → —
+                      // REGRA 2: E/AM com negócio → redistribuição sobre fatia editorial
+                      // REGRA 1: demais → PR / totalPR_link × 100
+                      let analitico_pct: number | null = null
+                      if (modoAnalitico && sc !== 'nao_controlado' && totalPR_link > 0) {
+                        const isE  = fn === 'E'  || fn === 'SE'
+                        const isAM = fn === 'AM' || fn === 'SA'
+                        if (negocio && (isE || isAM)) {
+                          const negPctE  = (negocio.percentual_administrada  ?? 50) / 100
+                          const negPctAM = (negocio.percentual_administradora ?? 50) / 100
+                          analitico_pct = isE ? editorialPct * negPctE : editorialPct * negPctAM
+                        } else {
+                          analitico_pct = (t.percentual_exec_publica / totalPR_link) * 100
+                        }
+                      }
                       const mr_display = modoAnalitico ? analitico_pct : (t.percentual_fonomecanico ?? 0)
                       const sr_display = modoAnalitico ? analitico_pct : (t.percentual_sincronizacao ?? 0)
                       return (
