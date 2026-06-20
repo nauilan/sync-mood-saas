@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { PageHeader } from '@/components/ui/page-header'
 import {
   Upload, RefreshCw, FileCode2, Loader2, AlertTriangle,
-  ChevronRight, CheckCircle2, Clock, XCircle, FileText,
+  ChevronRight, CheckCircle2, Clock, XCircle, FileText, Trash2,
 } from 'lucide-react'
 import { authFetch } from '@/lib/supabase/client'
 
@@ -13,28 +13,33 @@ const STATUS_LABELS: Record<string, string> = {
   em_analise:  'Em Análise',
   confirmado:  'Confirmado',
   descartado:  'Descartado',
+  integrado:   'Integrado',
 }
 
 const STATUS_COLORS: Record<string, string> = {
   pendente:   'bg-slate-500/15 text-slate-400',
   em_analise: 'bg-amber-500/15 text-amber-400',
   confirmado: 'bg-emerald-500/15 text-emerald-400',
+  integrado:  'bg-emerald-500/15 text-emerald-400',
   descartado: 'bg-rose-500/15 text-rose-400',
 }
 
 const StatusIcon = ({ s }: { s: string }) => {
-  if (s === 'confirmado') return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+  if (s === 'confirmado' || s === 'integrado') return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
   if (s === 'descartado') return <XCircle className="w-3.5 h-3.5 text-rose-400" />
   if (s === 'em_analise') return <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin" />
   return <Clock className="w-3.5 h-3.5 text-slate-400" />
 }
 
 export default function CwrPage() {
-  const [items, setItems] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [erro, setErro] = useState('')
-  const [uploading, setUploading] = useState(false)
-  const [uploadErro, setUploadErro] = useState('')
+  const [items, setItems]               = useState<any[]>([])
+  const [loading, setLoading]           = useState(true)
+  const [erro, setErro]                 = useState('')
+  const [uploading, setUploading]       = useState(false)
+  const [uploadErro, setUploadErro]     = useState('')
+  const [confirmId, setConfirmId]       = useState<string | null>(null)
+  const [deleting, setDeleting]         = useState(false)
+  const [deleteErro, setDeleteErro]     = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { load() }, [])
@@ -45,7 +50,7 @@ export default function CwrPage() {
     try {
       const res = await authFetch('/api/cwr')
       const d = await res.json().catch(() => ({}))
-      if (!res.ok) { setErro(`Erro ${res.status}: ${d.error ?? 'Falha na API'} | debug: ${JSON.stringify(d.debug ?? {})}`); return }
+      if (!res.ok) { setErro(`Erro ${res.status}: ${d.error ?? 'Falha na API'}`); return }
       setItems(d.importacoes ?? [])
     } catch (e: unknown) { setErro(`Falha na requisição: ${e instanceof Error ? e.message : String(e)}`) }
     finally { setLoading(false) }
@@ -70,6 +75,27 @@ export default function CwrPage() {
       if (fileRef.current) fileRef.current.value = ''
     }
   }
+
+  async function handleDelete(id: string) {
+    setDeleting(true)
+    setDeleteErro('')
+    try {
+      const res = await authFetch(`/api/cwr/${id}`, { method: 'DELETE' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setDeleteErro(d.error ?? `Erro ${res.status}`)
+        return
+      }
+      setConfirmId(null)
+      setItems(prev => prev.filter(i => i.id !== id))
+    } catch (e: unknown) {
+      setDeleteErro(e instanceof Error ? e.message : 'Falha ao deletar.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const confirmItem = items.find(i => i.id === confirmId)
 
   return (
     <div className="space-y-6 pb-10">
@@ -103,6 +129,59 @@ export default function CwrPage() {
         <div className="flex items-center gap-2 px-4 py-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-300 text-sm">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           {erro || uploadErro}
+        </div>
+      )}
+
+      {/* Modal de confirmação de exclusão */}
+      {confirmId && confirmItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#0d1526] border border-rose-500/30 rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-9 h-9 rounded-lg bg-rose-500/15 flex items-center justify-center shrink-0">
+                <Trash2 className="w-4 h-4 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white mb-1">Apagar importação CWR</h3>
+                <p className="text-xs text-white/50 font-mono">{confirmItem.nome_arquivo}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-white/60 mb-2">
+              Esta ação irá remover permanentemente:
+            </p>
+            <ul className="text-xs text-white/50 space-y-1 mb-4 ml-3 list-disc">
+              <li>Todas as <span className="text-rose-300 font-semibold">{confirmItem.relatorio?.obras_lidas ?? '?'} obras</span> criadas por este arquivo</li>
+              <li>Todos os titulares, fonogramas e links dessas obras</li>
+              <li>O registro desta importação</li>
+            </ul>
+            <p className="text-[11px] text-rose-400 font-semibold mb-5">Esta ação é irreversível.</p>
+
+            {deleteErro && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-300 text-xs mb-4">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                {deleteErro}
+              </div>
+            )}
+
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setConfirmId(null); setDeleteErro('') }}
+                disabled={deleting}
+                className="px-4 py-2 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDelete(confirmId)}
+                disabled={deleting}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+              >
+                {deleting
+                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Apagando...</>
+                  : <><Trash2 className="w-3.5 h-3.5" /> Apagar tudo</>}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -175,9 +254,18 @@ export default function CwrPage() {
                         {item.created_at ? new Date(item.created_at).toLocaleDateString('pt-BR') : '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <a href={`/master/cwr/${item.id}`} className="opacity-0 group-hover:opacity-100 text-white/30 hover:text-white/60 transition-all">
-                          <ChevronRight className="w-4 h-4" />
-                        </a>
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => { setConfirmId(item.id); setDeleteErro('') }}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-500/15 text-white/20 hover:text-rose-400 transition-colors"
+                            title="Apagar importação e todas as obras"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                          <a href={`/master/cwr/${item.id}`} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/5 text-white/20 hover:text-white/60 transition-colors">
+                            <ChevronRight className="w-4 h-4" />
+                          </a>
+                        </div>
                       </td>
                     </tr>
                   )
