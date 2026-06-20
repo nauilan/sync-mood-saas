@@ -216,3 +216,95 @@ export async function PATCH(
 
   return NextResponse.json({ contrato: data })
 }
+
+// ── DELETE /api/contratos/[id] — apaga contrato + obras vinculadas ─────────────
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const sb = getAdminClient()
+  if (!sb) return NextResponse.json({ error: 'Configuração do servidor ausente.' }, { status: 500 })
+
+  const tenantId = await autenticar(sb, req)
+  if (!tenantId) return NextResponse.json({ error: 'Não autenticado.' }, { status: 401 })
+
+  const { id } = await params
+
+  // 1. Confirmar que o contrato pertence ao tenant
+  const { data: contrato } = await sb
+    .from('contratos')
+    .select('id, numero, tenant_id')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .single()
+
+  if (!contrato) return NextResponse.json({ error: 'Contrato não encontrado.' }, { status: 404 })
+
+  // 2. Coletar obra_ids vinculadas a este contrato
+  const { data: coRows } = await sb
+    .from('contrato_obras')
+    .select('obra_id')
+    .eq('contrato_id', id)
+
+  // Também obras com contrato_origem_id direto
+  const { data: obrasDirectas } = await sb
+    .from('obras')
+    .select('id')
+    .eq('contrato_origem_id', id)
+
+  const obraIds = [
+    ...new Set([
+      ...(coRows ?? []).map((r: any) => r.obra_id as string).filter(Boolean),
+      ...(obrasDirectas ?? []).map((r: any) => r.id as string).filter(Boolean),
+    ]),
+  ]
+
+  const CHUNK = 200
+
+  // 3. Deletar obras_links_titulares
+  for (let i = 0; i < obraIds.length; i += CHUNK) {
+    await sb.from('obras_links_titulares').delete().in('obra_id', obraIds.slice(i, i + CHUNK))
+  }
+
+  // 4. Deletar fonogramas
+  for (let i = 0; i < obraIds.length; i += CHUNK) {
+    await sb.from('fonogramas').delete().in('obra_id', obraIds.slice(i, i + CHUNK))
+  }
+
+  // 5. Deletar obras_links
+  for (let i = 0; i < obraIds.length; i += CHUNK) {
+    await sb.from('obras_links').delete().in('obra_id', obraIds.slice(i, i + CHUNK))
+  }
+
+  // 6. Deletar obras
+  let obrasRemovidas = 0
+  for (let i = 0; i < obraIds.length; i += CHUNK) {
+    const { count } = await sb
+      .from('obras')
+      .delete({ count: 'exact' })
+      .in('id', obraIds.slice(i, i + CHUNK))
+    obrasRemovidas += count ?? 0
+  }
+
+  // 7. Deletar registros da junction table
+  await sb.from('contrato_obras').delete().eq('contrato_id', id)
+
+  // 8. Deletar o contrato
+  await sb.from('contratos').delete().eq('id', id)
+
+  await logAudit(sb, tenantId, 'DELETE', {
+    tabela_afetada: 'contratos',
+    registro_id: id,
+    dados_anteriores: { numero: contrato.numero, obras_removidas: obrasRemovidas },
+    dados_novos: null,
+    origem_execucao: 'usuario',
+  })
+
+  return NextResponse.json({
+    ok: true,
+    contrato_id:     id,
+    numero:          contrato.numero,
+    obras_removidas: obrasRemovidas,
+  })
+}

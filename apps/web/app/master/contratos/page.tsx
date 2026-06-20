@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   FileText, Plus, Search, Filter, CheckCircle2, Clock,
   AlertTriangle, ChevronRight, Building2, User,
-  Bell, ShieldAlert, DollarSign, Calendar, Download,
+  Bell, ShieldAlert, DollarSign, Calendar, Download, Trash2, Loader2,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import { KpiCard } from '@/components/ui/kpi-card'
@@ -63,6 +63,9 @@ export default function ContratosPage() {
   const [contratosApi, setContratosApi] = useState<any[]>([])
   const [apiKpis, setApiKpis] = useState<any>(null)
   const [loadingApi, setLoadingApi] = useState(true)
+  const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteErro, setDeleteErro] = useState('')
 
   useEffect(() => {
     authFetch('/api/contratos?per_page=100')
@@ -131,6 +134,22 @@ export default function ContratosPage() {
       .catch(() => {})
   }
 
+  async function handleDelete(id: string) {
+    setDeleting(true)
+    setDeleteErro('')
+    try {
+      const res = await authFetch(`/api/contratos/${id}`, { method: 'DELETE' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setDeleteErro(d.error ?? `Erro ${res.status}`); return }
+      setContratosApi(prev => prev.filter(c => c.id !== id))
+      setConfirmId(null)
+    } catch (e: unknown) {
+      setDeleteErro(e instanceof Error ? e.message : 'Falha ao deletar.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const editoras = useMemo(() => {
     const nomes = [...new Set(contratosApi.map((c: any) => c.editora_nome).filter(Boolean))]
     return ['todos', ...nomes]
@@ -166,8 +185,63 @@ export default function ContratosPage() {
     })
   }, [search, filterTipo, filterStatus, filterEditora, fonteContratos])
 
+  const confirmItem = contratosApi.find(c => c.id === confirmId)
+
   return (
     <div className="space-y-6">
+
+      {/* Modal de confirmação de exclusão */}
+      {confirmId && confirmItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#0d1526] border border-rose-500/30 rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-9 h-9 rounded-lg bg-rose-500/15 flex items-center justify-center shrink-0">
+                <Trash2 className="w-4 h-4 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white mb-1">Apagar contrato</h3>
+                <p className="text-xs text-white/50">{confirmItem.numero} — {confirmItem.titular_nome}</p>
+              </div>
+            </div>
+            <p className="text-xs text-white/60 mb-2">Esta ação irá remover permanentemente:</p>
+            <ul className="text-xs text-white/50 space-y-1 mb-4 ml-3 list-disc">
+              <li>O contrato e todos os seus dados</li>
+              <li>
+                <span className="text-rose-300 font-semibold">
+                  {confirmItem.obras?.length ?? '?'} obra(s)
+                </span> vinculadas a este contrato
+              </li>
+              <li>Todos os titulares, fonogramas e links dessas obras</li>
+            </ul>
+            <p className="text-[11px] text-rose-400 font-semibold mb-5">Esta ação é irreversível.</p>
+            {deleteErro && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-300 text-xs mb-4">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                {deleteErro}
+              </div>
+            )}
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setConfirmId(null); setDeleteErro('') }}
+                disabled={deleting}
+                className="px-4 py-2 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDelete(confirmId)}
+                disabled={deleting}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+              >
+                {deleting
+                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Apagando...</>
+                  : <><Trash2 className="w-3.5 h-3.5" /> Apagar tudo</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Alerta exclusividade vencendo */}
       {alertasExclusividade.length > 0 && (
         <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
@@ -363,7 +437,16 @@ export default function ContratosPage() {
                     )}
                   </div>
 
-                  <ChevronRight className="w-4 h-4 text-white/20 group-hover:text-violet-400 transition-colors flex-shrink-0" />
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={e => { e.preventDefault(); setConfirmId(c.id); setDeleteErro('') }}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 hover:bg-rose-500/15 text-white/20 hover:text-rose-400 transition-all"
+                      title="Apagar contrato e todas as obras"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                    <ChevronRight className="w-4 h-4 text-white/20 group-hover:text-violet-400 transition-colors flex-shrink-0" />
+                  </div>
                 </div>
               </div>
             </Link>
