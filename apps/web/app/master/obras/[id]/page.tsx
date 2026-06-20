@@ -766,23 +766,20 @@ export default function ObraDetailPage() {
                   {links.flatMap((link: any) => {
                     const titulares = link.titulares ?? []
                     // ── Cálculo analítico por link ──────────────────────────────
-                    const totalPR_ctrl = titulares
-                      .filter((x: any) => x.status_controle === 'controlado')
+                    // Cada link fecha 100%: PR_participante / soma_PR_do_link × 100
+                    const totalPR_link = titulares
                       .reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
-                    const amRow = titulares.find((x: any) => x.funcao_no_link === 'AM')
-                    const mandato_MR = amRow?.percentual_fonomecanico ?? 0
-                    const mandato_SR = amRow?.percentual_sincronizacao ?? 0
 
                     return titulares.map((t: any) => {
                       const sc = t.status_controle ?? ''
                       const scColor = sc === 'controlado' ? 'text-emerald-400' : sc === 'nao_controlado' ? 'text-white/35' : 'text-amber-400'
                       const scLabel = sc === 'controlado' ? 'Controlado' : sc === 'nao_controlado' ? 'Não ctrl.' : sc === 'contrato_pendente' ? 'Pendente' : sc || '—'
-                      const mr_display = modoAnalitico
-                        ? (sc === 'controlado' && totalPR_ctrl > 0 ? (t.percentual_exec_publica / totalPR_ctrl) * mandato_MR : 0)
-                        : (t.percentual_fonomecanico ?? 0)
-                      const sr_display = modoAnalitico
-                        ? (sc === 'controlado' && totalPR_ctrl > 0 ? (t.percentual_exec_publica / totalPR_ctrl) * mandato_SR : 0)
-                        : (t.percentual_sincronizacao ?? 0)
+                      // Analítico: % econômica do participante dentro do link (fecha 100% por link)
+                      const analitico_pct = modoAnalitico && totalPR_link > 0
+                        ? (t.percentual_exec_publica / totalPR_link) * 100
+                        : null
+                      const mr_display = modoAnalitico ? analitico_pct : (t.percentual_fonomecanico ?? 0)
+                      const sr_display = modoAnalitico ? analitico_pct : (t.percentual_sincronizacao ?? 0)
                       return (
                         <tr key={t.id} className="hover:bg-white/[0.02] transition-colors">
                           <td className="px-3 py-3 text-center">
@@ -811,12 +808,12 @@ export default function ObraDetailPage() {
                           </td>
                           <td className="px-3 py-3 text-right">
                             <span className="font-semibold tabular-nums text-violet-300/90 text-xs">
-                              {formatarPercentual(mr_display)}
+                              {mr_display != null ? formatarPercentual(mr_display) : <span className="text-white/25">—</span>}
                             </span>
                           </td>
                           <td className="px-3 py-3 text-right">
                             <span className="font-semibold tabular-nums text-teal-300/70 text-xs">
-                              {formatarPercentual(sr_display)}
+                              {sr_display != null ? formatarPercentual(sr_display) : <span className="text-white/25">—</span>}
                             </span>
                           </td>
                         </tr>
@@ -833,28 +830,20 @@ export default function ObraDetailPage() {
                 </tbody>
                 <tfoot>
                   <tr className="border-t border-white/[0.08]">
-                    <td colSpan={4} className="px-3 py-2 text-right text-xs text-white/25 font-medium">Total PR / MR / SR</td>
+                    <td colSpan={4} className="px-3 py-2 text-right text-xs text-white/25 font-medium">
+                      {modoAnalitico ? '% por link (anal.)' : 'Total PR / MR / SR'}
+                    </td>
                     <td className="px-3 py-2 text-right text-xs font-bold tabular-nums text-sky-300/70">
                       {formatarPercentual(links.flatMap((l: any) => l.titulares ?? []).reduce((s: number, t: any) => s + (t.percentual_exec_publica ?? 0), 0))}
                     </td>
                     <td className="px-3 py-2 text-right text-xs font-bold tabular-nums text-violet-300/70">
                       {modoAnalitico
-                        ? formatarPercentual(links.flatMap((l: any) => {
-                            const tits = l.titulares ?? []
-                            const totalPR = tits.filter((x: any) => x.status_controle === 'controlado').reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
-                            const mand = tits.find((x: any) => x.funcao_no_link === 'AM')?.percentual_fonomecanico ?? 0
-                            return tits.map((t: any) => t.status_controle === 'controlado' && totalPR > 0 ? (t.percentual_exec_publica / totalPR) * mand : 0)
-                          }).reduce((s: number, v: number) => s + v, 0))
+                        ? <span className="text-white/25 font-normal">100% × {links.length}</span>
                         : formatarPercentual(links.flatMap((l: any) => l.titulares ?? []).reduce((s: number, t: any) => s + (t.percentual_fonomecanico ?? 0), 0))}
                     </td>
                     <td className="px-3 py-2 text-right text-xs font-bold tabular-nums text-teal-300/60">
                       {modoAnalitico
-                        ? formatarPercentual(links.flatMap((l: any) => {
-                            const tits = l.titulares ?? []
-                            const totalPR = tits.filter((x: any) => x.status_controle === 'controlado').reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
-                            const mand = tits.find((x: any) => x.funcao_no_link === 'AM')?.percentual_sincronizacao ?? 0
-                            return tits.map((t: any) => t.status_controle === 'controlado' && totalPR > 0 ? (t.percentual_exec_publica / totalPR) * mand : 0)
-                          }).reduce((s: number, v: number) => s + v, 0))
+                        ? <span className="text-white/25 font-normal">100% × {links.length}</span>
                         : formatarPercentual(links.flatMap((l: any) => l.titulares ?? []).reduce((s: number, t: any) => s + (t.percentual_sincronizacao ?? 0), 0))}
                     </td>
                   </tr>
