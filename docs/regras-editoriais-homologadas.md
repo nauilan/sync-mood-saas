@@ -1,8 +1,9 @@
 # Regras Editoriais Homologadas — Sync Mood
 
-**Versão:** 1.0  
+**Versão:** 1.1  
 **Homologado em:** 19/06/2026  
-**Commit de referência:** `6f806d8`  
+**Última atualização:** 19/06/2026 (v1.1 — território BR/2WL)  
+**Commits de referência:** `6f806d8` · `5c3ee1b` · `24a4d8c`  
 **Status:** CONGELADO — alterações somente com aprovação explícita do responsável editorial
 
 ---
@@ -202,7 +203,59 @@ Exemplo:
 
 ---
 
-## 6. Mapa de Campos no Banco
+## 6. Regras de Território (ORI_TERRITORY_CODE)
+
+### 6.1 Códigos padronizados
+
+| Código | Significado | Uso |
+|---|---|---|
+| `BR` | Brasil | Repertório brasileiro administrado no Sync Mood |
+| `2WL` | Mundo (World) | Obras com administração mundial |
+
+### 6.2 Regra padrão para importação CWR
+
+> Obras importadas via CWR (`origem_cadastro = 'importacao_cwr'`) que não possuam território declarado no arquivo CWR recebem automaticamente `BR` como território padrão.
+
+**Justificativa:** O repertório atual administrado pela Top Show Music é 100% brasileiro. Caso surjam obras internacionais, o campo deverá ser ajustado manualmente para `2WL` ou outro código ISO antes do envio ao BackOffice.
+
+### 6.3 Correção aplicada em 19/06/2026
+
+```sql
+UPDATE obras
+SET territorio = 'BR'
+WHERE origem_cadastro = 'importacao_cwr'
+  AND territorio IS NULL;
+-- 760 linhas atualizadas
+```
+
+**Resultado:**
+
+| Métrica | Valor |
+|---|---|
+| Obras CWR atualizadas | 760 |
+| Obras CWR sem território após correção | 0 |
+| Obras não-CWR (não alteradas) | 6 (contrato_sistema=5, manual=1) |
+
+### 6.4 Impacto no Checklist SWI
+
+Com `territorio = 'BR'`, o item `ORI_TERRITORY_CODE` passa de ⚠ **ALERTA** para ✅ **PRONTO**. Obras com todos os demais critérios atendidos (como A CASA e RICO PRA CARALHO) passam a exibir badge **PRONTA**.
+
+### 6.5 Interface
+
+O campo território na aba Resumo usa `<select>` com as opções:
+- `BR — Brasil`
+- `2WL — Mundo (World)`
+
+Isso evita código livre e garante padronização.
+
+### 6.6 O que NÃO pode mudar sem aprovação
+
+- Trocar `BR` como padrão para obras CWR brasileiras sem território declarado
+- Adicionar novos códigos de território sem mapeamento ISO oficial
+
+---
+
+## 7. Mapa de Campos no Banco
 
 | Campo | Tabela | Significado |
 |---|---|---|
@@ -266,3 +319,37 @@ Exemplo:
 | OWR com status controlado | **0** |
 | Links misturados (AM + nao_controlado) | **0** |
 | AM sem MR (quando deveria ter) | **0** |
+
+---
+
+## 11. Checklist SWI — Classificação de Status (v1.1)
+
+### Hierarquia de status
+
+| Status | Símbolo | Significado | Bloqueia exportação? |
+|---|---|---|---|
+| `pronto` | ✅ | Critério atendido | — |
+| `alerta` | ⚠ | Recomendado mas ausente | **Não** |
+| `pendente` | ○ | Obrigatório e ausente | **Sim** |
+| `erro` | ✗ | Valor inválido/conflito | **Sim** |
+| `info` | ℹ | Informativo — opcional | — |
+
+### Badge final da obra
+
+| Badge | Condição |
+|---|---|
+| **PRONTA** (verde) | Todos os 9 critérios obrigatórios = `pronto` |
+| **PRONTA COM ALERTAS** (âmbar) | Sem erros, sem pendentes, ao menos 1 `alerta` |
+| **PENDENTE** (cinza) | Ao menos 1 critério obrigatório = `pendente` |
+| **COM ERROS** (vermelho) | Ao menos 1 critério obrigatório = `erro` |
+
+> Critérios opcionais (ISWC, PERFORMER_NAME) usam `info` e nunca afetam o badge.
+
+---
+
+## 12. Changelog
+
+| Versão | Data | Alteração | Commits |
+|---|---|---|---|
+| 1.0 | 19/06/2026 | Documento inicial — links, Sintético, Analítico, MR/OWR | `6f806d8` |
+| 1.1 | 19/06/2026 | Território BR/2WL · 760 obras CWR corrigidas · checklist PRONTA COM ALERTAS | `5c3ee1b` `24a4d8c` |
