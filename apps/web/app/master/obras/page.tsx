@@ -1238,9 +1238,12 @@ export default function ObrasPage() {
   // KPIs dinâmicos calculados do catálogo real
   const kpis = useMemo(() => ({
     total: catalogoCompleto.length,
-    ativas: catalogoCompleto.filter(o => o.status === 'ativa' || o.status === 'validada').length,
+    ativas: catalogoCompleto.filter(o =>
+      o.status === 'ativa' || o.status === 'validada' || o.status_catalogo === 'catalogo_ativo'
+    ).length,
     pre_cadastro: catalogoCompleto.filter(o =>
-      o.status === 'pre_cadastro' || o.status_catalogo === 'pre_cadastro'
+      (o.status === 'pre_cadastro' || o.status_catalogo === 'pre_cadastro') &&
+      o.status !== 'ativa' && o.status_catalogo !== 'catalogo_ativo'
     ).length,
     sem_iswc: catalogoCompleto.filter(o => !o.iswc).length,
     com_fonograma: catalogoCompleto.filter(o => (o._fonogramas_count ?? 0) > 0).length,

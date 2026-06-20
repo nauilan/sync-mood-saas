@@ -232,11 +232,11 @@ export default function ObraDetailPage() {
     try {
       const res = await authFetch(`/api/obras/${obraId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ status_catalogo: 'catalogo_ativo' }),
+        body: JSON.stringify({ status: 'ativa', status_catalogo: 'catalogo_ativo' }),
       })
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || 'Erro ao ativar obra')
-      setObra((prev: any) => ({ ...prev, status_catalogo: 'catalogo_ativo' }))
+      setObra((prev: any) => ({ ...prev, status: 'ativa', status_catalogo: 'catalogo_ativo' }))
     } catch (err) {
       alert('Erro ao ativar obra: ' + String(err))
     } finally {
