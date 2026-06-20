@@ -54,6 +54,7 @@ export const MASTER_NAV: NavSection[] = [
     { label: 'Analise de Lancamentos',    href: '/master/backoffice/matching',             iconName: 'Shuffle'       },
     { label: 'ONI — Obras Nao Id.',       href: '/master/backoffice/match-lista-oni',      iconName: 'Target'        },
     { label: 'Relatorios BackOffice',     href: '/master/backoffice/relatorios',           iconName: 'BarChart3'     },
+    { label: 'Auditoria Analitico',       href: '/master/auditoria-analitico',             iconName: 'Scale'         },
     { label: 'Logs de Processamento',     href: '/master/backoffice/logs',                 iconName: 'ScrollText'    },
     { label: 'Pendencias Juridicas',      href: '/master/backoffice/pendencias-juridicas', iconName: 'AlertTriangle' },
     { label: 'Configuracoes BackOffice',  href: '/master/backoffice/configuracoes',        iconName: 'Settings'      },
