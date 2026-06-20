@@ -203,8 +203,9 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const sb = getAdminClient()
-  if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
+  const sbNullable = getAdminClient()
+  if (!sbNullable) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
+  const sb = sbNullable
 
   const usuario = await autenticar(req, sb)
   if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
@@ -271,7 +272,10 @@ export async function DELETE(
     obrasRemovidas = await deleteObras([id])
   }
 
-  await logAudit(sb, usuario.tenant_id, 'DELETE', {
+  await logAudit({
+    tenant_id: usuario.tenant_id,
+    acao: 'deletar',
+    modulo: 'obras',
     tabela_afetada: 'obras',
     registro_id: id,
     dados_anteriores: { titulo: obra.titulo, cascade, contrato_origem_id: obra.contrato_origem_id },

@@ -293,7 +293,10 @@ export async function DELETE(
   // 8. Deletar o contrato
   await sb.from('contratos').delete().eq('id', id)
 
-  await logAudit(sb, tenantId, 'DELETE', {
+  await logAudit({
+    tenant_id: tenantId,
+    acao: 'deletar',
+    modulo: 'contratos',
     tabela_afetada: 'contratos',
     registro_id: id,
     dados_anteriores: { numero: contrato.numero, obras_removidas: obrasRemovidas },
