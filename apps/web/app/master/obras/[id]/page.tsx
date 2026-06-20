@@ -1260,8 +1260,12 @@ export default function ObraDetailPage() {
           { label: 'ISWC (opcional)',       desc: 'Não obrigatório — recomendado quando disponível',     status: obra?.iswc ? 'pronto' : 'info',             valor: obra?.iswc ?? 'Não cadastrado' },
           { label: 'PERFORMER_NAME (opc)', desc: 'Intérprete do fonograma — opcional',                  status: fonogramas.some((f: any)=>f.interprete) ? 'pronto' : 'info', valor: fonogramas.find((f: any)=>f.interprete)?.interprete ?? 'Não informado' },
         ]
-        const swiOk  = swiItems.slice(0,9).every(c => c.status === 'pronto')
-        const swiErr = swiItems.some(c => c.status === 'erro')
+        const swiMand   = swiItems.slice(0,9)
+        const swiOk     = swiMand.every(c => c.status === 'pronto')
+        const swiErr    = swiMand.some(c => c.status === 'erro')
+        const swiPend   = !swiErr && swiMand.some(c => c.status === 'pendente')
+        // pronta com alertas: sem erros, sem pendentes, mas ao menos um alerta
+        const swiAlerta = !swiErr && !swiPend && !swiOk
 
         // ── ISRC Checklist ──────────────────────────────────────────────────
         const scOk  = !!obra?.codigo_obra
@@ -1281,17 +1285,17 @@ export default function ObraDetailPage() {
           <div className="space-y-4">
 
             {/* Banner prontidão */}
-            <div className={`rounded-xl border px-5 py-3 flex items-center justify-between gap-4 ${swiErr ? 'border-red-500/30 bg-red-500/5' : swiOk ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/20 bg-amber-500/5'}`}>
+            <div className={`rounded-xl border px-5 py-3 flex items-center justify-between gap-4 ${swiErr ? 'border-red-500/30 bg-red-500/5' : swiOk ? 'border-emerald-500/30 bg-emerald-500/5' : swiAlerta ? 'border-amber-400/20 bg-amber-400/5' : 'border-white/[0.08] bg-white/[0.02]'}`}>
               <div>
-                <p className={`text-sm font-semibold ${swiErr ? 'text-red-400' : swiOk ? 'text-emerald-400' : 'text-amber-400'}`}>
-                  {swiErr ? '✗ Erros impedem envio SWI' : swiOk ? '✓ Obra pronta para SWI' : '○ Pendências para SWI'}
+                <p className={`text-sm font-semibold ${swiErr ? 'text-red-400' : swiOk ? 'text-emerald-400' : swiAlerta ? 'text-amber-300' : 'text-white/40'}`}>
+                  {swiErr ? '✗ Erros impedem envio SWI' : swiOk ? '✓ Obra pronta para SWI' : swiAlerta ? '⚠ Pronta com alertas — pode prosseguir' : '○ Pendências para SWI'}
                 </p>
                 <p className="text-[11px] text-white/30 mt-0.5">
                   {isrcOk ? `${fonoC.filter((c: any)=>c.st==='pronto').length} fonograma(s) prontos para ISRC` : fonogramas.length === 0 ? 'Sem fonogramas — ISRC indisponível' : 'Fonogramas com ISRC pendente'}
                 </p>
               </div>
               <div className="flex gap-2 shrink-0">
-                <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold ${swiOk ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/8 text-white/35'}`}>SWI</span>
+                <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold ${swiOk ? 'bg-emerald-500/15 text-emerald-400' : swiAlerta ? 'bg-amber-400/15 text-amber-300' : 'bg-white/8 text-white/35'}`}>SWI</span>
                 <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold ${isrcOk ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/8 text-white/35'}`}>ISRC</span>
                 <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold ${stCfg.cls}`}>{stCfg.label}</span>
               </div>
@@ -1380,9 +1384,11 @@ export default function ObraDetailPage() {
                   <div className="flex items-center gap-2 flex-wrap justify-end">
                     {swiOk
                       ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold">PRONTA</span>
-                      : swiErr
-                        ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">COM ERROS</span>
-                        : <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 font-semibold">PENDENTE</span>
+                      : swiAlerta
+                        ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 font-semibold">PRONTA COM ALERTAS</span>
+                        : swiErr
+                          ? <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 font-semibold">COM ERROS</span>
+                          : <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/8 text-white/40 font-semibold">PENDENTE</span>
                     }
                     <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-white/25 font-semibold">GERAÇÃO EM BREVE</span>
                   </div>
