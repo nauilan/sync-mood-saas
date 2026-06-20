@@ -514,6 +514,11 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                 <Edit3 className="w-4 h-4" />
               </button>
             )}
+            <Link href={`/master/obras/${obra.id}`}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-sky-500/10 text-white/30 hover:text-sky-400 transition-colors"
+              title="Abrir página completa (BackOffice, Titulares, Analítico...)">
+              <ExternalLink className="w-4 h-4" />
+            </Link>
             <button onClick={onClose}
               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5 text-white/30 hover:text-white/70 transition-colors">
               <X className="w-5 h-5" />
@@ -1518,7 +1523,17 @@ export default function ObrasPage() {
                       <PctBadge value={obra._percentual_controlado ?? 0} color="bg-violet-500" />
                     </td>
                     <td className="px-5 py-3.5 text-right">
-                      <ChevronRight className={`w-4 h-4 transition-colors ml-auto ${isAtiva ? 'text-violet-400 rotate-90' : 'text-white/20 group-hover:text-violet-400'}`} />
+                      <div className="flex items-center justify-end gap-1">
+                        <Link
+                          href={`/master/obras/${obra.id}`}
+                          onClick={e => e.stopPropagation()}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 hover:bg-sky-500/10 text-white/30 hover:text-sky-400 transition-all"
+                          title="Abrir página completa"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </Link>
+                        <ChevronRight className={`w-4 h-4 transition-colors ${isAtiva ? 'text-violet-400 rotate-90' : 'text-white/20 group-hover:text-violet-400'}`} />
+                      </div>
                     </td>
                   </tr>
                 )
