@@ -732,22 +732,35 @@ tfoot td{background:#f7f7f7;font-weight:bold}
               }
               return 0
             }
-            // Analítico MEC: largest-remainder garante soma exata = 100,00%
-            const ctrlRowsMec = rows.filter((r: any) => {
-              const lt2 = (links[r.li] as any)?.titulares ?? []
-              return !isOwrLink(lt2) && r.t.controlado
-            })
-            const mecAnaliticoVals = largestRemainder(
-              ctrlRowsMec.map((r: any) => r.t.percentual_exec_publica ?? r.t.percentual ?? 0)
-            )
-            const mecAnaliticoMap = new Map(ctrlRowsMec.map((r: any, i: number) => [r.t, mecAnaliticoVals[i]]))
-            // Analítico: usa proporção da exec pública normalizada a 100% dentro da cadeia controlada
+            // Analítico: calcula pct econômico por link (PR / totalPR_link × 100)
+            const analiticoLinkPct = new Map<any, number>()
+            if (modoView === 'analitico') {
+              const linkGroups = new Map<number, any[]>()
+              rows.forEach((r: any) => {
+                if (!linkGroups.has(r.li)) linkGroups.set(r.li, [])
+                linkGroups.get(r.li)!.push(r.t)
+              })
+              linkGroups.forEach((titulares, li) => {
+                const lt = (links[li] as any)?.titulares ?? []
+                if (isOwrLink(lt)) return
+                const totalPR = titulares.reduce((s: number, t: any) =>
+                  s + (t.percentual_exec_publica ?? t.percentual ?? 0), 0)
+                if (totalPR <= 0) return
+                titulares.forEach((t: any) => {
+                  const sc = t.status_controle ?? (t.controlado === false ? 'nao_controlado' : 'controlado')
+                  if (sc === 'nao_controlado') {
+                    analiticoLinkPct.set(t, 0)
+                  } else {
+                    analiticoLinkPct.set(t, (t.percentual_exec_publica ?? t.percentual ?? 0) / totalPR * 100)
+                  }
+                })
+              })
+            }
             const calcFono = (li: number, t: any) => {
               if (modoView === 'sintetico') return sinteticoFono(li, t)
               const lt = (links[li] as any)?.titulares ?? []
               if (isOwrLink(lt)) return 0
-              if (!t.controlado) return 0
-              return mecAnaliticoMap.get(t) ?? 0
+              return analiticoLinkPct.get(t) ?? 0
             }
             const calcExec = (t: any) => (t.percentual_exec_publica ?? t.percentual ?? 0)
             const sumExec = rows.reduce((s: number, r: any) => s + calcExec(r.t), 0)
