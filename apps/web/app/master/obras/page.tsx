@@ -142,6 +142,15 @@ function ObraDrawer({ obra: obraInicial, onClose, editoras = [] }: { obra: any; 
       .finally(() => setLoadingLinks(false))
   }, [obraInicial.id])
 
+  // ── Negócios editoriais — necessário para analítico E/AM ─────────────────
+  const [negocios, setNegocios] = useState<any[]>([])
+  useEffect(() => {
+    authFetch('/api/negocios-editoriais?status=ativo&limit=500')
+      .then(r => r.json())
+      .then(json => setNegocios(json.negocios ?? []))
+      .catch(() => {})
+  }, [])
+
   // ── Calcular Analítico ───────────────────────────────────────────────────
   const [calculando, setCalculando] = useState(false)
   const [analiticoResult, setAnaliticoResult] = useState<any>(null)
@@ -756,18 +765,50 @@ tfoot td{background:#f7f7f7;font-weight:bold}
               return 0
             }
             // Analítico: usa percentual_exec_publica absoluto de cada titular.
+            // Para E e AM: redistribui via negócio editorial (mesma lógica do [id]/page.tsx).
             // NÃO normaliza por link — percentual_exec_publica já representa a fatia
             // absoluta da obra, independente de quantos links existem.
-            // Normalizar por link inflava valores quando autores estão em links separados
-            // (cada link de ~33% normalizava para 100%, somando 300% no total).
             const analiticoLinkPct = new Map<any, number>()
             if (modoView === 'analitico') {
               rows.forEach((r: any) => {
-                const lt = (links[r.li] as any)?.titulares ?? []
+                const lt: any[] = (links[r.li] as any)?.titulares ?? []
                 if (isOwrLink(lt)) return
                 const t = r.t
                 const sc = t.status_controle ?? (t.controlado === false ? 'nao_controlado' : 'controlado')
-                analiticoLinkPct.set(t, sc === 'nao_controlado' ? 0 : (t.percentual_exec_publica ?? t.percentual ?? 0))
+                if (sc === 'nao_controlado') { analiticoLinkPct.set(t, 0); return }
+
+                const fn = (t.funcao_no_link ?? '').toUpperCase()
+                const isE  = fn === 'E'  || fn === 'SE'  || fn === 'AQ'
+                const isAM = fn === 'AM' || fn === 'SA'
+
+                if (isE || isAM) {
+                  // Fatia editorial absoluta do link (E + AM + SE + SA)
+                  const editorialPR = lt
+                    .filter((x: any) => ['E','SE','AM','SA','AQ'].includes((x.funcao_no_link ?? '').toUpperCase()))
+                    .reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
+
+                  // Buscar negócio por nome (mesmo fallback do [id]/page.tsx)
+                  const amNome = (lt.find((x: any) => (x.funcao_no_link ?? '').toUpperCase() === 'AM' || (x.funcao_no_link ?? '').toUpperCase() === 'SA')?.nome ?? '').trim().toUpperCase()
+                  const eNome  = (lt.find((x: any) => ['E','SE','AQ'].includes((x.funcao_no_link ?? '').toUpperCase()))?.nome ?? '').trim().toUpperCase()
+                  const negocio = negocios.find((n: any) =>
+                    (n.editora_administradora_nome ?? '').trim().toUpperCase() === amNome &&
+                    (n.editora_administrada_nome   ?? '').trim().toUpperCase() === eNome
+                  ) ?? (amNome ? negocios.find((n: any) =>
+                    (n.editora_administradora_nome ?? '').trim().toUpperCase() === amNome
+                  ) : undefined)
+
+                  if (negocio) {
+                    const negPctE  = (negocio.percentual_administrada  ?? 50) / 100
+                    const negPctAM = (negocio.percentual_administradora ?? 50) / 100
+                    analiticoLinkPct.set(t, isE ? editorialPR * negPctE : editorialPR * negPctAM)
+                  } else {
+                    // Sem negócio cadastrado: mantém exec_publica como fallback
+                    analiticoLinkPct.set(t, t.percentual_exec_publica ?? t.percentual ?? 0)
+                  }
+                } else {
+                  // CA, C, A, V, AR, etc.: usa exec_publica absoluto diretamente
+                  analiticoLinkPct.set(t, t.percentual_exec_publica ?? t.percentual ?? 0)
+                }
               })
             }
             const calcFono = (li: number, t: any) => {
