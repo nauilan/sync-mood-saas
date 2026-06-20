@@ -665,12 +665,15 @@ export default function ObraDetailPage() {
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-1">Território</label>
-                    <input
-                      className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-violet-500"
-                      placeholder="Mundial / Brasil / América Latina..."
+                    <select
+                      className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-violet-500"
                       value={resumoDraft.territorio ?? ''}
                       onChange={e => setResumoDraft(p => ({ ...p, territorio: e.target.value }))}
-                    />
+                    >
+                      <option value="">— Selecionar —</option>
+                      <option value="BR">BR — Brasil</option>
+                      <option value="2WL">2WL — Mundo (World)</option>
+                    </select>
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-2">Direitos Administrados</label>
@@ -710,7 +713,7 @@ export default function ObraDetailPage() {
                     { label: 'ISWC Anterior', value: obra.iswc_anterior ?? '—', color: 'text-white/55 font-mono' },
                     { label: 'ISWC Alternativo', value: obra.iswc_alternativo ?? '—', color: 'text-white/55 font-mono' },
                     { label: 'Status ISWC', value: obra.status_iswc ?? 'pendente', color: 'text-white/55' },
-                    { label: 'Território', value: obra.territorio ?? 'Não definido', color: 'text-white/55' },
+                    { label: 'Território', value: obra.territorio === 'BR' ? 'BR — Brasil' : obra.territorio === '2WL' ? '2WL — Mundo' : obra.territorio ?? 'Não definido', color: 'text-white/55' },
                   ].map(f => (
                     <div key={f.label}>
                       <p className="text-white/30 mb-0.5">{f.label}</p>
@@ -1256,7 +1259,7 @@ export default function ObraDetailPage() {
           { label: 'ADM_PUBLISHER',        desc: 'Administradora local quando há controle (AM)',        status: !ctrl ? 'info' : adms.length > 0 ? 'pronto' : 'alerta', valor: adms.length > 0 ? (adms[0].nome ?? '✓') : ctrl ? 'Ausente' : 'N/A' },
           { label: 'ADM_PR_COLLECT',       desc: 'Percentual execução pública da ADM',                  status: !ctrl ? 'info' : adm0 && Number(adm0.percentual_exec_publica||0)>0 ? 'pronto' : 'pendente', valor: adm0 ? `${Number(adm0.percentual_exec_publica||0).toFixed(2)}%` : '—' },
           { label: 'ADM_MR_COLLECT',       desc: 'Percentual fonomecânico/digital da ADM',              status: !ctrl ? 'info' : adm0 && Number(adm0.percentual_fonomecanico||0)>0 ? 'pronto' : 'pendente', valor: adm0 ? `${Number(adm0.percentual_fonomecanico||0).toFixed(2)}%` : '—' },
-          { label: 'ORI_TERRITORY_CODE',   desc: 'Território de controle',                              status: obra?.territorio ? 'pronto' : 'alerta',     valor: obra?.territorio ?? 'Não definido' },
+          { label: 'ORI_TERRITORY_CODE',   desc: 'Território de controle',                              status: obra?.territorio ? 'pronto' : 'alerta',     valor: obra?.territorio === 'BR' ? 'BR — Brasil' : obra?.territorio === '2WL' ? '2WL — Mundo' : obra?.territorio ?? 'Não definido' },
           { label: 'ISWC (opcional)',       desc: 'Não obrigatório — recomendado quando disponível',     status: obra?.iswc ? 'pronto' : 'info',             valor: obra?.iswc ?? 'Não cadastrado' },
           { label: 'PERFORMER_NAME (opc)', desc: 'Intérprete do fonograma — opcional',                  status: fonogramas.some((f: any)=>f.interprete) ? 'pronto' : 'info', valor: fonogramas.find((f: any)=>f.interprete)?.interprete ?? 'Não informado' },
         ]
