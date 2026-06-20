@@ -785,9 +785,11 @@ tfoot td{background:#f7f7f7;font-weight:bold}
               if (isOwrLink(lt)) return 0
               return analiticoLinkPct.get(t) ?? 0
             }
+            const calcSinc = (t: any) => (t.percentual_sincronizacao ?? 0)
             const calcExec = (t: any) => (t.percentual_exec_publica ?? t.percentual ?? 0)
             const sumExec = rows.reduce((s: number, r: any) => s + calcExec(r.t), 0)
             const sumFono = rows.reduce((s: number, r: any) => s + calcFono(r.li, r.t), 0)
+            const sumSinc = rows.reduce((s: number, r: any) => s + calcSinc(r.t), 0)
             const CAT_LABEL: Record<string, string> = {
               compositor: 'CA', compositorautor: 'CA', CA: 'CA', C: 'C', A: 'A',
               editora_original: 'E', administradora: 'AM', subeditora: 'SE',
@@ -844,6 +846,7 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                     {rows.map(({ li, t }: any, ri: number) => {
                       const ep = calcExec(t)
                       const fn = calcFono(li, t)
+                      const sr = calcSinc(t)
                       const catKey = CAT_LABEL[(t.papel ?? '').replace(/\s/g,'').toLowerCase()] ?? t.papel ?? '—'
                       return (
                         <tr key={t.id || ri}
@@ -868,8 +871,8 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                           <td className={`text-center px-2 py-2 border-l border-white/[0.04] tabular-nums font-semibold ${fn > 0 ? 'text-teal-400' : 'text-white/20'}`}>
                             {fn.toFixed(2)}%
                           </td>
-                          <td className={`text-center px-2 py-2 border-l border-white/[0.04] tabular-nums font-semibold ${fn > 0 ? 'text-amber-400' : 'text-white/20'}`}>
-                            {fn.toFixed(2)}%
+                          <td className={`text-center px-2 py-2 border-l border-white/[0.04] tabular-nums font-semibold ${sr > 0 ? 'text-amber-400' : 'text-white/20'}`}>
+                            {sr.toFixed(2)}%
                           </td>
                           <td className="text-center px-3 py-2 border-l border-white/[0.04]">
                             {t.contrato_file ? (
@@ -887,7 +890,7 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                       <td colSpan={5} className="px-3 py-2.5 text-right text-white/40 uppercase tracking-wide">total</td>
                       <td className="text-center px-2 py-2.5 border-l border-white/[0.06] text-cyan-400 tabular-nums">{sumExec.toFixed(2)}%</td>
                       <td className="text-center px-2 py-2.5 border-l border-white/[0.06] text-teal-400 tabular-nums">{sumFono.toFixed(2)}%</td>
-                      <td className="text-center px-2 py-2.5 border-l border-white/[0.06] text-amber-400 tabular-nums">{sumFono.toFixed(2)}%</td>
+                      <td className="text-center px-2 py-2.5 border-l border-white/[0.06] text-amber-400 tabular-nums">{sumSinc.toFixed(2)}%</td>
                       <td className="border-l border-white/[0.06]" />
                     </tr>
                   </tfoot>
