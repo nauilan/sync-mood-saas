@@ -142,14 +142,7 @@ function ObraDrawer({ obra: obraInicial, onClose, editoras = [] }: { obra: any; 
       .finally(() => setLoadingLinks(false))
   }, [obraInicial.id])
 
-  // ── Negócios editoriais — necessário para analítico E/AM ─────────────────
-  const [negocios, setNegocios] = useState<any[]>([])
-  useEffect(() => {
-    authFetch('/api/negocios-editoriais?status=ativo&limit=500')
-      .then(r => r.json())
-      .then(json => setNegocios(json.negocios ?? []))
-      .catch(() => {})
-  }, [])
+
 
   // ── Calcular Analítico ───────────────────────────────────────────────────
   const [calculando, setCalculando] = useState(false)
@@ -747,91 +740,33 @@ tfoot td{background:#f7f7f7;font-weight:bold}
               const fnT = (t.funcao_no_link ?? '').toUpperCase()
               const hasAM = lt.some((x: any) => ['AM','SA'].includes((x.funcao_no_link ?? '').toUpperCase()))
               const hasE  = lt.some((x: any) => ['E','SE'].includes((x.funcao_no_link ?? '').toUpperCase()))
-              // Pool editorial = E+AM apenas.
-              // CAs cederam direitos de fono/sinc à cadeia editorial — não cobram diretamente.
-              // AM coleta o pool inteiro e repassa E internamente (sintético).
-              // Sem AM: E coleta o pool inteiro.
-              const editorialPool = () =>
+              // Sintético = total do link (CA+E+AM). AM absorve tudo; sem AM, E absorve.
+              const linkTotal = () =>
                 parseFloat(
-                  lt.filter((x: any) => ['E','SE','AM','SA'].includes((x.funcao_no_link ?? '').toUpperCase()))
-                    .reduce((acc: number, x: any) => acc + (x.percentual_exec_publica ?? x.percentual ?? 0), 0)
+                  lt.reduce((acc: number, x: any) => acc + (x.percentual_exec_publica ?? x.percentual ?? 0), 0)
                     .toFixed(2)
                 )
               if (hasAM) {
-                return (fnT === 'AM' || fnT === 'SA') ? editorialPool() : 0
+                return (fnT === 'AM' || fnT === 'SA') ? linkTotal() : 0
               }
               if (hasE) {
-                return (fnT === 'E' || fnT === 'SE') ? editorialPool() : 0
+                return (fnT === 'E' || fnT === 'SE') ? linkTotal() : 0
               }
               return 0
             }
-            // Analítico: lê os % brutos do CWR e redistribui E/AM via negócio editorial.
-            // Lookup por UUID (editora_id = editora_administrada_id) — cada editora tem
-            // seu próprio negócio com percentual específico, sem fallback genérico por AM.
-            // analiticoInconsistente: marca E/AM cujo CWR difere do esperado pelo negócio.
-            const analiticoLinkPct       = new Map<any, number>()
-            const analiticoInconsistente = new Map<any, boolean>()
+            // Analítico: ratio de cada participante dentro do link
+            // CA ratio = CA.PR / linkTotalPR (ex: 18.75/25 = 75%)
+            // E  ratio = E.PR  / linkTotalPR (ex: 5/25    = 20%)
+            // AM ratio = AM.PR / linkTotalPR (ex: 1.25/25 = 5%)
+            // OWR: 0% (autor não controlado não participa da distribuição)
+            const analiticoLinkPct = new Map<any, number>()
             if (modoView === 'analitico') {
               rows.forEach((r: any) => {
                 const lt: any[] = (links[r.li] as any)?.titulares ?? []
                 if (isOwrLink(lt)) return
                 const t = r.t
-                const sc = t.status_controle ?? (t.controlado === false ? 'nao_controlado' : 'controlado')
-                if (sc === 'nao_controlado') { analiticoLinkPct.set(t, 0); return }
-
-                const fn = (t.funcao_no_link ?? '').toUpperCase()
-                const isE  = fn === 'E'  || fn === 'SE'
-                const isAM = fn === 'AM' || fn === 'SA'
-
-                if (isE || isAM) {
-                  // Lookup de negócio por UUID com fallback por nome (contains)
-                  const lookupNeg = (eT: any) =>
-                    (eT.editora_id
-                      ? negocios.find((n: any) => n.editora_administrada_id === eT.editora_id)
-                      : undefined) ??
-                    (() => {
-                      const nLower = (eT.nome ?? '').toLowerCase()
-                      return nLower
-                        ? negocios.find((n: any) => {
-                            const admNome = (n.editora_administrada_nome ?? '').toLowerCase()
-                            return admNome && (nLower.includes(admNome) || admNome.includes(nLower))
-                          })
-                        : undefined
-                    })()
-                  const editoras = lt.filter((x: any) =>
-                    ['E','SE'].includes((x.funcao_no_link ?? '').toUpperCase())
-                  )
-                  if (isE) {
-                    // E: analítico = CWR próprio (já é a fatia correta por editora)
-                    analiticoLinkPct.set(t, t.percentual_exec_publica ?? 0)
-                    analiticoInconsistente.set(t, false)
-                  } else {
-                    // AM: Σ E_i.exec × (negPctAM_i / negPctE_i) para cada E com negócio
-                    let totalExpectedAM = 0
-                    let hasNeg = false
-                    for (const eT of editoras) {
-                      const neg = lookupNeg(eT)
-                      if (neg) {
-                        const negPctE  = (neg.percentual_administrada  ?? 50) / 100
-                        const negPctAM = (neg.percentual_administradora ?? 50) / 100
-                        if (negPctE > 0) {
-                          totalExpectedAM += (eT.percentual_exec_publica ?? 0) * (negPctAM / negPctE)
-                          hasNeg = true
-                        }
-                      }
-                    }
-                    const cwrAM = t.percentual_exec_publica ?? 0
-                    analiticoLinkPct.set(t, hasNeg ? totalExpectedAM : cwrAM)
-                    analiticoInconsistente.set(t, hasNeg && Math.abs(cwrAM - totalExpectedAM) > 0.5)
-                  }
-                } else {
-                  // CA em link com cadeia editorial: cedeu fono/sinc à editora → 0
-                  // CA em link puro (sem E/AM): cobra diretamente
-                  const hasEditorial = lt.some((x: any) =>
-                    ['E','SE','AM','SA'].includes((x.funcao_no_link ?? '').toUpperCase())
-                  )
-                  analiticoLinkPct.set(t, hasEditorial ? 0 : (t.percentual_exec_publica ?? t.percentual ?? 0))
-                }
+                const linkTotalPR = lt.reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? x.percentual ?? 0), 0)
+                analiticoLinkPct.set(t, linkTotalPR > 0 ? (t.percentual_exec_publica ?? t.percentual ?? 0) / linkTotalPR * 100 : 0)
               })
             }
             const calcFono = (li: number, t: any) => {
@@ -928,13 +863,7 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                           </td>
                           <td className="px-3 py-2 font-mono text-white/40 text-[10px]">{fmtDoc(t.cpf_cnpj, t.tipo_pessoa)}</td>
                           <td className="text-center px-2 py-2 border-l border-white/[0.04] tabular-nums text-cyan-400 font-semibold">
-                            <span className="flex items-center justify-center gap-1">
-                              {ep.toFixed(2)}%
-                              {modoView === 'analitico' && analiticoInconsistente.get(t) && (
-                                <span title={`CWR: ${(t.percentual_exec_publica ?? 0).toFixed(2)}% ≠ negócio esperado`}
-                                  className="text-amber-400 text-[9px] leading-none">⚠</span>
-                              )}
-                            </span>
+                            {ep.toFixed(2)}%
                           </td>
                           <td className={`text-center px-2 py-2 border-l border-white/[0.04] tabular-nums font-semibold ${fn > 0 ? 'text-teal-400' : 'text-white/20'}`}>
                             {fn.toFixed(2)}%
