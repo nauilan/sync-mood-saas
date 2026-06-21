@@ -796,11 +796,20 @@ export default function ObraDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.04]">
-                  {links.flatMap((link: any) => {
-                    const titulares = link.titulares ?? []
-                    // ── Lookup por UUID com fallback por nome (contains) ──
-                    // editora_id pode ser null em registros importados via CWR.
-                    const lookupNegLink = (eT: any) =>
+                  {(() => {
+                    // ── Contexto editorial no nível da OBRA (cross-links) ──
+                    // No CWR cada titular pode estar em link separado; por isso buscamos
+                    // todas as E e AM de todos os links antes de renderizar.
+                    const todosOsTitulares = links.flatMap((l: any) => l.titulares ?? [])
+                    const todasEditoras = todosOsTitulares.filter((x: any) =>
+                      ['E','SE'].includes((x.funcao_no_link ?? '').toUpperCase())
+                    )
+                    const hasAnyAM = todosOsTitulares.some((x: any) =>
+                      ['AM','SA'].includes((x.funcao_no_link ?? '').toUpperCase())
+                    )
+                    const hasEditorialObra = todasEditoras.length > 0 || hasAnyAM
+
+                    const lookupNeg = (eT: any) =>
                       (eT.editora_id
                         ? negocios.find((n: any) => n.editora_administrada_id === eT.editora_id)
                         : undefined) ??
@@ -813,33 +822,32 @@ export default function ObraDetailPage() {
                             })
                           : undefined
                       })()
-                    const editorasLink = titulares.filter((x: any) =>
-                      x.funcao_no_link === 'E' || x.funcao_no_link === 'SE'
-                    )
-                    // AM: Σ E_i.exec × (negPctAM_i / negPctE_i) para cada E com negócio
-                    let totalExpectedAMLink = 0
-                    let hasNegLink = false
-                    for (const eT of editorasLink) {
-                      const neg = lookupNegLink(eT)
+
+                    // AM esperado = Σ E_i.exec × (negPctAM_i / negPctE_i)
+                    let totalExpectedAM = 0
+                    let hasNeg = false
+                    for (const eT of todasEditoras) {
+                      const neg = lookupNeg(eT)
                       if (neg) {
                         const negPctE  = (neg.percentual_administrada  ?? 50) / 100
                         const negPctAM = (neg.percentual_administradora ?? 50) / 100
                         if (negPctE > 0) {
-                          totalExpectedAMLink += (eT.percentual_exec_publica ?? 0) * (negPctAM / negPctE)
-                          hasNegLink = true
+                          totalExpectedAM += (eT.percentual_exec_publica ?? 0) * (negPctAM / negPctE)
+                          hasNeg = true
                         }
                       }
                     }
 
+                    return links.flatMap((link: any) => {
+                    const titulares = link.titulares ?? []
                     return titulares.map((t: any) => {
                       const sc = t.status_controle ?? ''
-                      const fn = t.funcao_no_link ?? ''
+                      const fn = (t.funcao_no_link ?? '').toUpperCase()
                       const scColor = sc === 'controlado' ? 'text-emerald-400' : sc === 'nao_controlado' ? 'text-white/35' : 'text-amber-400'
                       const scLabel = sc === 'controlado' ? 'Controlado' : sc === 'nao_controlado' ? 'Não ctrl.' : sc === 'contrato_pendente' ? 'Pendente' : sc || '—'
-                      // REGRA nao_controlado → —
-                      // REGRA E: analítico = CWR próprio (já é a fatia correta por editora)
-                      // REGRA AM: Σ E_i.exec × (negPctAM_i / negPctE_i)
-                      // REGRA CA: percentual_exec_publica do CWR
+                      // REGRA E:  analítico = CWR próprio (fatia líquida após repasse ao AM)
+                      // REGRA AM: Σ E_i.exec × (negPctAM_i / negPctE_i) — nível da obra
+                      // REGRA CA: 0 se existe cadeia editorial na obra; exec se link puro
                       let analitico_pct: number | null = null
                       let analitico_inconsistente = false
                       if (modoAnalitico && sc !== 'nao_controlado') {
@@ -850,12 +858,11 @@ export default function ObraDetailPage() {
                           analitico_inconsistente = false
                         } else if (isAM) {
                           const cwrAM = t.percentual_exec_publica ?? 0
-                          analitico_pct = hasNegLink ? totalExpectedAMLink : cwrAM
-                          analitico_inconsistente = hasNegLink && Math.abs(cwrAM - totalExpectedAMLink) > 0.5
+                          analitico_pct = hasNeg ? totalExpectedAM : cwrAM
+                          analitico_inconsistente = hasNeg && Math.abs(cwrAM - totalExpectedAM) > 0.5
                         } else {
-                          // CA em link com cadeia editorial: cedeu fono/sinc à editora → 0
-                          // CA em link puro (sem E/AM): cobra diretamente
-                          analitico_pct = editorasLink.length > 0 || hasNegLink
+                          // CA: cedeu fono/sinc à cadeia editorial da obra
+                          analitico_pct = hasEditorialObra
                             ? 0
                             : (t.percentual_exec_publica ?? t.percentual ?? 0)
                         }
@@ -905,7 +912,8 @@ export default function ObraDetailPage() {
                         </tr>
                       )
                     })
-                  })}
+                    })
+                  })()}
                   {links.length === 0 && (
                     <tr>
                       <td colSpan={7} className="px-4 py-8 text-center text-xs text-white/30">
