@@ -59,6 +59,27 @@ function parseDescricao(desc?: string) {
   return { header, fields }
 }
 
+// Tipos de direito por território para a tabela de integrantes
+const BR_TIPOS_DIREITO = [
+  { key: 'pct_repr_grafica',          label: 'Rep. Gráfica' },
+  { key: 'pct_repr_fonomecanica',     label: 'Fono.' },
+  { key: 'pct_inclusao_audiovisual',  label: 'Audiovisual' },
+  { key: 'pct_inclusao_publicitaria', label: 'Publicidade' },
+  { key: 'pct_distribuicao_meios',    label: 'Digital' },
+  { key: 'pct_inclusao_base_dados',   label: 'Base Dados' },
+  { key: 'pct_comunicacao_publico',   label: 'Com. Público' },
+  { key: 'pct_autorizacoes_onus',     label: 'Aut. Ônus' },
+]
+const EXT_TIPOS_DIREITO = [
+  { key: 'pct_ext_repr_grafica',          label: 'Rep. Gráfica' },
+  { key: 'pct_ext_repr_fonomecanica',     label: 'Fono.' },
+  { key: 'pct_ext_inclusao_audiovisual',  label: 'Audiovisual' },
+  { key: 'pct_ext_inclusao_publicitaria', label: 'Publicidade' },
+  { key: 'pct_ext_distribuicao_meios',    label: 'Digital' },
+  { key: 'pct_ext_inclusao_base_dados',   label: 'Base Dados' },
+  { key: 'pct_ext_comunicacao_publico',   label: 'Com. Público' },
+]
+
 // Badge de status de catálogo da obra
 const STATUS_CATALOGO_CONFIG: Record<string, { label: string; cls: string }> = {
   pre_cadastro:            { label: 'Pré-cadastro',       cls: 'bg-amber-500/15 text-amber-300 border border-amber-500/30' },
@@ -926,6 +947,155 @@ export default function ObraDetailPage() {
               </table>
             </div>
           </div>
+
+          {/* ── Tipos de Direitos por Link ── */}
+          {links.length > 0 && (
+            <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-white/[0.06] bg-white/[0.02]">
+                <h3 className="text-sm font-semibold text-white">Tipos de Direitos</h3>
+                <p className="text-[11px] text-white/35 mt-0.5">
+                  {modoAnalitico ? 'Analítico — ratio de cada participante no link' : 'Sintético — controle econômico por tipo jurídico'}
+                </p>
+              </div>
+
+              {/* ─── BRASIL ─── */}
+              <div className="overflow-x-auto">
+                <div className="px-5 py-2 bg-emerald-950/20">
+                  <span className="text-[10px] font-bold text-emerald-400/70 uppercase tracking-widest">Brasil</span>
+                </div>
+                <table className="w-full text-xs min-w-[900px]">
+                  <thead>
+                    <tr className="border-b border-white/[0.04]">
+                      <th className="text-center px-2 py-2 text-white/25 font-semibold w-9">Lk</th>
+                      <th className="text-left px-3 py-2 text-white/25 font-semibold min-w-[140px]">Nome</th>
+                      {BR_TIPOS_DIREITO.map(c => (
+                        <th key={c.key} className="text-right px-2 py-2 text-white/25 font-semibold whitespace-nowrap">{c.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.03]">
+                    {links.flatMap((link: any) => {
+                      const tits = link.titulares ?? []
+                      const hasAM = tits.some((x: any) => ['AM','SA'].includes((x.funcao_no_link ?? '').toUpperCase()))
+                      const lPR = tits.reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
+                      const lMR = tits.reduce((s: number, x: any) => s + (x.percentual_fonomecanico ?? 0), 0)
+                      const mrFall = lMR > 0 ? lMR : lPR
+                      const cTot: Record<string, number> = {}
+                      for (const c of BR_TIPOS_DIREITO) cTot[c.key] = tits.reduce((s: number, x: any) => s + (x[c.key] ?? 0), 0)
+                      return tits.map((t: any) => {
+                        const fn = (t.funcao_no_link ?? '').toUpperCase()
+                        const isAM  = fn === 'AM' || fn === 'SA'
+                        const isE   = fn === 'E'  || fn === 'SE'
+                        const isOWR = fn === 'OWR'
+                        return (
+                          <tr key={t.id + '_br'} className="hover:bg-white/[0.02]">
+                            <td className="px-2 py-2.5 text-center">
+                              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-violet-600/60 text-[9px] font-bold text-white">
+                                {link.numero_link ?? '?'}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <span className={t.controlado ? 'text-white/75 font-medium' : 'text-white/40'}>{t.nome}</span>
+                            </td>
+                            {BR_TIPOS_DIREITO.map(c => {
+                              const ct = cTot[c.key]
+                              let v: number | null = null
+                              if (!isOWR) {
+                                if (modoAnalitico) {
+                                  const base = ct > 0 ? ct : lPR
+                                  const raw  = ct > 0 ? (t[c.key] ?? 0) : (t.percentual_exec_publica ?? 0)
+                                  v = base > 0 ? raw / base * 100 : null
+                                } else {
+                                  if (isAM || (isE && !hasAM)) v = ct > 0 ? ct : mrFall
+                                }
+                              }
+                              return (
+                                <td key={c.key} className="px-2 py-2.5 text-right">
+                                  <span className={v != null ? 'tabular-nums font-semibold text-emerald-300/80' : 'text-white/20'}>
+                                    {v != null ? formatarPercentual(v) : '—'}
+                                  </span>
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        )
+                      })
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* ─── EXTERIOR ─── */}
+              <div className="overflow-x-auto border-t border-white/[0.05]">
+                <div className="px-5 py-2 bg-sky-950/20">
+                  <span className="text-[10px] font-bold text-sky-400/70 uppercase tracking-widest">Exterior</span>
+                  {modoAnalitico && (
+                    <span className="ml-2 text-[10px] text-white/25">autor ≥ 50% das quantias líquidas remetidas</span>
+                  )}
+                </div>
+                <table className="w-full text-xs min-w-[840px]">
+                  <thead>
+                    <tr className="border-b border-white/[0.04]">
+                      <th className="text-center px-2 py-2 text-white/25 font-semibold w-9">Lk</th>
+                      <th className="text-left px-3 py-2 text-white/25 font-semibold min-w-[140px]">Nome</th>
+                      {EXT_TIPOS_DIREITO.map(c => (
+                        <th key={c.key} className="text-right px-2 py-2 text-white/25 font-semibold whitespace-nowrap">{c.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.03]">
+                    {links.flatMap((link: any) => {
+                      const tits = link.titulares ?? []
+                      const hasAM = tits.some((x: any) => ['AM','SA'].includes((x.funcao_no_link ?? '').toUpperCase()))
+                      const lPR = tits.reduce((s: number, x: any) => s + (x.percentual_exec_publica ?? 0), 0)
+                      const lSR = tits.reduce((s: number, x: any) => s + (x.percentual_sincronizacao ?? 0), 0)
+                      const srFall = lSR > 0 ? lSR : lPR
+                      const cTot: Record<string, number> = {}
+                      for (const c of EXT_TIPOS_DIREITO) cTot[c.key] = tits.reduce((s: number, x: any) => s + (x[c.key] ?? 0), 0)
+                      return tits.map((t: any) => {
+                        const fn = (t.funcao_no_link ?? '').toUpperCase()
+                        const isAM  = fn === 'AM' || fn === 'SA'
+                        const isE   = fn === 'E'  || fn === 'SE'
+                        const isOWR = fn === 'OWR'
+                        return (
+                          <tr key={t.id + '_ext'} className="hover:bg-white/[0.02]">
+                            <td className="px-2 py-2.5 text-center">
+                              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-sky-700/60 text-[9px] font-bold text-white">
+                                {link.numero_link ?? '?'}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <span className={t.controlado ? 'text-white/75 font-medium' : 'text-white/40'}>{t.nome}</span>
+                            </td>
+                            {EXT_TIPOS_DIREITO.map(c => {
+                              const ct = cTot[c.key]
+                              let v: number | null = null
+                              if (!isOWR) {
+                                if (modoAnalitico) {
+                                  const base = ct > 0 ? ct : lPR
+                                  const raw  = ct > 0 ? (t[c.key] ?? 0) : (t.percentual_exec_publica ?? 0)
+                                  v = base > 0 ? raw / base * 100 : null
+                                } else {
+                                  if (isAM || (isE && !hasAM)) v = ct > 0 ? ct : srFall
+                                }
+                              }
+                              return (
+                                <td key={c.key} className="px-2 py-2.5 text-right">
+                                  <span className={v != null ? 'tabular-nums font-semibold text-sky-300/70' : 'text-white/20'}>
+                                    {v != null ? formatarPercentual(v) : '—'}
+                                  </span>
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        )
+                      })
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

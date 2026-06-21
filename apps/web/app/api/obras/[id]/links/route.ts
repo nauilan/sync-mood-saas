@@ -56,7 +56,13 @@ export async function GET(
         percentual_exec_publica, percentual_fonomecanico, percentual_sincronizacao,
         controlado, ipi, cae,
         titular_id, editora_id, editora_original_id, editora_administradora_id,
-        contrato_id, status_controle
+        contrato_id, status_controle,
+        pct_repr_grafica, pct_repr_fonomecanica, pct_inclusao_audiovisual,
+        pct_inclusao_publicitaria, pct_distribuicao_meios, pct_inclusao_base_dados,
+        pct_comunicacao_publico, pct_autorizacoes_onus,
+        pct_ext_repr_grafica, pct_ext_repr_fonomecanica, pct_ext_inclusao_audiovisual,
+        pct_ext_inclusao_publicitaria, pct_ext_distribuicao_meios, pct_ext_inclusao_base_dados,
+        pct_ext_comunicacao_publico
       )
     `)
     .eq('obra_id', obra_id)
