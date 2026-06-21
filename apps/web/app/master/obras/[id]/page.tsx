@@ -853,7 +853,11 @@ export default function ObraDetailPage() {
                           analitico_pct = hasNegLink ? totalExpectedAMLink : cwrAM
                           analitico_inconsistente = hasNegLink && Math.abs(cwrAM - totalExpectedAMLink) > 0.5
                         } else {
-                          analitico_pct = t.percentual_exec_publica ?? t.percentual ?? 0
+                          // CA em link com cadeia editorial: cedeu fono/sinc à editora → 0
+                          // CA em link puro (sem E/AM): cobra diretamente
+                          analitico_pct = editorasLink.length > 0 || hasNegLink
+                            ? 0
+                            : (t.percentual_exec_publica ?? t.percentual ?? 0)
                         }
                       }
                       const mr_display = modoAnalitico ? analitico_pct : (t.percentual_fonomecanico ?? 0)

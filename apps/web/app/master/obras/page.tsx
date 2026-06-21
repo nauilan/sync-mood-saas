@@ -744,23 +744,24 @@ tfoot td{background:#f7f7f7;font-weight:bold}
               const lt = (links[li] as any)?.titulares ?? []
               // Link OWR → 0% para todos (autor externo, sem controle de fono/sinc)
               if (isOwrLink(lt)) return 0
-              const hasAM = lt.some((x: any) =>
-                ['AM', 'administradora'].includes(x.papel) || (x.papel ?? '').toUpperCase() === 'AM'
-              )
-              const hasE = lt.some((x: any) => { const p=(x.papel??'').toUpperCase(); return p==='E'||p==='AQ'||x.papel==='editora_original' })
-              const papel = (t.papel ?? '').toUpperCase()
-              // Fono sintético do link = soma de toda a cadeia (usa exec pública como base confiável)
-              const linkFono = () =>
+              const fnT = (t.funcao_no_link ?? '').toUpperCase()
+              const hasAM = lt.some((x: any) => ['AM','SA'].includes((x.funcao_no_link ?? '').toUpperCase()))
+              const hasE  = lt.some((x: any) => ['E','SE'].includes((x.funcao_no_link ?? '').toUpperCase()))
+              // Pool editorial = E+AM apenas.
+              // CAs cederam direitos de fono/sinc à cadeia editorial — não cobram diretamente.
+              // AM coleta o pool inteiro e repassa E internamente (sintético).
+              // Sem AM: E coleta o pool inteiro.
+              const editorialPool = () =>
                 parseFloat(
-                  lt.reduce((acc: number, x: any) => acc + (x.percentual_exec_publica ?? x.percentual ?? 0), 0).toFixed(2)
+                  lt.filter((x: any) => ['E','SE','AM','SA'].includes((x.funcao_no_link ?? '').toUpperCase()))
+                    .reduce((acc: number, x: any) => acc + (x.percentual_exec_publica ?? x.percentual ?? 0), 0)
+                    .toFixed(2)
                 )
               if (hasAM) {
-                if (papel === 'AM' || t.papel === 'administradora') return linkFono()
-                return 0
+                return (fnT === 'AM' || fnT === 'SA') ? editorialPool() : 0
               }
               if (hasE) {
-                if (papel === 'E' || t.papel === 'editora_original' || papel === 'AQ') return linkFono()
-                return 0
+                return (fnT === 'E' || fnT === 'SE') ? editorialPool() : 0
               }
               return 0
             }
@@ -824,8 +825,12 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                     analiticoInconsistente.set(t, hasNeg && Math.abs(cwrAM - totalExpectedAM) > 0.5)
                   }
                 } else {
-                  // CA, C, A, V: exibe exec_publica do CWR diretamente (o que ficou pro autor)
-                  analiticoLinkPct.set(t, t.percentual_exec_publica ?? t.percentual ?? 0)
+                  // CA em link com cadeia editorial: cedeu fono/sinc à editora → 0
+                  // CA em link puro (sem E/AM): cobra diretamente
+                  const hasEditorial = lt.some((x: any) =>
+                    ['E','SE','AM','SA'].includes((x.funcao_no_link ?? '').toUpperCase())
+                  )
+                  analiticoLinkPct.set(t, hasEditorial ? 0 : (t.percentual_exec_publica ?? t.percentual ?? 0))
                 }
               })
             }
