@@ -797,121 +797,102 @@ export default function ObraDetailPage() {
                 </thead>
                 <tbody className="divide-y divide-white/[0.04]">
                   {(() => {
-                    // ── Contexto editorial no nível da OBRA (cross-links) ──
-                    // No CWR cada titular pode estar em link separado; por isso buscamos
-                    // todas as E e AM de todos os links antes de renderizar.
-                    const todosOsTitulares = links.flatMap((l: any) => l.titulares ?? [])
-                    const todasEditoras = todosOsTitulares.filter((x: any) =>
-                      ['E','SE'].includes((x.funcao_no_link ?? '').toUpperCase())
-                    )
-                    const hasAnyAM = todosOsTitulares.some((x: any) =>
-                      ['AM','SA'].includes((x.funcao_no_link ?? '').toUpperCase())
-                    )
-                    const hasEditorialObra = todasEditoras.length > 0 || hasAnyAM
-
-                    const lookupNeg = (eT: any) =>
-                      (eT.editora_id
-                        ? negocios.find((n: any) => n.editora_administrada_id === eT.editora_id)
-                        : undefined) ??
-                      (() => {
-                        const nLower = (eT.nome ?? '').toLowerCase()
-                        return nLower
-                          ? negocios.find((n: any) => {
-                              const admNome = (n.editora_administrada_nome ?? '').toLowerCase()
-                              return admNome && (nLower.includes(admNome) || admNome.includes(nLower))
-                            })
-                          : undefined
-                      })()
-
-                    // AM esperado = Σ E_i.exec × (negPctAM_i / negPctE_i)
-                    let totalExpectedAM = 0
-                    let hasNeg = false
-                    for (const eT of todasEditoras) {
-                      const neg = lookupNeg(eT)
-                      if (neg) {
-                        const negPctE  = (neg.percentual_administrada  ?? 50) / 100
-                        const negPctAM = (neg.percentual_administradora ?? 50) / 100
-                        if (negPctE > 0) {
-                          totalExpectedAM += (eT.percentual_exec_publica ?? 0) * (negPctAM / negPctE)
-                          hasNeg = true
-                        }
-                      }
-                    }
-
+                    // ── Renderização por link: um CA por link com sua E e AM ──
+                    // Sintético MR/SR: total do link exibido na linha do AM (ou E se sem AM)
+                    // Analítico MR/SR: ratio de cada participante dentro do link
+                    //   CA% = CA.PR / linkTotalPR  (ex: 18,75/25 = 75%)
+                    //   E%  = E.PR  / linkTotalPR  (ex: 5/25    = 20%)
+                    //   AM% = AM.PR / linkTotalPR  (ex: 1,25/25 = 5%)
+                    //   OWR: — (não participa de distribuição editorial)
                     return links.flatMap((link: any) => {
-                    const titulares = link.titulares ?? []
-                    return titulares.map((t: any) => {
-                      const sc = t.status_controle ?? ''
-                      const fn = (t.funcao_no_link ?? '').toUpperCase()
-                      const scColor = sc === 'controlado' ? 'text-emerald-400' : sc === 'nao_controlado' ? 'text-white/35' : 'text-amber-400'
-                      const scLabel = sc === 'controlado' ? 'Controlado' : sc === 'nao_controlado' ? 'Não ctrl.' : sc === 'contrato_pendente' ? 'Pendente' : sc || '—'
-                      // REGRA E:  analítico = CWR próprio (fatia líquida após repasse ao AM)
-                      // REGRA AM: Σ E_i.exec × (negPctAM_i / negPctE_i) — nível da obra
-                      // REGRA CA: 0 se existe cadeia editorial na obra; exec se link puro
-                      let analitico_pct: number | null = null
-                      let analitico_inconsistente = false
-                      if (modoAnalitico && sc !== 'nao_controlado') {
-                        const isE  = fn === 'E'  || fn === 'SE'
-                        const isAM = fn === 'AM' || fn === 'SA'
-                        if (isE) {
-                          analitico_pct = t.percentual_exec_publica ?? 0
-                          analitico_inconsistente = false
-                        } else if (isAM) {
-                          const cwrAM = t.percentual_exec_publica ?? 0
-                          analitico_pct = hasNeg ? totalExpectedAM : cwrAM
-                          analitico_inconsistente = hasNeg && Math.abs(cwrAM - totalExpectedAM) > 0.5
+                      const titulares = link.titulares ?? []
+
+                      // Contexto editorial DESTE link
+                      const linkEs  = titulares.filter((x: any) => ['E','SE'].includes((x.funcao_no_link ?? '').toUpperCase()))
+                      const linkAMs = titulares.filter((x: any) => ['AM','SA'].includes((x.funcao_no_link ?? '').toUpperCase()))
+                      const hasAM = linkAMs.length > 0
+
+                      // Totais PR/MR/SR do link
+                      const linkTotalPR = titulares.reduce((s: number, x: any) => s + (x.percentual_exec_publica  ?? 0), 0)
+                      const linkTotalMR = titulares.reduce((s: number, x: any) => s + (x.percentual_fonomecanico  ?? 0), 0)
+                      const linkTotalSR = titulares.reduce((s: number, x: any) => s + (x.percentual_sincronizacao ?? 0), 0)
+                      // Valor sintético = total MR/SR do link; fallback para totalPR se não houver MR/SR
+                      const sinteticoMR = linkTotalMR > 0 ? linkTotalMR : linkTotalPR
+                      const sinteticoSR = linkTotalSR > 0 ? linkTotalSR : linkTotalPR
+
+                      return titulares.map((t: any) => {
+                        const sc = t.status_controle ?? ''
+                        const fn = (t.funcao_no_link ?? '').toUpperCase()
+                        const scColor = sc === 'controlado' ? 'text-emerald-400' : sc === 'nao_controlado' ? 'text-white/35' : 'text-amber-400'
+                        const scLabel = sc === 'controlado' ? 'Controlado' : sc === 'nao_controlado' ? 'Não ctrl.' : sc === 'contrato_pendente' ? 'Pendente' : sc || '—'
+
+                        const isE   = fn === 'E'   || fn === 'SE'
+                        const isAM  = fn === 'AM'  || fn === 'SA'
+                        const isOWR = fn === 'OWR'
+
+                        let mr_display: number | null = null
+                        let sr_display: number | null = null
+
+                        if (modoAnalitico) {
+                          // Analítico: ratio deste participante dentro do link
+                          // Derivado diretamente do CWR (que já reflete o negócio firmado)
+                          if (!isOWR && linkTotalPR > 0) {
+                            const ratio = (t.percentual_exec_publica ?? 0) / linkTotalPR * 100
+                            mr_display = ratio
+                            sr_display = ratio
+                          }
+                          // OWR: fica null — não participa da distribuição editorial
                         } else {
-                          // CA: cedeu fono/sinc à cadeia editorial da obra
-                          analitico_pct = hasEditorialObra
-                            ? 0
-                            : (t.percentual_exec_publica ?? t.percentual ?? 0)
+                          // Sintético outros direitos: total do link na linha do AM ou E
+                          if (isAM) {
+                            mr_display = sinteticoMR
+                            sr_display = sinteticoSR
+                          } else if (isE && !hasAM) {
+                            mr_display = sinteticoMR
+                            sr_display = sinteticoSR
+                          }
+                          // CA, OWR, E-quando-há-AM: null (exibido como —)
                         }
-                      }
-                      const mr_display = modoAnalitico ? analitico_pct : (t.percentual_fonomecanico ?? 0)
-                      const sr_display = modoAnalitico ? analitico_pct : (t.percentual_sincronizacao ?? 0)
-                      return (
-                        <tr key={t.id} className="hover:bg-white/[0.02] transition-colors">
-                          <td className="px-3 py-3 text-center">
-                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 text-[10px] font-bold text-white">
-                              {link.numero_link ?? link.ordem ?? '?'}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3">
-                            <span className={`font-medium ${t.controlado ? 'text-white/80' : 'text-white/55'}`}>
-                              {t.nome}
-                            </span>
-                            {(t.ipi || t.cae) && (
-                              <span className="block text-[10px] font-mono text-white/30">{t.ipi || t.cae}</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-3 text-center">
-                            <SiglaBadge papel={t.papel} />
-                          </td>
-                          <td className="px-3 py-3 text-center">
-                            <span className={`text-[10px] font-semibold ${scColor}`}>{scLabel}</span>
-                          </td>
-                          <td className="px-3 py-3 text-right">
-                            <span className="inline-flex items-center justify-end gap-1 font-semibold tabular-nums text-sky-300/90 text-xs">
-                              {t.percentual_exec_publica != null ? formatarPercentual(t.percentual_exec_publica) : <span className="text-white/25">—</span>}
-                              {modoAnalitico && analitico_inconsistente && (
-                                <span title={`CWR: ${(t.percentual_exec_publica ?? 0).toFixed(2)}% ≠ esperado pelo negócio`}
-                                  className="text-amber-400 text-[10px] leading-none cursor-help">⚠</span>
+
+                        return (
+                          <tr key={t.id} className="hover:bg-white/[0.02] transition-colors">
+                            <td className="px-3 py-3 text-center">
+                              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-violet-600 text-[10px] font-bold text-white">
+                                {link.numero_link ?? link.ordem ?? '?'}
+                              </span>
+                            </td>
+                            <td className="px-3 py-3">
+                              <span className={`font-medium ${t.controlado ? 'text-white/80' : 'text-white/55'}`}>
+                                {t.nome}
+                              </span>
+                              {(t.ipi || t.cae) && (
+                                <span className="block text-[10px] font-mono text-white/30">{t.ipi || t.cae}</span>
                               )}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3 text-right">
-                            <span className="font-semibold tabular-nums text-violet-300/90 text-xs">
-                              {mr_display != null ? formatarPercentual(mr_display) : <span className="text-white/25">—</span>}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3 text-right">
-                            <span className="font-semibold tabular-nums text-teal-300/70 text-xs">
-                              {sr_display != null ? formatarPercentual(sr_display) : <span className="text-white/25">—</span>}
-                            </span>
-                          </td>
-                        </tr>
-                      )
-                    })
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              <SiglaBadge papel={t.papel} />
+                            </td>
+                            <td className="px-3 py-3 text-center">
+                              <span className={`text-[10px] font-semibold ${scColor}`}>{scLabel}</span>
+                            </td>
+                            <td className="px-3 py-3 text-right">
+                              <span className="font-semibold tabular-nums text-sky-300/90 text-xs">
+                                {t.percentual_exec_publica != null ? formatarPercentual(t.percentual_exec_publica) : <span className="text-white/25">—</span>}
+                              </span>
+                            </td>
+                            <td className="px-3 py-3 text-right">
+                              <span className="font-semibold tabular-nums text-violet-300/90 text-xs">
+                                {mr_display != null ? formatarPercentual(mr_display) : <span className="text-white/25">—</span>}
+                              </span>
+                            </td>
+                            <td className="px-3 py-3 text-right">
+                              <span className="font-semibold tabular-nums text-teal-300/70 text-xs">
+                                {sr_display != null ? formatarPercentual(sr_display) : <span className="text-white/25">—</span>}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })
                     })
                   })()}
                   {links.length === 0 && (
