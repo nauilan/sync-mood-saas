@@ -182,6 +182,7 @@ export default function ObraDetailPage() {
   // ── Modo Analítico/Sintético (aba Integrantes) ───────────────────────────────
   const [modoAnalitico, setModoAnalitico] = useState(false)
   const [negocios, setNegocios] = useState<any[]>([])
+  const [calcPctLoading, setCalcPctLoading] = useState<Record<string, boolean>>({})
 
   // ── Completude ──────────────────────────────────────────────────────────────
   const [completude, setCompletude] = useState<any>(null)
@@ -244,6 +245,33 @@ export default function ObraDetailPage() {
       setExportacoesCarregado(true)
     } catch (e) { console.error('[exportacoes]', e) }
     finally { setExportacoesLdg(false) }
+  }
+
+  async function calcularDireitos(linkId: string) {
+    setCalcPctLoading(prev => ({ ...prev, [linkId]: true }))
+    try {
+      const res = await authFetch(`/api/obras/${obraId}/links/calcular-pct`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ link_id: linkId }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error ?? 'Erro ao calcular tipos de direito')
+        return
+      }
+      // Refresh links após cálculo
+      const linksRes = await authFetch(`/api/obras/${obraId}/links`)
+      if (linksRes.ok) {
+        const d = await linksRes.json()
+        setLinks(normalizarLinksObra(d.data ?? []))
+      }
+    } catch (e) {
+      console.error('[calcularDireitos]', e)
+      alert('Erro inesperado ao calcular tipos de direito')
+    } finally {
+      setCalcPctLoading(prev => ({ ...prev, [linkId]: false }))
+    }
   }
 
   // Ativar obra no catálogo (pre_cadastro → catalogo_ativo)
@@ -951,11 +979,26 @@ export default function ObraDetailPage() {
           {/* ── Tipos de Direitos por Link ── */}
           {links.length > 0 && (
             <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
-              <div className="px-5 py-3 border-b border-white/[0.06] bg-white/[0.02]">
-                <h3 className="text-sm font-semibold text-white">Tipos de Direitos</h3>
-                <p className="text-[11px] text-white/35 mt-0.5">
-                  {modoAnalitico ? 'Analítico — ratio de cada participante no link' : 'Sintético — controle econômico por tipo jurídico'}
-                </p>
+              <div className="px-5 py-3 border-b border-white/[0.06] bg-white/[0.02] flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-white">Tipos de Direitos</h3>
+                  <p className="text-[11px] text-white/35 mt-0.5">
+                    {modoAnalitico ? 'Analítico — ratio de cada participante no link' : 'Sintético — controle econômico por tipo jurídico'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                  <span className="text-[10px] text-white/25 shrink-0">Calcular do contrato:</span>
+                  {links.map((link: any) => (
+                    <button
+                      key={link.id ?? link.numero_link}
+                      onClick={() => link.id && calcularDireitos(link.id)}
+                      disabled={!link.id || !!calcPctLoading[link.id]}
+                      className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-violet-600/20 text-violet-300 hover:bg-violet-600/35 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {calcPctLoading[link.id] ? '…' : `Lk ${link.numero_link} ⟳`}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* ─── BRASIL ─── */}
