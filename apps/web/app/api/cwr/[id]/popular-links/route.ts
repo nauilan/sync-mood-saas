@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { deveZerarMR, calcularMrAM } from '@/lib/backoffice-rules'
 
 const sanitize = (v: string | undefined) =>
   (v ?? '').replace(/[\uFEFF\u200B\u200C\u200D]/g, '').trim()
@@ -24,6 +23,12 @@ async function getUser(req: NextRequest) {
   return data ? { userId: data.id as string, tenantId: data.tenant_id as string } : null
 }
 
+function mapFuncaoAutor(papel: string): string {
+  const p = (papel ?? '').toUpperCase().trim()
+  // CA = autor controlado (SWT); OWR = autor não controlado (OWT)
+  return 'CA'
+}
+
 function mapPapelAutor(p: string): string {
   const papel = (p ?? '').toUpperCase().trim()
   if (papel === 'CA') return 'compositor'
@@ -37,16 +42,24 @@ function mapPapelAutor(p: string): string {
   return 'compositor'
 }
 
-function mapPapelEditora(tipo: string, papel: string): string {
-  const t = (tipo ?? papel ?? '').toUpperCase().trim()
+function mapFuncaoEditora(tipo: string): string {
+  const t = (tipo ?? '').toUpperCase().trim()
+  if (t === 'SE') return 'SE'
+  if (t === 'AM' || t === 'AQ') return 'AM'
+  return 'E'
+}
+
+function mapPapelEditora(tipo: string): string {
+  const t = (tipo ?? '').toUpperCase().trim()
   if (t === 'SE') return 'subeditora'
   if (t === 'AM' || t === 'AQ') return 'administradora'
-  if (t === 'PA') return 'editora_original'
   return 'editora_original'
 }
 
 // POST /api/cwr/[id]/popular-links
-// Lê snapshot_cwr de todas as obras desta importação e cria obras_links + obras_links_titulares
+// Regra: 1 link por autor (controlado ou não).
+// Autores controlados (CA): recebem as editoras proporcionalmente.
+// Autores não controlados (OWR): link próprio, sem editoras.
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -97,107 +110,151 @@ export async function POST(
     })
   }
 
-  // 4. Inserir obras_links em lote
-  const linksPayload = obrasParaProcessar.map(row => ({
-    obra_id:         row.obra_id as string,
-    tenant_id:       usuario.tenantId,
-    numero_link:     1,
-    percentual_link: 100,
-    tipo_link:       'controlado',
-    controlado:      true,
-    status:          'ativo',
-  }))
+  let totalLinksCreados = 0
+  let totalTitularesCreados = 0
 
-  const { data: linksCreated, error: errLinks } = await client
-    .from('obras_links')
-    .insert(linksPayload)
-    .select('id, obra_id')
-
-  if (errLinks || !linksCreated?.length) {
-    return NextResponse.json({ error: 'Falha ao criar obras_links', detail: errLinks?.message }, { status: 500 })
-  }
-
-  // 5. Mapear obra_id → link_id
-  const obraToLinkId: Record<string, string> = {}
-  for (const l of linksCreated) {
-    obraToLinkId[l.obra_id as string] = l.id as string
-  }
-
-  // 6. Montar todos os titulares
-  const allTitulares: Record<string, unknown>[] = []
-
+  // 4. Processar obra por obra — 1 link por autor
   for (const row of obrasParaProcessar) {
-    const linkId = obraToLinkId[row.obra_id as string]
-    if (!linkId) continue
+    const snap      = (row.snapshot_cwr ?? {}) as Record<string, unknown>
+    const autores   = (snap.autores  as any[]) ?? []
+    const editoras  = (snap.editoras as any[]) ?? []
 
-    const snap     = (row.snapshot_cwr ?? {}) as Record<string, unknown>
-    const autores  = (snap.autores  as any[]) ?? []
-    const editoras = (snap.editoras as any[]) ?? []
+    const obraId    = row.obra_id as string
+    const tenantId  = usuario.tenantId
 
-    for (const a of autores) {
-      if (!a.nome?.trim()) continue
-      allTitulares.push({
-        obra_link_id:           linkId,
-        obra_id:                row.obra_id,
-        tenant_id:              usuario.tenantId,
-        titular_id:             null,
-        nome:                   (a.nome as string).trim(),
-        papel:                  mapPapelAutor(a.papel ?? ''),
-        funcao_no_link:         mapPapelAutor(a.papel ?? ''),
-        percentual_exec_publica:  a.pr_pct ?? 0,
-        // GUARDA DEFENSIVA: autores nunca coletam MR diretamente (SWR/OWR/CA/C/A/V/AD)
-        // AM coleta em nome deles — gravar aqui duplicaria o valor no BackOffice.
+    const caList  = autores.filter(a => a.controlled === true)
+    const owrList = autores.filter(a => a.controlled !== true)
+
+    // Total PR dos autores controlados — base para distribuição proporcional das editoras
+    const totalCaPR = caList.reduce((s: number, a: any) => s + (a.pr_pct ?? 0), 0)
+
+    let linkNum = 1
+
+    // ── Links dos autores CONTROLADOS (CA) ────────────────────────────────
+    for (const ca of caList) {
+      // Criar o link
+      const { data: linkRow, error: errLink } = await client
+        .from('obras_links')
+        .insert({
+          obra_id:         obraId,
+          tenant_id:       tenantId,
+          numero_link:     linkNum,
+          percentual_link: ca.pr_pct ?? 0,
+          tipo_link:       'controlado',
+          controlado:      true,
+          status:          'ativo',
+        })
+        .select('id')
+        .single()
+
+      if (errLink || !linkRow) continue
+      const linkId = linkRow.id as string
+      linkNum++
+      totalLinksCreados++
+
+      const titulares: Record<string, unknown>[] = []
+
+      // Adicionar o CA
+      titulares.push({
+        obra_link_id:             linkId,
+        obra_id:                  obraId,
+        tenant_id:                tenantId,
+        nome:                     (ca.nome as string).trim(),
+        papel:                    mapPapelAutor(ca.papel ?? ''),
+        funcao_no_link:           'CA',
+        percentual_exec_publica:  ca.pr_pct ?? 0,
         percentual_fonomecanico:  0,
-        percentual_sincronizacao: a.sr_pct ?? 0,
-        controlado:             a.controlled ?? false,
-        status_controle:        (a.controlled ?? false) ? 'controlado' : 'nao_controlado',
-        ipi:                    a.ipi   ?? null,
-        cae:                    a.ipi   ?? null,
+        percentual_sincronizacao: ca.sr_pct ?? 0,
+        controlado:               true,
+        status_controle:          'controlado',
+        ipi:                      ca.ipi ?? null,
+        cae:                      ca.ipi ?? null,
       })
+
+      // Proporção deste CA no total de CAs controlados
+      const proporcao = totalCaPR > 0 ? (ca.pr_pct ?? 0) / totalCaPR : (caList.length > 0 ? 1 / caList.length : 1)
+
+      // Adicionar editoras proporcionalmente a este CA
+      for (const e of editoras) {
+        if (!e.nome?.trim()) continue
+        const funcaoEd = mapFuncaoEditora(e.tipo ?? e.papel ?? '')
+        const papelEd  = mapPapelEditora(e.tipo ?? e.papel ?? '')
+        const isAM     = funcaoEd === 'AM'
+
+        // Se só 1 CA controlado, editora recebe 100% dos seus %. Se múltiplos CAs, distribui proporcional.
+        const fator = caList.length === 1 ? 1 : proporcao
+
+        // AM coleta o MR em nome do CA — usa o PR do CA como referência
+        const mrEd = isAM ? (ca.pr_pct ?? 0) * fator : 0
+
+        titulares.push({
+          obra_link_id:             linkId,
+          obra_id:                  obraId,
+          tenant_id:                tenantId,
+          nome:                     (e.nome as string).trim(),
+          papel:                    papelEd,
+          funcao_no_link:           funcaoEd,
+          percentual_exec_publica:  Math.round((e.pr_pct ?? 0) * fator * 100) / 100,
+          percentual_fonomecanico:  Math.round(mrEd * 100) / 100,
+          percentual_sincronizacao: Math.round((e.sr_pct ?? 0) * fator * 100) / 100,
+          controlado:               e.controlled ?? false,
+          status_controle:          (e.controlled ?? false) ? 'controlado' : 'nao_controlado',
+          ipi:                      e.ipi ?? null,
+          cae:                      e.ipi ?? null,
+        })
+      }
+
+      const { error: errTit } = await client.from('obras_links_titulares').insert(titulares)
+      if (!errTit) totalTitularesCreados += titulares.length
     }
 
-    // AM MR = soma dos PR controlados do link (NUNCA o valor bruto SPT do CWR)
-    const mrAmCorreto = calcularMrAM(
-      autores.map((a: any) => ({ pr_pct: a.pr_pct ?? 0, controlled: a.controlled ?? false }))
-    )
-    for (const e of editoras) {
-      if (!e.nome?.trim()) continue
-      const papelEd = mapPapelEditora(e.tipo ?? '', e.papel ?? '')
-      // Regra BackOffice: E/SE/SA → MR=0; AM → soma PR controlados (não valor bruto CWR)
-      const mrEd = deveZerarMR(papelEd) ? 0 : mrAmCorreto
-      allTitulares.push({
-        obra_link_id:           linkId,
-        obra_id:                row.obra_id,
-        tenant_id:              usuario.tenantId,
-        titular_id:             null,
-        nome:                   (e.nome as string).trim(),
-        papel:                  papelEd,
-        funcao_no_link:         papelEd,
-        percentual_exec_publica:  e.pr_pct ?? 0,
-        percentual_fonomecanico:  mrEd,
-        percentual_sincronizacao: e.sr_pct ?? 0,
-        controlado:             e.controlled ?? false,
-        status_controle:        (e.controlled ?? false) ? 'controlado' : 'nao_controlado',
-        ipi:                    e.ipi   ?? null,
-        cae:                    e.ipi   ?? null,
-      })
-    }
-  }
+    // ── Links dos autores NÃO CONTROLADOS (OWR) ───────────────────────────
+    for (const owr of owrList) {
+      if (!owr.nome?.trim()) continue
 
-  // 7. Inserir titulares em lotes de 500
-  const CHUNK = 500
-  let titularesCreados = 0
-  for (let i = 0; i < allTitulares.length; i += CHUNK) {
-    const chunk = allTitulares.slice(i, i + CHUNK)
-    const { error: errTit } = await client.from('obras_links_titulares').insert(chunk)
-    if (!errTit) titularesCreados += chunk.length
+      const { data: linkRow, error: errLink } = await client
+        .from('obras_links')
+        .insert({
+          obra_id:         obraId,
+          tenant_id:       tenantId,
+          numero_link:     linkNum,
+          percentual_link: owr.pr_pct ?? 0,
+          tipo_link:       'nao_controlado',
+          controlado:      false,
+          status:          'ativo',
+        })
+        .select('id')
+        .single()
+
+      if (errLink || !linkRow) continue
+      const linkId = linkRow.id as string
+      linkNum++
+      totalLinksCreados++
+
+      const { error: errTit } = await client.from('obras_links_titulares').insert({
+        obra_link_id:             linkId,
+        obra_id:                  obraId,
+        tenant_id:                tenantId,
+        nome:                     (owr.nome as string).trim(),
+        papel:                    mapPapelAutor(owr.papel ?? ''),
+        funcao_no_link:           'OWR',
+        percentual_exec_publica:  owr.pr_pct ?? 0,
+        percentual_fonomecanico:  0,
+        percentual_sincronizacao: owr.sr_pct ?? 0,
+        controlado:               false,
+        status_controle:          'nao_controlado',
+        ipi:                      owr.ipi ?? null,
+        cae:                      owr.ipi ?? null,
+      })
+      if (!errTit) totalTitularesCreados++
+    }
   }
 
   return NextResponse.json({
     ok: true,
     obras_processadas:     obrasParaProcessar.length,
     obras_ja_tinham_links: obraIdsComLinks.size,
-    links_criados:         linksCreated.length,
-    titulares_criados:     titularesCreados,
+    links_criados:         totalLinksCreados,
+    titulares_criados:     totalTitularesCreados,
   })
 }
