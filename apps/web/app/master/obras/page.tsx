@@ -737,21 +737,27 @@ tfoot td{background:#f7f7f7;font-weight:bold}
               const lt = (links[li] as any)?.titulares ?? []
               // Link OWR → 0% para todos (autor externo, sem controle de fono/sinc)
               if (isOwrLink(lt)) return 0
-              const fnT = (t.funcao_no_link ?? '').toUpperCase()
-              const hasAM = lt.some((x: any) => ['AM','SA'].includes((x.funcao_no_link ?? '').toUpperCase()))
-              const hasE  = lt.some((x: any) => ['E','SE'].includes((x.funcao_no_link ?? '').toUpperCase()))
+              // Detecta AM/E via funcao_no_link OU papel (fallback para obras importadas via CWR)
+              const xIsAM = (x: any) => {
+                const fn = (x.funcao_no_link ?? '').toUpperCase()
+                const p  = (x.papel ?? '').toLowerCase()
+                return ['AM','SA'].includes(fn) || p === 'administradora'
+              }
+              const xIsE = (x: any) => {
+                const fn = (x.funcao_no_link ?? '').toUpperCase()
+                const p  = (x.papel ?? '').toLowerCase()
+                return ['E','SE'].includes(fn) || p === 'editora_original' || p === 'subeditora'
+              }
+              const hasAM = lt.some(xIsAM)
+              const hasE  = lt.some(xIsE)
               // Sintético = total do link (CA+E+AM). AM absorve tudo; sem AM, E absorve.
               const linkTotal = () =>
                 parseFloat(
                   lt.reduce((acc: number, x: any) => acc + (x.percentual_exec_publica ?? x.percentual ?? 0), 0)
                     .toFixed(2)
                 )
-              if (hasAM) {
-                return (fnT === 'AM' || fnT === 'SA') ? linkTotal() : 0
-              }
-              if (hasE) {
-                return (fnT === 'E' || fnT === 'SE') ? linkTotal() : 0
-              }
+              if (hasAM) return xIsAM(t) ? linkTotal() : 0
+              if (hasE)  return xIsE(t)  ? linkTotal() : 0
               return 0
             }
             // Analítico: ratio de cada participante dentro do link
