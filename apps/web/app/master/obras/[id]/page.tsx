@@ -856,10 +856,18 @@ export default function ObraDetailPage() {
                     return links.flatMap((link: any) => {
                       const titulares = link.titulares ?? []
 
-                      // Contexto editorial DESTE link
-                      const linkEs  = titulares.filter((x: any) => ['E','SE'].includes((x.funcao_no_link ?? '').toUpperCase()))
-                      const linkAMs = titulares.filter((x: any) => ['AM','SA'].includes((x.funcao_no_link ?? '').toUpperCase()))
-                      const hasAM = linkAMs.length > 0
+                      // Contexto editorial DESTE link (funcao_no_link OU papel como fallback)
+                      const xIsAM2 = (x: any) => {
+                        const fn = (x.funcao_no_link ?? '').toUpperCase()
+                        const p  = (x.papel ?? '').toLowerCase()
+                        return ['AM','SA'].includes(fn) || p === 'administradora'
+                      }
+                      const xIsE2 = (x: any) => {
+                        const fn = (x.funcao_no_link ?? '').toUpperCase()
+                        const p  = (x.papel ?? '').toLowerCase()
+                        return ['E','SE'].includes(fn) || p === 'editora_original' || p === 'subeditora'
+                      }
+                      const hasAM = titulares.some(xIsAM2)
 
                       // Totais PR/MR/SR do link
                       const linkTotalPR = titulares.reduce((s: number, x: any) => s + (x.percentual_exec_publica  ?? 0), 0)
@@ -875,9 +883,9 @@ export default function ObraDetailPage() {
                         const scColor = sc === 'controlado' ? 'text-emerald-400' : sc === 'nao_controlado' ? 'text-white/35' : 'text-amber-400'
                         const scLabel = sc === 'controlado' ? 'Controlado' : sc === 'nao_controlado' ? 'Não ctrl.' : sc === 'contrato_pendente' ? 'Pendente' : sc || '—'
 
-                        const isE   = fn === 'E'   || fn === 'SE'
-                        const isAM  = fn === 'AM'  || fn === 'SA'
-                        const isOWR = fn === 'OWR'
+                        const isE   = xIsE2(t)
+                        const isAM  = xIsAM2(t)
+                        const isOWR = fn === 'OWR' || (t.papel ?? '').toLowerCase() === 'owr'
 
                         let mr_display: number | null = null
                         let sr_display: number | null = null
