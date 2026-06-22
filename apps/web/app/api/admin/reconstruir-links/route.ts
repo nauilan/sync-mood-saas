@@ -211,7 +211,7 @@ export async function POST(req: NextRequest) {
             tenant_id:       tenantId,
             numero_link:     linkNum,
             percentual_link: owr.pr_pct ?? 0,
-            tipo_link:       'nao_controlado',
+            tipo_link:       'direto_sem_editora',
             controlado:      false,
             status:          'ativo',
           })
