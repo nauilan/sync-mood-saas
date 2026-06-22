@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
   // 1. Buscar todas as cwr_importacoes_obras com snapshot_cwr e obra_id
   let query = client
     .from('cwr_importacoes_obras')
-    .select('id, obra_id, snapshot_cwr, tenant_id')
+    .select('id, obra_id, snapshot_cwr, obras!inner(tenant_id)')
     .not('obra_id', 'is', null)
     .not('snapshot_cwr', 'is', null)
 
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
 
   for (const row of toProcess) {
     const obraId   = row.obra_id as string
-    const tenantId = row.tenant_id as string
+    const tenantId = (row as any).obras?.tenant_id as string ?? ''
     const snap     = (row.snapshot_cwr ?? {}) as Record<string, unknown>
     const autores  = (snap.autores  as any[]) ?? []
     const editoras = (snap.editoras as any[]) ?? []
