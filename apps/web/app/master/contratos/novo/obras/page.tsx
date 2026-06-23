@@ -423,10 +423,10 @@ export default function NovoContratoObrasPage() {
   const [editContratoId, setEditContratoId] = useState<string | null>(null)
   const btnProximoRef = useRef<HTMLButtonElement>(null)
   // Titulares PF+Autor para Step 1
-  const [titulares, setTitulares] = useState<{ id: string; nome_completo: string; cpf?: string; codigo_titular?: string; pessoa?: string; email?: string; contatos?: Array<{tipo: string; valor: string}> }[]>([])
+  const [titulares, setTitulares] = useState<{ id: string; nome_completo: string; cpf?: string; codigo_titular?: string; codigo_interno?: string; pessoa?: string; email?: string; contatos?: Array<{tipo: string; valor: string}> }[]>([])
   // Todas as PF do banco para pickers de assinantes
   const [pessoasFisicas, setPessoasFisicas] = useState<PessoaFisica[]>([])
-  const [editoras, setEditoras] = useState<{ id: string; nome_fantasia: string; cnpj?: string; tipo_editora?: string }[]>([])
+  const [editoras, setEditoras] = useState<{ id: string; nome_fantasia: string; cnpj?: string; tipo_editora?: string; codigo_interno?: string; codigo_titular?: string }[]>([])
   const [editoraMasterId, setEditoraMasterId] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -1511,7 +1511,7 @@ export default function NovoContratoObrasPage() {
             pct: parseFloat(pctAutorTitular.toFixed(4)),
             categoria: 'CA',
             cpfCnpj: form.titular_cpf || '—',
-            codInterno: titulares.find(t => t.id === form.titular_id)?.codigo_titular || form.titular_id?.slice(0, 8) || '—',
+            codInterno: (() => { const t = titulares.find(t => t.id === form.titular_id); return t?.codigo_interno || t?.codigo_titular || form.titular_id?.slice(0, 8) || '—' })(),
           })
           if (pctEditoraTitular > 0) {
             const edMaster = editoras.find(e => e.id === editoraMasterId)
@@ -1522,7 +1522,7 @@ export default function NovoContratoObrasPage() {
               pct: parseFloat(pctEditoraTitular.toFixed(4)),
               categoria: EDITORA_SIGLA,
               cpfCnpj: edMaster?.cnpj || '—',
-              codInterno: editoraMasterId?.slice(0, 8) || '—',
+              codInterno: edMaster?.codigo_interno || edMaster?.codigo_titular || '—',
             })
           }
           linkNum++
@@ -1537,7 +1537,7 @@ export default function NovoContratoObrasPage() {
               pct: parseFloat(ca.pct.toFixed(4)),
               categoria: 'CA',
               cpfCnpj: titCa?.cpf || '—',
-              codInterno: titCa?.codigo_titular || ca.titular_id?.slice(0, 8) || '—',
+              codInterno: titCa?.codigo_interno || titCa?.codigo_titular || ca.titular_id?.slice(0, 8) || '—',
             })
             linkNum++
           }
