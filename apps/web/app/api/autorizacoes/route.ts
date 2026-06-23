@@ -73,7 +73,6 @@ export async function GET(req: NextRequest) {
   let q = sb.from('autorizacoes')
     .select('*', { count: 'exact' })
     .eq('tenant_id', usuario.tenant_id)
-    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .range(offset, offset + per_page - 1)
 
@@ -87,9 +86,9 @@ export async function GET(req: NextRequest) {
 
   // KPIs básicos
   const [{ count: totalEmitidas }, { count: totalAguardando }, { count: totalRascunho }] = await Promise.all([
-    sb.from('autorizacoes').select('*', { count: 'exact', head: true }).eq('tenant_id', usuario.tenant_id).eq('status_workflow', 'emitida').is('deleted_at', null),
-    sb.from('autorizacoes').select('*', { count: 'exact', head: true }).eq('tenant_id', usuario.tenant_id).eq('status_workflow', 'aguardando_aprovacao_admin').is('deleted_at', null),
-    sb.from('autorizacoes').select('*', { count: 'exact', head: true }).eq('tenant_id', usuario.tenant_id).eq('status_workflow', 'rascunho').is('deleted_at', null),
+    sb.from('autorizacoes').select('*', { count: 'exact', head: true }).eq('tenant_id', usuario.tenant_id).eq('status_workflow', 'emitida'),
+    sb.from('autorizacoes').select('*', { count: 'exact', head: true }).eq('tenant_id', usuario.tenant_id).eq('status_workflow', 'aguardando_aprovacao_admin'),
+    sb.from('autorizacoes').select('*', { count: 'exact', head: true }).eq('tenant_id', usuario.tenant_id).eq('status_workflow', 'rascunho'),
   ])
 
   return NextResponse.json({
@@ -146,7 +145,7 @@ export async function POST(req: NextRequest) {
     tipo_autorizacao:       tipo_autorizacao ?? tipo_uso ?? null,
     status_workflow,
     finalidade:             finalidade ?? descricao ?? null,
-    observacoes:            observacoes ?? null,
+    descricao:              finalidade ?? descricao ?? null,
     licenciado_nome:        licenciado_nome ?? licenciado ?? null,
     licenciado_cnpj_cpf:    licenciado_cnpj_cpf ?? null,
     licenciado_email:       licenciado_email ?? null,
@@ -155,7 +154,7 @@ export async function POST(req: NextRequest) {
     territorio:             territorio ?? 'BR',
     prazo_inicio:           prazo_inicio ?? data_inicio ?? null,
     prazo_fim:              prazo_fim ?? data_fim ?? null,
-    prazo_indeterminado:    prazo_indeterminado ?? false,
+    prazo_indeter:          prazo_indeterminado ?? false,
     numero_autorizacao:     gerarNumeroAutorizacao(),
     editora_administrada_id: editora_administrada_id ?? null,
     emitida_por:            status_workflow === 'emitida' ? usuario.id : null,

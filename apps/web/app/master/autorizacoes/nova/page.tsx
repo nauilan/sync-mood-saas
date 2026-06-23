@@ -82,6 +82,33 @@ function BoolField({ label, value, onChange }: { label: string; value: boolean; 
   )
 }
 
+function CurrencyInput({ value, onChange, disabled }: { value: number; onChange: (v: number) => void; disabled?: boolean }) {
+  const [display, setDisplay] = React.useState(() =>
+    value > 0 ? value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''
+  )
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const raw = e.target.value.replace(/\D/g, '')
+    if (!raw) { setDisplay(''); onChange(0); return }
+    const numeric = parseFloat(raw) / 100
+    setDisplay(numeric.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+    onChange(numeric)
+  }
+  return (
+    <div className="flex items-center gap-2 h-9 bg-white/5 border border-white/[0.08] rounded-lg px-3 focus-within:border-violet-500/50 transition-colors">
+      <span className="text-sm text-white/40 shrink-0">R$</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={display}
+        onChange={handleChange}
+        disabled={disabled}
+        placeholder="0,00"
+        className="flex-1 bg-transparent text-sm text-white placeholder:text-white/25 focus:outline-none tabular-nums"
+      />
+    </div>
+  )
+}
+
 function MultiSelect({ options, value, onChange, label }: { options: string[]; value: string[]; onChange: (v: string[]) => void; label?: string }) {
   return (
     <div className="space-y-1">
@@ -114,21 +141,26 @@ interface TitularSelecionado {
 }
 
 function extrairTitular(t: any): TitularSelecionado {
-  const isPJ = t.tipo_pessoa === 'PJ'
-  const nome     = isPJ ? (t._pj?.razao_social ?? '') : (t._pf?.nome_completo ?? '')
-  const cpf_cnpj = isPJ ? (t._pj?.cnpj ?? '')         : (t._pf?.cpf ?? '')
-  const end  = t._enderecos?.find((e: any) => e.principal) ?? t._enderecos?.[0] ?? {}
-  const tel  = t._contatos?.find((c: any) => c.tipo === 'whatsapp' || c.tipo === 'telefone') ?? t._contatos?.find((c: any) => c.tipo !== 'email') ?? {}
-  const mail = t._contatos?.find((c: any) => c.tipo === 'email') ?? {}
+  // Titulares usam campos flat: nome_completo, cpf/cpf_cnpj, endereco (JSONB), contatos (JSONB[])
+  const nome     = t.nome_completo ?? t.nome ?? ''
+  const cpf_cnpj = t.cpf ?? t.cpf_cnpj ?? t.cnpj ?? ''
+  const end      = (typeof t.endereco === 'object' && t.endereco !== null) ? t.endereco : {}
+  const contatos: any[] = Array.isArray(t.contatos) ? t.contatos : []
+  const tel  = contatos.find((c: any) => c.tipo === 'whatsapp' || c.tipo === 'telefone')
+            ?? contatos.find((c: any) => c.tipo !== 'email')
+            ?? {}
+  const mail = contatos.find((c: any) => c.tipo === 'email') ?? {}
   return {
     nome,
     cpf_cnpj,
-    endereco:  end.endereco ? `${end.endereco}, ${end.numero ?? ''}${end.complemento ? ' ' + end.complemento : ''}`.trim() : '',
+    endereco:  end.logradouro
+      ? `${end.logradouro}, ${end.numero ?? ''}${end.complemento ? ' ' + end.complemento : ''}`.trim()
+      : (end.endereco ?? ''),
     bairro:    end.bairro ?? '',
     cep:       end.cep ?? '',
     cidade_uf: end.cidade ? `${end.cidade} / ${end.estado ?? ''}` : '',
     contato:   tel.valor ?? '',
-    email:     mail.valor ?? '',
+    email:     mail.valor ?? t.email ?? '',
   }
 }
 
@@ -192,10 +224,12 @@ function TitularLookup({
         {open && filtered.length > 0 && (
           <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-[#0d1526] border border-violet-500/30 rounded-xl shadow-2xl overflow-hidden">
             {filtered.map((t: any) => {
-              const isPJ = t.tipo_pessoa === 'PJ'
-              const nome = isPJ ? (t._pj?.razao_social ?? '') : (t._pf?.nome_completo ?? '')
-              const doc  = isPJ ? (t._pj?.cnpj ?? '')         : (t._pf?.cpf ?? '')
-              const pseudo = t._pseudonimos?.find((p: any) => p.principal)?.pseudonimo
+              const nome = t.nome_completo ?? t.nome ?? '(sem nome)'
+              const doc  = t.cpf ?? t.cpf_cnpj ?? t.cnpj ?? ''
+              const pseudo = Array.isArray(t.pseudonimos)
+                ? t.pseudonimos.find((p: any) => p.principal)?.pseudonimo
+                : undefined
+              const isPJ = t.pessoa === 'PJ' || t.tipo === 'editora'
               return (
                 <button
                   key={t.id}
@@ -607,8 +641,7 @@ function StepPagamento({ valorTotal, forma, setForma, condicao, setCondicao, par
         <div className="mt-5 space-y-4 bg-white/[0.03] rounded-xl border border-white/[0.06] p-4">
           <div className="grid grid-cols-2 gap-4">
             <Field label="Entrada (R$)">
-              <input type="number" value={entrada || ''} onChange={e => setEntrada(parseFloat(e.target.value) || 0)}
-                min={0} max={valorTotal} placeholder="0,00" className={ic} />
+              <CurrencyInput value={entrada} onChange={setEntrada} />
             </Field>
             <Field label="Numero de Parcelas">
               <select value={parcelas} onChange={e => setParcelas(parseInt(e.target.value))} className={sel}>
@@ -715,9 +748,24 @@ export default function NovaAutorizacaoPage() {
     const timer = setTimeout(async () => {
       setBuscandoObra(true)
       try {
-        const res = await authFetch(`/api/obras?search=${encodeURIComponent(q)}&limit=30`)
+        const res = await authFetch(`/api/obras?q=${encodeURIComponent(q)}&per_page=30`)
         const json = await res.json()
-        setObrasResultado(json.obras ?? json.data ?? [])
+        const obras = (json.obras ?? json.data ?? []) as any[]
+        // Calcular _percentual_controlado a partir dos links da obra
+        const obrasComPct = obras.map((obra: any) => {
+          const links: any[] = obra._links ?? obra.obras_links ?? []
+          let pctControlado = 0
+          for (const link of links) {
+            const titulares: any[] = link.titulares ?? link.obras_links_titulares ?? []
+            for (const t of titulares) {
+              if (t.controlado) {
+                pctControlado += Number(t.percentual_exec_publica ?? t.percentual ?? 0)
+              }
+            }
+          }
+          return { ...obra, _percentual_controlado: pctControlado }
+        })
+        setObrasResultado(obrasComPct)
       } catch { setObrasResultado([]) }
       finally { setBuscandoObra(false) }
     }, 300)
@@ -1003,11 +1051,7 @@ export default function NovaAutorizacaoPage() {
             )}
           </div>
           <Field label="Valor Total (BRL)">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-white/40">R$</span>
-              <input type="number" value={valorTotal || ''} onChange={e => setValorTotal(parseFloat(e.target.value) || 0)}
-                placeholder="0,00" min={0} className={ic} />
-            </div>
+            <CurrencyInput value={valorTotal} onChange={setValorTotal} />
           </Field>
           <Field label="Observacoes">
             <textarea rows={2} value={obs} onChange={e => setObs(e.target.value)} placeholder="Observacoes adicionais..." className={ic + ' h-auto py-2 resize-none'} />
