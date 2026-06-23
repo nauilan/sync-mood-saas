@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { extrairLetraDaLegal, validarArquivoContrato } from '@/lib/contrato-integridade'
 
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
@@ -47,38 +48,6 @@ async function extrairTextoPDF(buffer: Buffer): Promise<string> {
   }
 }
 
-// Heurística: identifica o texto poético (letra) dentro do texto bruto do contrato.
-// Busca blocos com linhas curtas (≤80 chars), pelo menos 4 linhas consecutivas,
-// separados por quebras duplas — típico de letras musicais em contratos.
-function extrairLetraDaLegal(texto: string): string {
-  // Normalizar quebras de linha
-  const linhas = texto.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
-
-  // Identificar seções que se parecem com letra: linhas curtas e repetitivas
-  const candidatos: string[][] = []
-  let bloco: string[] = []
-
-  for (const linha of linhas) {
-    const l = linha.trim()
-    if (l.length === 0) {
-      if (bloco.length >= 4) candidatos.push([...bloco])
-      bloco = []
-    } else if (l.length <= 80 && !/^\d+\.?\s/.test(l) && !/CONTRATO|CLÁUSULA|CONSIDERANDO|PELO PRESENTE|INSTRUMENTO/i.test(l)) {
-      bloco.push(l)
-    } else {
-      if (bloco.length >= 4) candidatos.push([...bloco])
-      bloco = []
-    }
-  }
-  if (bloco.length >= 4) candidatos.push(bloco)
-
-  if (candidatos.length === 0) return ''
-
-  // Pegar o maior bloco como candidato principal
-  const melhor = candidatos.sort((a, b) => b.length - a.length)[0]
-  return melhor.join('\n')
-}
-
 // ── POST /api/obras/[id]/contrato-manual ────────────────────────────────────
 export async function POST(
   req: NextRequest,
@@ -116,16 +85,10 @@ export async function POST(
 
   if (!arquivo) return NextResponse.json({ error: 'Campo "arquivo" obrigatório' }, { status: 400 })
 
-  // Validar tipo
-  const tiposPermitidos = ['application/pdf', 'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-  if (!tiposPermitidos.includes(arquivo.type)) {
-    return NextResponse.json({ error: 'Apenas PDF ou DOCX são aceitos' }, { status: 400 })
-  }
-
-  // Limite 20 MB
-  if (arquivo.size > 20 * 1024 * 1024) {
-    return NextResponse.json({ error: 'Arquivo excede o limite de 20 MB' }, { status: 400 })
+  // Validar tipo e tamanho
+  const validacao = validarArquivoContrato(arquivo.type, arquivo.size)
+  if (!validacao.ok) {
+    return NextResponse.json({ error: validacao.erro }, { status: validacao.status })
   }
 
   const buffer = Buffer.from(await arquivo.arrayBuffer())

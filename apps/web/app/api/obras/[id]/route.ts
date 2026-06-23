@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { logAudit } from '@/lib/audit'
+import { detectarCamposCriticos } from '@/lib/contrato-integridade'
 
 const sanitize = (v: string | undefined) => (v ?? '').replace(/^\uFEFF/, '').trim()
 const SUPABASE_URL = sanitize(process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL)
@@ -149,10 +150,7 @@ export async function PATCH(
   // ── Interceptor de campos críticos (Migration 060) ────────────────────────
   // Se um campo crítico mudou E a obra tem links controlados,
   // marcar como recontratação pendente e bloquear exportação.
-  const CAMPOS_CRITICOS = ['titulo', 'subtitulo', 'titulo_alternativo', 'letra']
-  const camposCriticosAlterados = CAMPOS_CRITICOS.filter(
-    c => c in update && String(anterior[c] ?? '') !== String(update[c] ?? '')
-  )
+  const camposCriticosAlterados = detectarCamposCriticos(update, anterior as Record<string, unknown>)
   let recontratacaoExigida = false
   if (camposCriticosAlterados.length > 0) {
     const { count: linksControlados } = await sb
