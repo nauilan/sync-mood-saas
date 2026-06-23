@@ -42,7 +42,7 @@ CREATE INDEX IF NOT EXISTS obras_contratos_vigente_idx    ON obras_contratos(vig
 -- RLS
 ALTER TABLE obras_contratos ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "obras_contratos_tenant_isolamento"
+CREATE POLICY "obras_contratos_tenant_isolamento"
   ON obras_contratos
   USING (
     tenant_id = (
