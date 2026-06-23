@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
           ipi, controlado, titular_id
         )
       ),
-      fonogramas(id, tenant_id, deleted_at),
+      fonogramas(id),
       contrato_obras(count)`,
       { count: 'exact' }
     )
@@ -116,7 +116,7 @@ export async function GET(req: NextRequest) {
         })),
         obras_links_titulares: undefined,
       })),
-      _fonogramas_count: (fono ?? []).filter((f: any) => f.tenant_id === usuario.tenant_id && !f.deleted_at).length,
+      _fonogramas_count: (fono ?? []).length,
       contrato_obras_count: (cObras as any)?.[0]?.count ?? null,
     }
   })
