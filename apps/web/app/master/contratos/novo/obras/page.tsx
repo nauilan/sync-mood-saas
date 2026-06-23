@@ -17,8 +17,8 @@ const STEP_LABELS = [
   { label: 'Titular',       icon: Users },
   { label: 'Obras',         icon: Music },
   { label: 'Direitos',      icon: ShieldCheck },
-  { label: 'Cadastro',      icon: Music },
   { label: 'Data & Resumo', icon: Globe },
+  { label: 'Cadastro',      icon: Music },
   { label: 'Assinatura',    icon: Pen },
   { label: 'Revisão',       icon: Eye },
 ]
@@ -1473,10 +1473,24 @@ export default function NovoContratoObrasPage() {
       pseudo: string
       pct: number
       categoria: string
+      cpfCnpj?: string
+      codInterno?: string
     }
 
     return (
       <div className="space-y-6">
+        {/* Data de Contrato */}
+        <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl px-4 py-3 flex items-center gap-6 text-xs">
+          <div>
+            <span className="text-white/30 block mb-0.5">Data de Contrato</span>
+            <span className="text-white/80 font-semibold">{form.data_emissao || '—'}</span>
+          </div>
+          <div>
+            <span className="text-white/30 block mb-0.5">Tipo</span>
+            <span className="text-white/70">{form.tipo ? TIPO_CONFIG[form.tipo].nome : '—'}</span>
+          </div>
+        </div>
+
         <p className="text-xs text-white/40">
           Prévia do cadastro de obra formado a partir do contrato.
           Cada link agrupa o autor com a participação editorial vinculada.
@@ -1496,26 +1510,34 @@ export default function NovoContratoObrasPage() {
             pseudo: (form.titular_nome || 'AUTOR').split(' ')[0].toUpperCase(),
             pct: parseFloat(pctAutorTitular.toFixed(4)),
             categoria: 'CA',
+            cpfCnpj: form.titular_cpf || '—',
+            codInterno: titulares.find(t => t.id === form.titular_id)?.codigo_titular || form.titular_id?.slice(0, 8) || '—',
           })
           if (pctEditoraTitular > 0) {
+            const edMaster = editoras.find(e => e.id === editoraMasterId)
             linhas.push({
               link: linkNum,
               nome: EDITORA_NOME,
               pseudo: EDITORA_PSEUDO,
               pct: parseFloat(pctEditoraTitular.toFixed(4)),
               categoria: EDITORA_SIGLA,
+              cpfCnpj: edMaster?.cnpj || '—',
+              codInterno: editoraMasterId?.slice(0, 8) || '—',
             })
           }
           linkNum++
 
           // — Links dos co-autores: CA puro (sem contrato próprio = sem linha de editora)
           for (const ca of obra.co_autores.filter(c => c.nome && c.pct > 0)) {
+            const titCa = titulares.find(t => t.id === ca.titular_id)
             linhas.push({
               link: linkNum,
               nome: ca.nome.toUpperCase(),
               pseudo: ca.nome.split(' ')[0].toUpperCase(),
               pct: parseFloat(ca.pct.toFixed(4)),
               categoria: 'CA',
+              cpfCnpj: titCa?.cpf || '—',
+              codInterno: titCa?.codigo_titular || ca.titular_id?.slice(0, 8) || '—',
             })
             linkNum++
           }
@@ -1524,7 +1546,7 @@ export default function NovoContratoObrasPage() {
 
           return (
             <div key={idx} className="bg-white/[0.02] border border-white/[0.06] rounded-xl overflow-hidden">
-              <div className="bg-white/[0.03] border-b border-white/[0.06] px-4 py-3 grid grid-cols-3 gap-2 text-xs">
+              <div className="bg-white/[0.03] border-b border-white/[0.06] px-4 py-3 grid grid-cols-4 gap-2 text-xs">
                 <div>
                   <span className="text-white/30 block">Título da Obra</span>
                   <span className="text-white font-semibold">{obra.titulo || '—'}</span>
@@ -1537,6 +1559,10 @@ export default function NovoContratoObrasPage() {
                   <span className="text-white/30 block">Título Alternativo</span>
                   <span className="text-white/60">{obra.titulo_alternativo || '—'}</span>
                 </div>
+                <div>
+                  <span className="text-white/30 block">ID Interno Obra</span>
+                  <span className="text-white/40 font-mono text-[10px]">Gerado ao salvar</span>
+                </div>
               </div>
 
               <div className="overflow-x-auto">
@@ -1546,6 +1572,8 @@ export default function NovoContratoObrasPage() {
                       <th className="px-3 py-2 text-left text-white/30 font-medium w-12">Link</th>
                       <th className="px-3 py-2 text-left text-white/30 font-medium">Nome do Compositor</th>
                       <th className="px-3 py-2 text-left text-white/30 font-medium">Pseudônimo</th>
+                      <th className="px-3 py-2 text-left text-white/30 font-medium">CPF / CNPJ</th>
+                      <th className="px-3 py-2 text-left text-white/30 font-medium">ID Interno</th>
                       <th className="px-3 py-2 text-right text-white/30 font-medium w-20">%</th>
                       <th className="px-3 py-2 text-center text-white/30 font-medium w-20">Categoria</th>
                     </tr>
@@ -1560,6 +1588,8 @@ export default function NovoContratoObrasPage() {
                         </td>
                         <td className="px-3 py-2 text-white/80 font-medium">{l.nome}</td>
                         <td className="px-3 py-2 text-white/50">{l.pseudo}</td>
+                        <td className="px-3 py-2 text-white/50 font-mono text-[11px]">{l.cpfCnpj || '—'}</td>
+                        <td className="px-3 py-2 text-white/40 font-mono text-[11px]">{l.codInterno || '—'}</td>
                         <td className="px-3 py-2 text-right text-white/70 font-mono">{l.pct.toFixed(2)}%</td>
                         <td className="px-3 py-2 text-center">
                           <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -1575,7 +1605,7 @@ export default function NovoContratoObrasPage() {
                   </tbody>
                   <tfoot>
                     <tr className="border-t border-white/[0.08]">
-                      <td colSpan={3} className="px-3 py-2 text-right text-white/30 text-[10px] font-medium">
+                      <td colSpan={5} className="px-3 py-2 text-right text-white/30 text-[10px] font-medium">
                         Total
                       </td>
                       <td className="px-3 py-2 text-right font-mono font-bold text-xs text-white/60">
@@ -1897,7 +1927,7 @@ export default function NovoContratoObrasPage() {
   // Render
   // ─────────────────────────────────────────────────────────────────────────
 
-  const steps = [renderStep0, renderStep1, renderStep3, renderStep2, renderStepCadastro, renderStep4, renderStep5, renderStep6]
+  const steps = [renderStep0, renderStep1, renderStep3, renderStep2, renderStep4, renderStepCadastro, renderStep5, renderStep6]
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
