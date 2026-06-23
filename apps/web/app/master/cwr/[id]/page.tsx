@@ -63,6 +63,21 @@ function PapelTag({ papel, cor }: { papel: string; cor: 'violet' | 'sky' | 'slat
   )
 }
 
+function calcCwrQuality(cwr: Record<string, any>): { score: number; label: string } {
+  const checks: boolean[] = [
+    !!cwr.titulo?.trim(),
+    !!cwr.iswc,
+    (cwr.autores ?? []).length > 0,
+    (cwr.autores ?? []).every((a: any) => (a.pr_pct ?? 0) > 0),
+    (cwr.editoras ?? []).length > 0,
+    (cwr.fonogramas ?? []).some((f: any) => f.isrc),
+  ]
+  const ok = checks.filter(Boolean).length
+  const score = Math.round((ok / checks.length) * 100)
+  const label = score >= 80 ? 'Dados completos' : score >= 50 ? 'Dados parciais' : 'Dados incompletos'
+  return { score, label }
+}
+
 function ObraCard({ obra, showConfirm }: { obra: any; showConfirm?: boolean }) {
   const [open, setOpen] = useState(false)
   const cwr = obra.snapshot_cwr ?? {}
@@ -119,7 +134,15 @@ function ObraCard({ obra, showConfirm }: { obra: any; showConfirm?: boolean }) {
         <div className="flex items-center gap-3 shrink-0 ml-4">
           <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${mb.cls}`}>{mb.label}</span>
           <span className={`text-[10px] font-semibold ${eb.cls}`}>{eb.label}</span>
-          <span className="text-xs text-white/20">{obra.match_score ?? 0}%</span>
+          {obra.match_tipo === 'nova' ? (() => {
+            const { score, label } = calcCwrQuality(cwr)
+            const scoreColor = score >= 80 ? 'text-emerald-400' : score >= 50 ? 'text-amber-400' : 'text-red-400'
+            return (
+              <span className={`text-xs font-mono ${scoreColor}`} title={label}>{score}%</span>
+            )
+          })() : (
+            <span className="text-xs text-white/30 font-mono" title="Similaridade com obra existente">{obra.match_score ?? 0}%</span>
+          )}
           {open ? <ChevronUp className="w-3.5 h-3.5 text-white/30" /> : <ChevronDown className="w-3.5 h-3.5 text-white/30" />}
         </div>
       </button>
@@ -326,6 +349,7 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
   const [reprocessando, setReprocessando] = useState(false)
   const [reprocessErro, setReprocessErro] = useState('')
   const [reprocessStats, setReprocessStats] = useState<Record<string, number> | null>(null)
+  const [autoReprocessando, setAutoReprocessando] = useState(false)
 
   const [integrando, setIntegrando] = useState(false)
   const [integraMsg, setIntegraMsg] = useState('')
@@ -364,7 +388,7 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
     finally { setPopulando(false) }
   }
 
-  async function load() {
+  async function load(triggerAutoReprocess = false) {
     setLoading(true)
     setErro('')
     try {
@@ -376,7 +400,29 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
         setErro(d.error ?? `Erro ${res.status} ao carregar importação.`)
         return
       }
-      setData(await res.json())
+      const loadedData = await res.json()
+      setData(loadedData)
+
+      // ── Auto-reprocessar se parser antigo e não confirmado ──────────────────
+      const parserVersao = loadedData?.relatorio?.parser_versao ?? 0
+      const statusImp    = loadedData?.importacao?.status
+      if ((triggerAutoReprocess || parserVersao < 2) && statusImp !== 'confirmado') {
+        setAutoReprocessando(true)
+        try {
+          const rr = await authFetch(`/api/cwr/${id}/reprocessar`, { method: 'POST' })
+          const dd = await rr.json()
+          if (rr.ok) {
+            setReprocessStats(dd.stats)
+            // recarregar sem re-trigger para evitar loop
+            const r2 = await authFetch(`/api/cwr/${id}`)
+            if (r2.ok) setData(await r2.json())
+          } else {
+            setReprocessErro(dd.error ?? 'Erro no reprocessamento automático.')
+          }
+        } catch { setReprocessErro('Falha no reprocessamento automático.') }
+        finally { setAutoReprocessando(false) }
+      }
+      // ────────────────────────────────────────────────────────────────────────
     } catch { setErro('Falha na requisição. Verifique sua conexão.') }
     finally { setLoading(false) }
   }
@@ -551,8 +597,21 @@ export default function CwrDetalhe({ params }: { params: Promise<{ id: string }>
         <ArrowLeft className="w-3.5 h-3.5" /> Todas as importações
       </a>
 
-      {/* Banner: parser desatualizado */}
-      {!parserAtualizado && imp.status !== 'confirmado' && (
+      {/* Banner: auto-reprocessando */}
+      {autoReprocessando && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-violet-500/10 border border-violet-500/25 rounded-lg text-violet-300 text-sm">
+          <div className="w-4 h-4 border-2 border-violet-400 border-t-transparent rounded-full animate-spin shrink-0" />
+          <div>
+            <p className="font-semibold">Reprocessando automaticamente…</p>
+            <p className="text-xs text-violet-300/70 mt-0.5">
+              Corrigindo títulos, autores, ISWCs, ISRCs e percentuais com o parser atualizado.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Banner: parser desatualizado (só aparece se auto-reprocess falhou) */}
+      {!parserAtualizado && !autoReprocessando && imp.status !== 'confirmado' && (
         <div className="flex items-start gap-3 px-4 py-3 bg-amber-500/10 border border-amber-500/25 rounded-lg text-amber-300 text-sm">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
