@@ -529,12 +529,21 @@ export async function POST(
   const titularesCriadosIds: string[] = []
 
   if (chavesToCreate.size > 0) {
-    const { count: totalAtual } = await client
+    // Usar o maior código CWR existente como base para evitar colisão de constraint
+    const { data: maxCwrRow } = await client
       .from('titulares')
-      .select('id', { count: 'exact', head: true })
+      .select('codigo_titular')
       .eq('tenant_id', usuario.tenantId)
+      .like('codigo_titular', 'CWR%')
+      .order('codigo_titular', { ascending: false })
+      .limit(1)
 
-    let seq = (totalAtual ?? 0) + 1
+    let seq = 1
+    if (maxCwrRow && maxCwrRow.length > 0) {
+      const lastCode = (maxCwrRow[0].codigo_titular as string) ?? ''
+      const lastNum  = parseInt(lastCode.replace(/^CWR0*/, '') || '0', 10)
+      if (!isNaN(lastNum)) seq = lastNum + 1
+    }
     const payloads:  Record<string, unknown>[] = []
     const chaveKeys: string[]                  = []
 
@@ -564,7 +573,7 @@ export async function POST(
       const chunkChaves = chaveKeys.slice(i, i + CHUNK)
       const { data: criados, error: titErr } = await client
         .from('titulares')
-        .insert(chunk)
+        .upsert(chunk, { onConflict: 'tenant_id,codigo_titular', ignoreDuplicates: true })
         .select('id, ipi, nome_completo')
       if (titErr) {
         return NextResponse.json({
