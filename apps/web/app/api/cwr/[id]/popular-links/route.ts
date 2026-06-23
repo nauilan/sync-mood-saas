@@ -221,6 +221,15 @@ export async function POST(
     const caList  = autores.filter(a => a.controlled === true  && a.nome?.trim())
     const owrList = autores.filter(a => a.controlled !== true  && a.nome?.trim())
 
+    // Deduplica editoras por (nome, tipo) — mantém maior pr_pct para evitar duplicatas do CWR
+    const editoras_unicas = editoras.filter(e => e.nome?.trim()).reduce((acc: Participante[], e) => {
+      const chave = `${(e.nome ?? '').trim().toLowerCase()}|${((e.tipo ?? e.papel) ?? '').toUpperCase().trim()}`
+      const idx = acc.findIndex(x => `${(x.nome ?? '').trim().toLowerCase()}|${((x.tipo ?? x.papel) ?? '').toUpperCase().trim()}` === chave)
+      if (idx >= 0) { if ((e.pr_pct ?? 0) > (acc[idx].pr_pct ?? 0)) acc[idx] = e }
+      else acc.push({ ...e })
+      return acc
+    }, [])
+
     const owrRawTotal   = owrList.reduce((s, o) => s + (o.pr_pct ?? 0), 0)
     const totalCaPR     = caList.reduce((s, a)  => s + (a.pr_pct ?? 0), 0)
     const caCorrectPool = Math.round((100 - owrRawTotal) * 100) / 100
@@ -249,7 +258,7 @@ export async function POST(
       const proporcao        = totalCaPR > 0 ? (ca.pr_pct ?? 0) / totalCaPR : 1 / caList.length
       const fator            = caList.length === 1 ? 1 : proporcao
 
-      const edsParaEstCA = editoras
+      const edsParaEstCA = editoras_unicas
         .filter(e => e.nome?.trim())
         .map(e => ({ ...e, pr_pct: (e.pr_pct ?? 0) * fator }))
 

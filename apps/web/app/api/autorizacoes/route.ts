@@ -71,12 +71,7 @@ export async function GET(req: NextRequest) {
   const offset            = (page - 1) * per_page
 
   let q = sb.from('autorizacoes')
-    .select(`
-      *,
-      obra:obra_id ( id, titulo ),
-      editora:editora_id ( id, nome ),
-      titular:titular_id ( id, nome )
-    `, { count: 'exact' })
+    .select('*', { count: 'exact' })
     .eq('tenant_id', usuario.tenant_id)
     .is('deleted_at', null)
     .order('created_at', { ascending: false })

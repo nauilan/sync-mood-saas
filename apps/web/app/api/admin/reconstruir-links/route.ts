@@ -237,6 +237,15 @@ export async function POST(req: NextRequest) {
       await client.from('obras_links_titulares').delete().eq('obra_id', obraId)
       await client.from('obras_links').delete().eq('obra_id', obraId)
 
+      // Deduplica editoras por (nome, tipo) — evita duplicatas do snapshot CWR
+      const editoras_unicas = editoras.filter(e => e.nome?.trim()).reduce((acc: Participante[], e) => {
+        const chave = `${(e.nome ?? '').trim().toLowerCase()}|${((e.tipo ?? e.papel) ?? '').toUpperCase().trim()}`
+        const idx = acc.findIndex(x => `${(x.nome ?? '').trim().toLowerCase()}|${((x.tipo ?? x.papel) ?? '').toUpperCase().trim()}` === chave)
+        if (idx >= 0) { if ((e.pr_pct ?? 0) > (acc[idx].pr_pct ?? 0)) acc[idx] = e }
+        else acc.push({ ...e })
+        return acc
+      }, [])
+
       const owrRawTotal   = owrList.reduce((s, o) => s + (o.pr_pct ?? 0), 0)
       const totalCaPR     = caList.reduce((s, a)  => s + (a.pr_pct ?? 0), 0)
       const caCorrectPool = Math.round((100 - owrRawTotal) * 100) / 100
@@ -265,8 +274,7 @@ export async function POST(req: NextRequest) {
         const proporcao        = totalCaPR > 0 ? (ca.pr_pct ?? 0) / totalCaPR : 1 / caList.length
         const fator            = caList.length === 1 ? 1 : proporcao
 
-        const edsParaEstCA = editoras
-          .filter(e => e.nome?.trim())
+        const edsParaEstCA = editoras_unicas
           .map(e => ({ ...e, pr_pct: (e.pr_pct ?? 0) * fator }))
 
         const distribuicao = calcCaLink(ca, edsParaEstCA, linkTotalCorreto)
