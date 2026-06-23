@@ -1245,16 +1245,10 @@ export default function ObrasPage() {
     obrasData.forEach(o => {
       const linksRaw = normalizarLinksObra(o._links ?? MOCK_OBRAS_LINKS[o.id] ?? [])
       if (linksRaw.length > 0) {
-        const PAPEIS_EDITORA_RECALC = ['editora_original', 'administradora', 'subeditora']
-        const PAPEIS_EDITORA_ABREV  = ['E', 'AM', 'SE', 'AQ']
+        // Ctrl% = soma dos percentual_link dos links controlados (link.controlado === true)
         const pctCtrl = parseFloat(
           linksRaw.reduce((total: number, link: any) => {
-            return total + (link.titulares ?? []).reduce((s: number, t: any) => {
-              const p = t.papel ?? ''
-              const isEdi = PAPEIS_EDITORA_RECALC.includes(p) || PAPEIS_EDITORA_ABREV.includes(p.toUpperCase())
-              if (!isEdi) return s
-              return s + (t.percentual_fonomecanico || t.percentual_exec_publica || t.percentual || 0)
-            }, 0)
+            return total + (link.controlado ? (link.percentual_link ?? 0) : 0)
           }, 0).toFixed(2)
         )
         o = { ...o, _percentual_controlado: pctCtrl }

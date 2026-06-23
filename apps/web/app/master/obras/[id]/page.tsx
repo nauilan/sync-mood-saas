@@ -873,9 +873,9 @@ export default function ObraDetailPage() {
                       const linkTotalPR = titulares.reduce((s: number, x: any) => s + (x.percentual_exec_publica  ?? 0), 0)
                       const linkTotalMR = titulares.reduce((s: number, x: any) => s + (x.percentual_fonomecanico  ?? 0), 0)
                       const linkTotalSR = titulares.reduce((s: number, x: any) => s + (x.percentual_sincronizacao ?? 0), 0)
-                      // Valor sintético = total MR/SR do link; fallback para totalPR se não houver MR/SR
-                      const sinteticoMR = linkTotalMR > 0 ? linkTotalMR : linkTotalPR
-                      const sinteticoSR = linkTotalSR > 0 ? linkTotalSR : linkTotalPR
+                      // Sintético outros direitos = TOTAL PR do link (AM absorve tudo; E absorve se sem AM)
+                      const sinteticoMR = linkTotalPR
+                      const sinteticoSR = linkTotalPR
 
                       return titulares.map((t: any) => {
                         const sc = t.status_controle ?? ''
