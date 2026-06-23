@@ -64,17 +64,29 @@ function PapelTag({ papel, cor }: { papel: string; cor: 'violet' | 'sky' | 'slat
 }
 
 function calcCwrQuality(cwr: Record<string, any>): { score: number; label: string } {
-  const checks: boolean[] = [
-    !!cwr.titulo?.trim(),
-    !!cwr.iswc,
-    (cwr.autores ?? []).length > 0,
-    (cwr.autores ?? []).every((a: any) => (a.pr_pct ?? 0) > 0),
-    (cwr.editoras ?? []).length > 0,
-    (cwr.fonogramas ?? []).some((f: any) => f.isrc),
+  const autores:   any[] = cwr.autores   ?? []
+  const editoras:  any[] = cwr.editoras  ?? []
+  const fonogramas:any[] = cwr.fonogramas ?? []
+
+  const somaPct = autores.reduce((s: number, a: any) => s + (Number(a.pr_pct ?? a.pct ?? 0)), 0)
+
+  const checks: { ok: boolean; desc: string }[] = [
+    { ok: !!cwr.titulo?.trim(),                                           desc: 'Título' },
+    { ok: !!cwr.iswc,                                                     desc: 'ISWC' },
+    { ok: autores.length > 0 && autores.every((a: any) => !!a.ipi),       desc: 'IPI de todos os autores' },
+    { ok: autores.length > 0 && Math.abs(somaPct - 100) < 1,             desc: 'Percentuais somam 100%' },
+    { ok: editoras.length > 0 && editoras.some((e: any) => !!e.ipi),      desc: 'Editora com IPI' },
+    { ok: fonogramas.length > 0 && fonogramas.some((f: any) => !!f.isrc), desc: 'ISRC no fonograma' },
   ]
-  const ok = checks.filter(Boolean).length
+
+  const ok = checks.filter(c => c.ok).length
   const score = Math.round((ok / checks.length) * 100)
-  const label = score >= 80 ? 'Dados completos' : score >= 50 ? 'Dados parciais' : 'Dados incompletos'
+  const missing = checks.filter(c => !c.ok).map(c => c.desc)
+  const label = score >= 80
+    ? 'Dados completos'
+    : score >= 50
+      ? `Dados parciais — faltam: ${missing.join(', ')}`
+      : `Dados incompletos — faltam: ${missing.join(', ')}`
   return { score, label }
 }
 
