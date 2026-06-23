@@ -94,10 +94,8 @@ function calcCaLink(ca: Participante, eds: Participante[], linkTotalCorreto: num
   const esRaw  = eds.filter(e => !['AM','AQ'].includes(((e.tipo ?? e.papel) ?? '').toUpperCase().trim()))
   const amsRaw = eds.filter(e =>  ['AM','AQ'].includes(((e.tipo ?? e.papel) ?? '').toUpperCase().trim()))
 
-  const linkRaw = (ca.pr_pct ?? 0) + eds.reduce((s, e) => s + (e.pr_pct ?? 0), 0)
-  const caInt   = Math.round((ca.pr_pct ?? 0) * 100)
-  const linkInt = Math.round(linkRaw * 100)
-  const caRatio = snapRatio(linkInt > 0 ? caInt / linkInt : 0.75)
+  // caRatio = CA_raw / linkTotalCorreto — não usa editoras fatoradas no denominador
+  const caRatio = snapRatio(linkTotalCorreto > 0 ? (ca.pr_pct ?? 0) / linkTotalCorreto : 0.75)
 
   const caShare = r2(linkTotalCorreto * caRatio)
   const edTotal = Math.round((linkTotalCorreto - caShare) * 100) / 100
