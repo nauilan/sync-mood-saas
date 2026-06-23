@@ -1544,6 +1544,18 @@ export default function ObrasPage() {
                     </td>
                     <td className="px-4 py-3.5">
                       {(() => {
+                        const sc = (obra as any).status_contrato as string | undefined
+                        if (sc === 'sem_contrato') return (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-500/20 text-red-400">SEM CONTRATO</span>
+                        )
+                        if (sc === 'recontratacao_pendente') return (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-400">RECONTRATAÇÃO</span>
+                        )
+                        return null
+                      })()}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      {(() => {
                         const st = (obra.status || obra.status_catalogo) as StatusObra
                         return (
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_OBRA_COLORS[st] ?? 'bg-white/5 text-white/40'}`}>

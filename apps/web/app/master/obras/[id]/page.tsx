@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter, useParams } from 'next/navigation'
 import { PageHeader } from '@/components/ui/page-header'
@@ -145,6 +145,178 @@ function ControleBadge({ pct, label, color }: { pct: number; label: string; colo
   )
 }
 
+function TabContratos({ obraId, statusContrato, motivoRecontracao }: {
+  obraId: string
+  statusContrato?: string
+  motivoRecontracao?: string
+}) {
+  const [contratos, setContratos] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [uploading, setUploading] = React.useState(false)
+  const [extrairLetra, setExtrairLetra] = React.useState(true)
+  const [letraExtraida, setLetraExtraida] = React.useState<string | null>(null)
+  const [letraEditada, setLetraEditada] = React.useState('')
+  const [arquivo, setArquivo] = React.useState<File | null>(null)
+  const [msg, setMsg] = React.useState<{tipo: 'ok'|'erro', texto: string} | null>(null)
+  const fileRef = React.useRef<HTMLInputElement>(null)
+
+  const authFetchLocal = (url: string, opts?: RequestInit) => {
+    const raw = document.cookie.split(';').map(c => c.trim())
+    const chunks: string[] = []
+    for (const c of raw) {
+      const m = c.match(/^sb-[^-]+-auth-token\.(\d+)=(.*)$/)
+      if (m) { chunks[parseInt(m[1])] = m[2]; continue }
+      const m2 = c.match(/^sb-[^-]+-auth-token=(.*)$/)
+      if (m2 && !c.match(/\.\d+=/)) chunks[0] = m2[1]
+    }
+    const joined = chunks.filter(Boolean).join('')
+    let token = ''
+    try { token = JSON.parse(decodeURIComponent(joined))?.access_token ?? '' } catch { try { token = JSON.parse(joined)?.access_token ?? '' } catch { /**/ } }
+    return fetch(url, { ...opts, headers: { ...(opts?.headers ?? {}), Authorization: `Bearer ${token}` } })
+  }
+
+  React.useEffect(() => {
+    authFetchLocal(`/api/obras/${obraId}/contrato-manual`)
+      .then(r => r.json())
+      .then(d => setContratos(d.data ?? []))
+      .finally(() => setLoading(false))
+  }, [obraId])
+
+  async function handleUpload() {
+    if (!arquivo) return
+    setUploading(true)
+    setMsg(null)
+    const fd = new FormData()
+    fd.append('arquivo', arquivo)
+    fd.append('extrair_letra', String(extrairLetra))
+    fd.append('substituir_vigente', 'false')
+    try {
+      const r = await authFetchLocal(`/api/obras/${obraId}/contrato-manual`, { method: 'POST', body: fd })
+      const d = await r.json()
+      if (!r.ok) { setMsg({ tipo: 'erro', texto: d.error ?? 'Erro no upload' }); return }
+      setMsg({ tipo: 'ok', texto: d.mensagem ?? 'Contrato salvo com sucesso!' })
+      if (d.letra_extraida) { setLetraExtraida(d.letra_extraida); setLetraEditada(d.letra_extraida) }
+      setArquivo(null)
+      // Recarregar lista
+      authFetchLocal(`/api/obras/${obraId}/contrato-manual`).then(r => r.json()).then(d => setContratos(d.data ?? []))
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const precisaContrato = ['sem_contrato','recontratacao_pendente'].includes(statusContrato ?? '')
+
+  return (
+    <div className="space-y-6">
+      {/* Status atual */}
+      {motivoRecontracao && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-sm text-amber-300">
+          <strong>Motivo da recontratação:</strong> {motivoRecontracao}
+        </div>
+      )}
+
+      {/* Lista de contratos */}
+      <div>
+        <h3 className="text-sm font-semibold text-white/60 mb-3">Contratos Vinculados</h3>
+        {loading ? (
+          <p className="text-white/30 text-sm">Carregando...</p>
+        ) : contratos.length === 0 ? (
+          <p className="text-white/30 text-sm">Nenhum contrato manual anexado.</p>
+        ) : (
+          <div className="space-y-2">
+            {contratos.map((c: any) => (
+              <div key={c.id} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-white/80 text-sm font-medium">{c.arquivo_nome ?? 'Contrato'}</p>
+                  <p className="text-white/40 text-xs mt-0.5">{c.tipo} · {new Date(c.criado_em).toLocaleDateString('pt-BR')}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {c.vigente ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400">VIGENTE</span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/10 text-white/40">SUBSTITUÍDO</span>
+                  )}
+                  {c.arquivo_url && (
+                    <a href={c.arquivo_url} target="_blank" rel="noopener noreferrer"
+                      className="px-3 py-1 rounded-lg bg-white/10 text-white/60 text-xs hover:bg-white/20 transition-colors">
+                      Download
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Upload novo contrato */}
+      {precisaContrato && (
+        <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-5">
+          <h3 className="text-sm font-semibold text-white/80 mb-4">Anexar Contrato Manual</h3>
+          <div
+            className="border-2 border-dashed border-white/20 rounded-xl p-6 text-center cursor-pointer hover:border-white/40 transition-colors mb-4"
+            onClick={() => fileRef.current?.click()}
+            onDragOver={e => e.preventDefault()}
+            onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setArquivo(f) }}
+          >
+            <input ref={fileRef} type="file" accept=".pdf,.doc,.docx" className="hidden"
+              onChange={e => setArquivo(e.target.files?.[0] ?? null)} />
+            {arquivo ? (
+              <p className="text-white/70 text-sm font-medium">{arquivo.name}</p>
+            ) : (
+              <p className="text-white/30 text-sm">Arraste o PDF/DOCX do contrato ou clique para selecionar</p>
+            )}
+          </div>
+
+          <label className="flex items-center gap-2 mb-4 cursor-pointer">
+            <input type="checkbox" checked={extrairLetra} onChange={e => setExtrairLetra(e.target.checked)}
+              className="w-4 h-4 rounded accent-violet-500" />
+            <span className="text-sm text-white/60">Extrair texto poético (letra) do contrato via IA</span>
+          </label>
+
+          {msg && (
+            <div className={`mb-4 p-3 rounded-xl text-sm ${msg.tipo === 'ok' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' : 'bg-red-500/10 text-red-300 border border-red-500/20'}`}>
+              {msg.texto}
+            </div>
+          )}
+
+          <button onClick={handleUpload} disabled={!arquivo || uploading}
+            className="w-full py-3 rounded-xl bg-violet-600 text-white font-bold text-sm disabled:opacity-40 hover:bg-violet-500 transition-colors">
+            {uploading ? 'Enviando...' : 'Salvar Contrato'}
+          </button>
+        </div>
+      )}
+
+      {/* Letra extraída para revisão */}
+      {letraExtraida && (
+        <div className="bg-white/[0.02] border border-violet-500/20 rounded-2xl p-5">
+          <h3 className="text-sm font-semibold text-violet-300 mb-2">Texto Poético Extraído — Revise antes de salvar</h3>
+          <textarea
+            value={letraEditada}
+            onChange={e => setLetraEditada(e.target.value)}
+            rows={10}
+            className="w-full bg-white/[0.03] border border-white/10 rounded-xl p-3 text-white/80 text-sm font-mono resize-y focus:outline-none focus:border-violet-500/50"
+          />
+          <button
+            onClick={async () => {
+              await authFetchLocal(`/api/obras/${obraId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ letra: letraEditada }),
+              })
+              setLetraExtraida(null)
+              setMsg({ tipo: 'ok', texto: 'Letra salva na obra com sucesso!' })
+            }}
+            className="mt-3 px-4 py-2 rounded-lg bg-violet-600 text-white font-bold text-sm hover:bg-violet-500 transition-colors"
+          >
+            Usar como letra da obra
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ObraDetailPage() {
   const router = useRouter()
   const rawParams = useParams()
@@ -178,6 +350,9 @@ export default function ObraDetailPage() {
   const [boEdit,    setBoEdit]    = useState(false)
   const [boDraft,   setBoDraft]   = useState<Record<string,string>>({})
   const [boSaving,  setBoSaving]  = useState(false)
+
+  // ── Modal de recontratação ───────────────────────────────────────────────────
+  const [modalRecontratacao, setModalRecontratacao] = React.useState<{campos: string[]} | null>(null)
 
   // ── Modo Analítico/Sintético (aba Integrantes) ───────────────────────────────
   const [modoAnalitico, setModoAnalitico] = useState(false)
@@ -369,6 +544,9 @@ export default function ObraDetailPage() {
       setObra((prev: any) => ({ ...prev, ...resumoDraft }))
       setEditResumo(false)
       setResumoDraft({})
+      if (d.recontratacao_exigida) {
+        setModalRecontratacao({ campos: d.data?.motivo_recontracao?.split(': ')[1]?.split(', ') ?? [] })
+      }
     } catch (e) { alert('Erro: ' + String(e)) }
     finally { setResumoSaving(false) }
   }
@@ -557,6 +735,27 @@ export default function ObraDetailPage() {
           </span>
           {/* Badge de status do catálogo */}
           <StatusCatalogoBadge status={obra.status_catalogo} />
+          {/* Badge de status contratual */}
+          {obra.status_contrato === 'sem_contrato' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/20">
+              SEM CONTRATO
+            </span>
+          )}
+          {obra.status_contrato === 'recontratacao_pendente' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/20">
+              RECONTRATAÇÃO PENDENTE
+            </span>
+          )}
+          {obra.status_contrato === 'contrato_manual' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/20">
+              CONTRATO MANUAL
+            </span>
+          )}
+          {(obra.status_contrato === 'contrato_sistema' || obra.status_contrato === 'valido') && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/20">
+              CONTRATO VÁLIDO
+            </span>
+          )}
           {obra.genero && <span className="text-xs px-2 py-1 rounded-full bg-white/5 text-white/50">{obra.genero}</span>}
           <span className="text-xs text-white/30">|</span>
           <span className="text-xs text-white/40">{obra.idioma}</span>
@@ -1384,23 +1583,7 @@ export default function ObraDetailPage() {
 
       {/* Tab: Contratos */}
       {activeTab === 'contratos' && (
-        <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6">
-          <h3 className="text-sm font-semibold text-white mb-4">Contratos Vinculados</h3>
-          {obra.contrato_origem_id ? (
-            <div className="flex items-center justify-between p-3 bg-white/[0.03] rounded-lg border border-white/[0.06]">
-              <div>
-                <p className="text-sm text-white/70 font-medium">Contrato de Origem</p>
-                <p className="text-xs font-mono text-white/40">{obra.contrato_origem_id}</p>
-              </div>
-              <Link href={`/master/contratos/${obra.contrato_origem_id}`}
-                className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300">
-                Ver <ExternalLink className="w-3 h-3" />
-              </Link>
-            </div>
-          ) : (
-            <div className="py-8 text-center text-xs text-white/30">Nenhum contrato vinculado.</div>
-          )}
-        </div>
+        <TabContratos obraId={obra.id} statusContrato={obra.status_contrato} motivoRecontracao={obra.motivo_recontracao} />
       )}
 
       {/* Tab: Completude */}
@@ -1659,6 +1842,27 @@ export default function ObraDetailPage() {
                   </div>
                 </div>
                 <div className="px-5 py-2">
+                  {/* Item 0 — Contrato vigente */}
+                  {(() => {
+                    const sc = obra?.status_contrato
+                    const pronto = sc === 'contrato_sistema' || sc === 'valido' || sc === 'contrato_manual'
+                    const alerta = sc === 'recontratacao_pendente'
+                    const erro   = !sc || sc === 'sem_contrato'
+                    return (
+                      <div className={`flex items-center gap-3 p-3 rounded-xl border ${pronto ? 'bg-emerald-500/5 border-emerald-500/20' : alerta ? 'bg-amber-500/5 border-amber-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                        <span className={`text-lg ${pronto ? 'text-emerald-400' : alerta ? 'text-amber-400' : 'text-red-400'}`}>
+                          {pronto ? '✓' : alerta ? '△' : '✗'}
+                        </span>
+                        <div className="flex-1">
+                          <p className="text-xs font-semibold text-white/70">Contrato vigente</p>
+                          <p className="text-[11px] text-white/40">{sc ?? 'sem_contrato'}</p>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${pronto ? 'bg-emerald-500/20 text-emerald-400' : alerta ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'}`}>
+                          {pronto ? 'pronto' : alerta ? 'alerta' : 'erro'}
+                        </span>
+                      </div>
+                    )
+                  })()}
                   {swiItems.map((item, idx) => (
                     <div key={idx} className="flex items-start gap-2.5 py-2 border-b border-white/[0.03] last:border-0">
                       {icon(item.status)}
@@ -1880,6 +2084,42 @@ export default function ObraDetailPage() {
           <div className="py-8 text-center text-xs text-white/30">
             <CheckCircle2 className="w-8 h-8 text-emerald-500/40 mx-auto mb-2" />
             Nenhuma divergencia aberta.
+          </div>
+        </div>
+      )}
+
+      {/* Modal de recontratação exigida */}
+      {modalRecontratacao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-[#1a1a2e] border border-amber-500/30 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                <span className="text-amber-400 text-lg">⚠</span>
+              </div>
+              <div>
+                <h3 className="text-white font-bold mb-1">Recontratação Exigida</h3>
+                <p className="text-white/60 text-sm">
+                  A alteração em {modalRecontratacao.campos.length > 0 ? `"${modalRecontratacao.campos.join('", "')}"` : 'campo(s) crítico(s)'} exige que o contrato de cessão seja refeito com todos os autores controlados desta obra.
+                </p>
+              </div>
+            </div>
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 mb-4 text-xs text-amber-300">
+              A exportação desta obra ficará bloqueada até que um novo contrato seja assinado ou um contrato manual seja anexado.
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setModalRecontratacao(null)}
+                className="px-4 py-2 rounded-lg bg-white/10 text-white/70 text-sm hover:bg-white/20 transition-colors"
+              >
+                Entendido
+              </button>
+              <button
+                onClick={() => { setModalRecontratacao(null); setActiveTab('contratos') }}
+                className="px-4 py-2 rounded-lg bg-amber-500 text-black font-bold text-sm hover:bg-amber-400 transition-colors"
+              >
+                Ir para Contratos
+              </button>
+            </div>
           </div>
         </div>
       )}

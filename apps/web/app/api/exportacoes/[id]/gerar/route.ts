@@ -64,6 +64,31 @@ export async function POST(
 
   if (!exportacao) return NextResponse.json({ error: 'Exportação não encontrada' }, { status: 404 })
 
+  // ── Verificar bloqueio contratual das obras incluídas ─────────────────────
+  // Busca obras vinculadas à exportação que estão com exportacao_bloqueada=true
+  const { data: obrasExportacao } = await sb
+    .from('exportacao_obras')
+    .select('obra_id')
+    .eq('exportacao_id', id)
+  const obraIds = (obrasExportacao ?? []).map((r: any) => r.obra_id as string).filter(Boolean)
+  if (obraIds.length > 0) {
+    const { data: obrasBloqueadas } = await sb
+      .from('obras')
+      .select('id, titulo, exportacao_bloqueio_motivo')
+      .in('id', obraIds)
+      .eq('exportacao_bloqueada', true)
+    if ((obrasBloqueadas ?? []).length > 0) {
+      const titulos = (obrasBloqueadas as any[]).map((o: any) => o.titulo).join(', ')
+      return NextResponse.json({
+        error: 'Exportação bloqueada — há obras com pendência contratual',
+        codigo: 'EXPORTACAO_BLOQUEADA',
+        obras_bloqueadas: obrasBloqueadas,
+        mensagem: `As seguintes obras precisam de contrato vigente antes de exportar: ${titulos}`,
+      }, { status: 422 })
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   if (!['preparando', 'erro'].includes(exportacao.status ?? '')) {
     return NextResponse.json({
       error: `Exportação com status "${exportacao.status}" não pode ser (re)gerada.`,

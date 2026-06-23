@@ -994,15 +994,27 @@ export async function POST(
     .update({ relatorio: { ...relAtual, integracao }, updated_at: new Date().toISOString() })
     .eq('id', id)
 
-  // ── 10b. Promover status das obras integradas para 'ativa' ───────────────
+  // ── 10b. Promover status das obras integradas para 'ativa' + marcar sem contrato ──
   if (obraIds.length > 0) {
     const CHUNK = 200
     for (let i = 0; i < obraIds.length; i += CHUNK) {
+      // Promover para 'ativa'
       await client
         .from('obras')
         .update({ status: 'ativa', updated_at: new Date().toISOString() })
         .in('id', obraIds.slice(i, i + CHUNK))
         .eq('status', 'pre_cadastro')
+      // Migration 060: obras CWR sem contrato sistema ficam bloqueadas para exportação
+      await client
+        .from('obras')
+        .update({
+          status_contrato:          'sem_contrato',
+          exportacao_bloqueada:     true,
+          exportacao_bloqueio_motivo: 'Obra importada via CWR sem contrato anexado — anexe o contrato na aba Contratos da obra',
+          updated_at:               new Date().toISOString(),
+        })
+        .in('id', obraIds.slice(i, i + CHUNK))
+        .is('contrato_origem_id', null)  // somente as sem contrato sistema
     }
   }
 

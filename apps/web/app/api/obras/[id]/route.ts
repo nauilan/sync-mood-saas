@@ -120,6 +120,9 @@ export async function PATCH(
     'backoffice_ultimo_arquivo', 'backoffice_ultimo_log',
     'backoffice_song_linkages', 'backoffice_oni_codes',
     'backoffice_counter_claims', 'backoffice_tickets', 'backoffice_alta_baixa',
+    // Migration 060 — integridade contratual
+    'status_contrato', 'requer_recontracao', 'motivo_recontracao',
+    'contrato_manual_url', 'contrato_manual_nome', 'contrato_manual_em',
   ]
 
   const update: Record<string, unknown> = {}
@@ -142,6 +145,31 @@ export async function PATCH(
     .single()
 
   if (!anterior) return NextResponse.json({ error: 'Obra não encontrada' }, { status: 404 })
+
+  // ── Interceptor de campos críticos (Migration 060) ────────────────────────
+  // Se um campo crítico mudou E a obra tem links controlados,
+  // marcar como recontratação pendente e bloquear exportação.
+  const CAMPOS_CRITICOS = ['titulo', 'subtitulo', 'titulo_alternativo', 'letra']
+  const camposCriticosAlterados = CAMPOS_CRITICOS.filter(
+    c => c in update && String(anterior[c] ?? '') !== String(update[c] ?? '')
+  )
+  let recontratacaoExigida = false
+  if (camposCriticosAlterados.length > 0) {
+    const { count: linksControlados } = await sb
+      .from('obras_links_titulares')
+      .select('*', { count: 'exact', head: true })
+      .eq('obra_id', id)
+      .eq('controlado', true)
+    if ((linksControlados ?? 0) > 0) {
+      recontratacaoExigida = true
+      update.requer_recontracao   = true
+      update.status_contrato      = 'recontratacao_pendente'
+      update.exportacao_bloqueada = true
+      update.exportacao_bloqueio_motivo = `Recontratação exigida — campo(s) crítico(s) alterado(s): ${camposCriticosAlterados.join(', ')}`
+      update.motivo_recontracao   = `Edição de campo crítico: ${camposCriticosAlterados.join(', ')}`
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   const { data, error } = await sb
     .from('obras')
@@ -194,7 +222,7 @@ export async function PATCH(
     origem_execucao: 'usuario',
   })
 
-  return NextResponse.json({ data })
+  return NextResponse.json({ data, recontratacao_exigida: recontratacaoExigida })
 }
 
 // ── DELETE /api/obras/[id] — hard delete em cascata ─────────────────────────
