@@ -11,15 +11,13 @@ import {
   Tv2, Megaphone, Music2, Info
 } from 'lucide-react'
 import { useWizardSmartScroll } from '@/hooks/use-wizard-smart-scroll'
-import { MOCK_OBRAS, calcularPercentualControlado, getLinksById } from '@/lib/mock-obras'
-import { MOCK_TITULARES } from '@/lib/mock-cadastros'
+import { authFetch } from '@/lib/supabase/client'
 import {
   TIPO_AUTORIZACAO_LABELS, TIPO_AUTORIZACAO_DESCRICAO, TIPO_AUTORIZACAO_COLORS,
   MODELO_NEGOCIO_LABELS, MODELO_NEGOCIO_DESCRICAO, MODELO_NEGOCIO_DOCUMENTO_NOME, MODELO_NEGOCIO_COLORS,
   TERRITORIOS, FORMA_PAGAMENTO_LABELS,
   obraBloqueadaPorExclusividade,
 } from '@/lib/types-autorizacoes'
-import { MOCK_AUTORIZACOES } from '@/lib/mock-autorizacoes'
 import type { TipoAutorizacao, ModeloNegocio, FormaPagamento } from '@/lib/types-autorizacoes'
 
 // ── Icones por tipo ──────────────────────────────────────────────────────────
@@ -38,9 +36,8 @@ const FORMAS_PAG: FormaPagamento[] = ['dinheiro', 'pix', 'transferencia', 'carta
 const TODOS_TIPOS: TipoAutorizacao[] = ['fonograma', 'sincronizacao', 'publicidade', 'tv', 'edicao_grafica', 'incidental', 'versao']
 
 // ── Sequencial de numero ─────────────────────────────────────────────────────
-const PROX_NUM = String(MOCK_AUTORIZACOES.length + 1).padStart(5, '0')
 const ANO_ATUAL = new Date().getFullYear()
-const NUMERO_GERADO = `AUTH-${ANO_ATUAL}-${PROX_NUM}`
+const NUMERO_GERADO = `AUTH-${ANO_ATUAL}-00001`
 
 // ── Steps ────────────────────────────────────────────────────────────────────
 const STEPS = [
@@ -146,16 +143,22 @@ function TitularLookup({
 }) {
   const [open, setOpen] = React.useState(false)
   const ref = React.useRef<HTMLDivElement>(null)
+  const [apiResults, setApiResults] = React.useState<any[]>([])
 
-  const filtered = React.useMemo(() => {
-    const q = value.toLowerCase().trim()
-    if (!q) return (MOCK_TITULARES as any[]).slice(0, 8)
-    return (MOCK_TITULARES as any[]).filter((t: any) => {
-      const nome = (t.razao_social || t.nome_completo || t.nome_artistico || '').toLowerCase()
-      const doc = (t.cnpj || t.cpf || '').toLowerCase()
-      return nome.includes(q) || doc.includes(q)
-    }).slice(0, 8)
+  React.useEffect(() => {
+    const q = value.trim()
+    if (!q) { setApiResults([]); return }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await authFetch(`/api/titulares?search=${encodeURIComponent(q)}&limit=8`)
+        const json = await res.json()
+        setApiResults(json.titulares ?? json.data ?? [])
+      } catch { setApiResults([]) }
+    }, 300)
+    return () => clearTimeout(timer)
   }, [value])
+
+  const filtered = apiResults
 
   // fecha ao clicar fora
   React.useEffect(() => {
@@ -700,6 +703,34 @@ export default function NovaAutorizacaoPage() {
   const [entrada, setEntrada] = useState(0)
   const [modeloNegocio, setModeloNegocio] = useState<ModeloNegocio>('pago_editora')
   const [buscaObra, setBuscaObra] = useState('')
+  // ── Busca real de obras via API ──────────────────────────────────────────
+  const [obrasResultado, setObrasResultado]           = useState<any[]>([])
+  const [buscandoObra, setBuscandoObra]               = useState(false)
+  const [obraSelecionadaData, setObraSelecionadaData] = useState<any>(null)
+  const [linksObra, setLinksObra]                     = useState<any[]>([])
+
+  useEffect(() => {
+    const q = buscaObra.trim()
+    if (!q) { setObrasResultado([]); return }
+    const timer = setTimeout(async () => {
+      setBuscandoObra(true)
+      try {
+        const res = await authFetch(`/api/obras?search=${encodeURIComponent(q)}&limit=30`)
+        const json = await res.json()
+        setObrasResultado(json.obras ?? json.data ?? [])
+      } catch { setObrasResultado([]) }
+      finally { setBuscandoObra(false) }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [buscaObra])
+
+  useEffect(() => {
+    if (!obraId) { setLinksObra([]); return }
+    authFetch(`/api/obras/${obraId}/links`)
+      .then(r => r.json())
+      .then(d => setLinksObra(d.links ?? []))
+      .catch(() => setLinksObra([]))
+  }, [obraId])
 
   // Smart scroll: top ao mudar step; scroll ao botao quando campo e preenchido
   const footerRef = useWizardSmartScroll(step, [tipo, obraId, dataInicio, dataFim, valorTotal, modeloNegocio])
@@ -708,10 +739,8 @@ export default function NovaAutorizacaoPage() {
     setCamposEspecificos(prev => ({ ...prev, [k]: v }))
   }
 
-  const obraSelecionada = MOCK_OBRAS.find(o => o.id === obraId)
-  const linksObra = obraId ? getLinksById(obraId) : []
-  const pcControlado = obraSelecionada?._percentual_controlado ?? (obraId ? calcularPercentualControlado(obraId) : 0)
-  const bloqueioExcl = obraId ? obraBloqueadaPorExclusividade(obraId, MOCK_AUTORIZACOES) : { bloqueada: false }
+  const pcControlado = obraSelecionadaData?._percentual_controlado ?? 0
+  const bloqueioExcl = { bloqueada: false }
 
   const exclusividadeDataFim = useMemo(() => {
     if (!exclusividade || !dataInicio) return null
@@ -833,88 +862,72 @@ export default function NovaAutorizacaoPage() {
             />
           </div>
           <div className="space-y-2">
-            {buscaObra.trim() === '' && obraId
-              ? (() => {
-                  const obra = MOCK_OBRAS.find(o => o.id === obraId)
-                  if (!obra) return null
-                  const links = getLinksById(obra.id)
-                  const pctCtrl = obra._percentual_controlado ?? calcularPercentualControlado(obra.id)
-                  const bloq = obraBloqueadaPorExclusividade(obra.id, MOCK_AUTORIZACOES)
-                  const allTits = links.flatMap(l => l.titulares ?? [])
-                  const todos = [...new Set(allTits.map(t => t.nome))]
-                  const controlados = [...new Set(allTits.filter(t => t.controlado).map(t => t.nome))]
-                  return (
-                    <button key={obra.id} onClick={() => {}} disabled
-                      className="flex items-center gap-3 w-full p-4 rounded-xl border text-left bg-violet-500/10 border-violet-500/40 ring-1 ring-violet-500/30 cursor-default">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-violet-600">
-                        <Music className="w-3.5 h-3.5 text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-white">{obra.titulo}</p>
-                        <p className="text-xs text-white/30">{obra.codigo} · Editora: {(obra as any).editora_nome ?? 'Top Show Music'}</p>
-                        {todos.length > 0 && (
-                          <div className="mt-0.5 space-y-0">
-                            <p className="text-[10px] text-white/35 truncate">Autores: {todos.join(' / ')}</p>
-                            {controlados.length > 0 && <p className="text-[10px] text-violet-400/70 truncate">Controlados: {controlados.join(' / ')}</p>}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-xs font-semibold text-violet-400">{pctCtrl.toFixed(2)}%</p>
-                        <p className="text-[10px] text-white/30">controlado</p>
-                      </div>
-                      <CheckCircle2 className="w-4 h-4 text-violet-400 shrink-0" />
-                    </button>
-                  )
-                })()
-              : buscaObra.trim() !== ''
-              ? MOCK_OBRAS.filter(o => {
-                  const q = buscaObra.toLowerCase()
-                  const links = getLinksById(o.id)
-                  const allTits = links.flatMap(l => l.titulares ?? [])
-                  const autorNames = allTits.map(t => t.nome?.toLowerCase() ?? '')
-                  return o.titulo.toLowerCase().includes(q) || o.codigo.toLowerCase().includes(q) || autorNames.some(n => n.includes(q))
-                }).map(obra => {
-                  const links = getLinksById(obra.id)
-                  const pctCtrl = obra._percentual_controlado ?? calcularPercentualControlado(obra.id)
-                  const sel2 = obraId === obra.id
-                  const bloq = obraBloqueadaPorExclusividade(obra.id, MOCK_AUTORIZACOES)
-                  return (
-                    <button key={obra.id} onClick={() => { if (!bloq.bloqueada) { setObraId(obra.id); setPctAutorizado(pctCtrl) } }}
-                      disabled={bloq.bloqueada}
-                      className={`flex items-center gap-3 w-full p-4 rounded-xl border text-left transition-all ${bloq.bloqueada ? 'opacity-50 cursor-not-allowed bg-rose-500/5 border-rose-500/20' : sel2 ? 'bg-violet-500/10 border-violet-500/40 ring-1 ring-violet-500/30' : 'bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.06]'}`}>
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${sel2 ? 'bg-violet-600' : bloq.bloqueada ? 'bg-rose-500/20' : 'bg-white/10'}`}>
-                        {bloq.bloqueada ? <Lock className="w-3.5 h-3.5 text-rose-400" /> : <Music className={`w-3.5 h-3.5 ${sel2 ? 'text-white' : 'text-white/40'}`} />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-semibold ${sel2 ? 'text-white' : bloq.bloqueada ? 'text-white/40' : 'text-white/70'}`}>{obra.titulo}</p>
-                        {bloq.bloqueada
-                          ? <p className="text-xs text-rose-400">Exclusividade vigente — {bloq.diasRestantes} dias ({bloq.autorizacao?.numero_autorizacao})</p>
-                          : <p className="text-xs text-white/30">{obra.codigo} · Editora: {(obra as any).editora_nome ?? 'Top Show Music'}</p>
-                        }
-                        {!bloq.bloqueada && (() => {
-                          const allTits = links.flatMap(l => l.titulares ?? [])
-                          const todos = [...new Set(allTits.map(t => t.nome))]
-                          const controlados = [...new Set(allTits.filter(t => t.controlado).map(t => t.nome))]
-                          return todos.length > 0 ? (
-                            <div className="mt-0.5 space-y-0">
-                              <p className="text-[10px] text-white/35 truncate">Autores: {todos.join(' / ')}</p>
-                              {controlados.length > 0 && <p className="text-[10px] text-violet-400/70 truncate">Controlados: {controlados.join(' / ')}</p>}
-                            </div>
-                          ) : null
-                        })()}
-                      </div>
-                      {!bloq.bloqueada && (
-                        <div className="text-right shrink-0">
-                          <p className="text-xs font-semibold text-violet-400">{pctCtrl.toFixed(2)}%</p>
-                          <p className="text-[10px] text-white/30">controlado</p>
+            {/* Spinner enquanto busca */}
+            {buscandoObra && (
+              <p className="text-xs text-white/40 text-center py-2">Buscando...</p>
+            )}
+            {/* Obra já selecionada (busca vazia) */}
+            {!buscandoObra && buscaObra.trim() === '' && obraSelecionadaData && (() => {
+                const obra = obraSelecionadaData
+                const allTits = linksObra.flatMap((l: any) => l.titulares ?? [])
+                const todos = [...new Set(allTits.map((t: any) => t.nome))]
+                const controlados = [...new Set(allTits.filter((t: any) => t.controlado).map((t: any) => t.nome))]
+                return (
+                  <button key={obra.id} onClick={() => {}} disabled
+                    className="flex items-center gap-3 w-full p-4 rounded-xl border text-left bg-violet-500/10 border-violet-500/40 ring-1 ring-violet-500/30 cursor-default">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-violet-600">
+                      <Music className="w-3.5 h-3.5 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-white">{obra.titulo}</p>
+                      <p className="text-xs text-white/30">{obra.codigo_obra ?? obra.codigo} · Editora: {obra.editora_nome ?? obra.editora ?? '—'}</p>
+                      {todos.length > 0 && (
+                        <div className="mt-0.5 space-y-0">
+                          <p className="text-[10px] text-white/35 truncate">Autores: {todos.join(' / ')}</p>
+                          {controlados.length > 0 && <p className="text-[10px] text-violet-400/70 truncate">Controlados: {controlados.join(' / ')}</p>}
                         </div>
                       )}
-                      {sel2 && <CheckCircle2 className="w-4 h-4 text-violet-400 shrink-0" />}
-                    </button>
-                  )
-                })
-              : null
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-semibold text-violet-400">{pcControlado.toFixed(2)}%</p>
+                      <p className="text-[10px] text-white/30">controlado</p>
+                    </div>
+                    <CheckCircle2 className="w-4 h-4 text-violet-400 shrink-0" />
+                  </button>
+                )
+              })()
+            }
+            {/* Resultados da busca */}
+            {!buscandoObra && buscaObra.trim() !== '' && obrasResultado.length === 0 && (
+              <p className="text-xs text-white/30 text-center py-2">Nenhuma obra encontrada</p>
+            )}
+            {!buscandoObra && buscaObra.trim() !== '' && obrasResultado.map((obra: any) => {
+                const pctCtrl = obra._percentual_controlado ?? 0
+                const sel2 = obraId === obra.id
+                return (
+                  <button key={obra.id}
+                    onClick={() => {
+                      setObraId(obra.id)
+                      setObraSelecionadaData(obra)
+                      setPctAutorizado(pctCtrl)
+                      setBuscaObra('')
+                    }}
+                    className={`flex items-center gap-3 w-full p-4 rounded-xl border text-left transition-all ${sel2 ? 'bg-violet-500/10 border-violet-500/40 ring-1 ring-violet-500/30' : 'bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.06]'}`}>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${sel2 ? 'bg-violet-600' : 'bg-white/10'}`}>
+                      <Music className={`w-3.5 h-3.5 ${sel2 ? 'text-white' : 'text-white/40'}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-semibold ${sel2 ? 'text-white' : 'text-white/70'}`}>{obra.titulo}</p>
+                      <p className="text-xs text-white/30">{obra.codigo_obra ?? obra.codigo} · Editora: {obra.editora_nome ?? obra.editora ?? '—'}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-semibold text-violet-400">{pctCtrl.toFixed(2)}%</p>
+                      <p className="text-[10px] text-white/30">controlado</p>
+                    </div>
+                    {sel2 && <CheckCircle2 className="w-4 h-4 text-violet-400 shrink-0" />}
+                  </button>
+                )
+              })
             }
           </div>
           {obraId && (
@@ -1077,7 +1090,7 @@ export default function NovaAutorizacaoPage() {
           </div>
 
           {/* Bloco de autores da obra */}
-          {obraSelecionada && (
+          {obraSelecionadaData && (
             <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5 space-y-2">
               <div className="flex items-center gap-2 mb-3">
                 <Users className="w-4 h-4 text-violet-400" />
@@ -1108,8 +1121,8 @@ export default function NovaAutorizacaoPage() {
               {[
                 { label: 'Numero', value: NUMERO_GERADO },
                 { label: 'Tipo', value: TIPO_AUTORIZACAO_LABELS[tipo] },
-                { label: 'Obra', value: obraSelecionada?.titulo ?? obraId },
-                { label: 'Editora', value: (obraSelecionada as any)?.editora_nome ?? 'Top Show Music' },
+                { label: 'Obra', value: obraSelecionadaData?.titulo ?? obraId },
+                { label: 'Editora', value: (obraSelecionadaData as any)?.editora_nome ?? '—' },
                 { label: '% Controlado', value: pcControlado.toFixed(2) + '%' },
                 { label: '% Autorizado', value: pctAutorizado.toFixed(2) + '%' },
                 { label: 'Territorio', value: TERRITORIOS.find(t => t.codigo === territorio)?.nome ?? territorio },
