@@ -19,6 +19,21 @@ export const maxDuration = 300
 const sanitize = (v: string | undefined) =>
   (v ?? '').replace(/[\uFEFF\u200B\u200C\u200D]/g, '').trim()
 
+// ── helpers de arredondamento ──────────────────────────────────────────────
+const r2    = (n: number) => Math.round(n * 100) / 100
+const ceil2 = (n: number) => Math.ceil(n  * 100) / 100
+
+// Frações de contrato comuns — snap evita erros de float (ex: 0.80024 → 0.80)
+const COMMON_RATIOS = [0.50, 0.60, 0.625, 0.6667, 0.70, 0.75, 0.80, 0.875, 1.0]
+function snapRatio(r: number): number {
+  let best = r, bestDiff = Infinity
+  for (const cr of COMMON_RATIOS) {
+    const d = Math.abs(r - cr)
+    if (d < bestDiff) { bestDiff = d; best = cr }
+  }
+  return bestDiff < 0.01 ? best : r
+}
+
 function mapPapelAutor(p: string): string {
   const papel = (p ?? '').toUpperCase().trim()
   if (papel === 'C' || papel === 'CA' || papel === 'ES') return 'compositor'
@@ -42,6 +57,104 @@ function mapPapelEditora(tipo: string): string {
   return 'editora_original'
 }
 
+interface Participante {
+  nome?: string
+  papel?: string
+  tipo?: string
+  pr_pct?: number
+  sr_pct?: number
+  ipi?: string | null
+  controlled?: boolean
+  [k: string]: unknown
+}
+
+interface Distribuido extends Participante {
+  pr_correto: number
+}
+
+/**
+ * Calcula distribuição correta de percentuais para um link CA:
+ *  1. CA share  = r2(linkTotal × caRatio)          ← favor ao autor
+ *  2. ed_total  = linkTotal − CA share              ← resto exato
+ *  3. E share   = ceil2(ed_total × eRatio)          ← favor ao editor original
+ *  4. AM share  = ed_total − E share                ← AM fica com o resto
+ */
+function calcCaLink(ca: Participante, eds: Participante[], linkTotalCorreto: number): Distribuido[] {
+  const result: Distribuido[] = []
+
+  if (eds.length === 0) {
+    result.push({ ...ca, pr_correto: linkTotalCorreto })
+    return result
+  }
+
+  const esRaw  = eds.filter(e => !['AM','AQ'].includes(((e.tipo ?? e.papel) ?? '').toUpperCase().trim()))
+  const amsRaw = eds.filter(e =>  ['AM','AQ'].includes(((e.tipo ?? e.papel) ?? '').toUpperCase().trim()))
+
+  const linkRaw = (ca.pr_pct ?? 0) + eds.reduce((s, e) => s + (e.pr_pct ?? 0), 0)
+  const caInt   = Math.round((ca.pr_pct ?? 0) * 100)
+  const linkInt = Math.round(linkRaw * 100)
+  const caRatio = snapRatio(linkInt > 0 ? caInt / linkInt : 0.75)
+
+  const caShare = r2(linkTotalCorreto * caRatio)
+  const edTotal = Math.round((linkTotalCorreto - caShare) * 100) / 100
+
+  result.push({ ...ca, pr_correto: caShare })
+
+  if (edTotal <= 0) return result
+
+  if (amsRaw.length === 0) {
+    // Só E(s)
+    let edAcumulado = 0
+    esRaw.forEach((e, idx) => {
+      let eShare: number
+      if (idx === esRaw.length - 1) {
+        eShare = Math.round((edTotal - edAcumulado) * 100) / 100
+      } else {
+        const eRawTotal = esRaw.reduce((s, x) => s + (x.pr_pct ?? 0), 0)
+        const eRatio = eRawTotal > 0 ? (e.pr_pct ?? 0) / eRawTotal : 1 / esRaw.length
+        eShare = ceil2(edTotal * eRatio)
+      }
+      edAcumulado += eShare
+      result.push({ ...e, pr_correto: eShare })
+    })
+  } else {
+    // Tem E e AM
+    const eRawTotal  = esRaw.reduce((s, e)  => s + (e.pr_pct ?? 0), 0)
+    const amRawTotal = amsRaw.reduce((s, e) => s + (e.pr_pct ?? 0), 0)
+    const allEdRaw   = eRawTotal + amRawTotal
+
+    let eTotal = 0
+    esRaw.forEach(e => {
+      const eInt   = Math.round((e.pr_pct ?? 0) * 100)
+      const edInt  = Math.round(allEdRaw * 100)
+      const eRatio = snapRatio(edInt > 0 ? eInt / edInt : 1 / (esRaw.length + amsRaw.length))
+      const eShare = ceil2(edTotal * eRatio)
+      eTotal += eShare
+      result.push({ ...e, pr_correto: eShare })
+    })
+
+    const amTotal = Math.round((edTotal - eTotal) * 100) / 100
+    if (amsRaw.length === 1) {
+      result.push({ ...amsRaw[0], pr_correto: amTotal })
+    } else {
+      let amAcumulado = 0
+      amsRaw.forEach((am, idx) => {
+        let amShare: number
+        if (idx === amsRaw.length - 1) {
+          amShare = Math.round((amTotal - amAcumulado) * 100) / 100
+        } else {
+          const amRatio = amRawTotal > 0 ? (am.pr_pct ?? 0) / amRawTotal : 1 / amsRaw.length
+          amShare = r2(amTotal * amRatio)
+        }
+        amAcumulado += amShare
+        result.push({ ...am, pr_correto: amShare })
+      })
+    }
+  }
+
+  return result
+}
+
 export async function POST(req: NextRequest) {
   const secret = sanitize(req.headers.get('x-admin-secret') ?? '')
   const srvKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY)
@@ -60,7 +173,6 @@ export async function POST(req: NextRequest) {
     { auth: { persistSession: false } }
   )
 
-  // 1. Buscar todas as cwr_importacoes_obras com snapshot_cwr e obra_id
   let query = client
     .from('cwr_importacoes_obras')
     .select('id, obra_id, snapshot_cwr')
@@ -75,7 +187,6 @@ export async function POST(req: NextRequest) {
   if (errRows) return NextResponse.json({ error: errRows.message }, { status: 500 })
   if (!rows?.length) return NextResponse.json({ ok: true, message: 'Nenhuma obra encontrada', total: 0 })
 
-  // Dedup por obra_id — pegar só a primeira entrada por obra
   const byObra = new Map<string, typeof rows[0]>()
   for (const r of rows) {
     const key = r.obra_id as string
@@ -83,18 +194,22 @@ export async function POST(req: NextRequest) {
   }
   const toProcess = Array.from(byObra.values())
 
-  // Buscar tenant_id de todas as obras em uma única query
+  // Buscar tenant_id em batches de 100 (evita URL longa)
   const allObraIds = toProcess.map(r => r.obra_id as string)
-  const { data: obrasData } = await client
-    .from('obras')
-    .select('id, tenant_id')
-    .in('id', allObraIds)
-  const tenantByObra = new Map<string, string>((obrasData ?? []).map((o: any) => [o.id as string, o.tenant_id as string]))
+  const tenantByObra = new Map<string, string>()
+  const BATCH = 100
+  for (let i = 0; i < allObraIds.length; i += BATCH) {
+    const { data: obs } = await client
+      .from('obras')
+      .select('id, tenant_id')
+      .in('id', allObraIds.slice(i, i + BATCH))
+    for (const o of (obs ?? [])) tenantByObra.set(o.id as string, o.tenant_id as string)
+  }
 
-  let totalObras   = 0
-  let totalLinks   = 0
-  let totalTit     = 0
-  let totalErrors  = 0
+  let totalObras  = 0
+  let totalLinks  = 0
+  let totalTit    = 0
+  let totalErrors = 0
   const erros: { obra_id: string; error: string }[] = []
   const preview: { obra_id: string; links: number; titulares: number }[] = []
 
@@ -102,39 +217,67 @@ export async function POST(req: NextRequest) {
     const obraId   = row.obra_id as string
     const tenantId = tenantByObra.get(obraId) ?? ''
     const snap     = (row.snapshot_cwr ?? {}) as Record<string, unknown>
-    const autores  = (snap.autores  as any[]) ?? []
-    const editoras = (snap.editoras as any[]) ?? []
+    const autores  = (snap.autores  as Participante[]) ?? []
+    const editoras = (snap.editoras as Participante[]) ?? []
 
-    const caList  = autores.filter(a => a.controlled === true)
-    const owrList = autores.filter(a => a.controlled !== true && a.nome?.trim())
-
-    // Calcular quantos links/titulares serão criados
-    const editorasPorCA = caList.length > 0 ? editoras.filter(e => e.nome?.trim()) : []
-    const linksCount    = caList.length + owrList.length
-    const titCount      = caList.length + (caList.length * editorasPorCA.length) + owrList.length
+    const caList  = autores.filter(a => a.controlled === true  && a.nome?.trim())
+    const owrList = autores.filter(a => a.controlled !== true  && a.nome?.trim())
 
     if (dryRun) {
-      preview.push({ obra_id: obraId, links: linksCount, titulares: titCount })
+      const edPorCA = caList.length > 0 ? editoras.filter(e => e.nome?.trim()).length : 0
+      preview.push({
+        obra_id:    obraId,
+        links:      caList.length + owrList.length,
+        titulares:  caList.length + (caList.length * edPorCA) + owrList.length,
+      })
       continue
     }
 
     try {
-      // 2. Apagar links e titulares existentes desta obra
       await client.from('obras_links_titulares').delete().eq('obra_id', obraId)
       await client.from('obras_links').delete().eq('obra_id', obraId)
 
-      const totalCaPR = caList.reduce((s: number, a: any) => s + (a.pr_pct ?? 0), 0)
+      const owrRawTotal   = owrList.reduce((s, o) => s + (o.pr_pct ?? 0), 0)
+      const totalCaPR     = caList.reduce((s, a)  => s + (a.pr_pct ?? 0), 0)
+      const caCorrectPool = Math.round((100 - owrRawTotal) * 100) / 100
+
+      // Calcular link_total_correto para cada CA
+      const caLinkTotals: number[] = []
+      let caAccumulated = 0
+      for (let ci = 0; ci < caList.length; ci++) {
+        let linkTotal: number
+        if (ci === caList.length - 1) {
+          linkTotal = Math.round((caCorrectPool - caAccumulated) * 100) / 100
+        } else {
+          const ratio = totalCaPR > 0 ? (caList[ci].pr_pct ?? 0) / totalCaPR : 1 / caList.length
+          linkTotal   = r2(caCorrectPool * ratio)
+        }
+        caAccumulated += linkTotal
+        caLinkTotals.push(linkTotal)
+      }
+
       let linkNum = 1
 
-      // ── Links dos autores CONTROLADOS (CA) ────────────────────────────────
-      for (const ca of caList) {
+      // ── Links CA ──────────────────────────────────────────────────────────
+      for (let ci = 0; ci < caList.length; ci++) {
+        const ca               = caList[ci]
+        const linkTotalCorreto = caLinkTotals[ci]
+        const proporcao        = totalCaPR > 0 ? (ca.pr_pct ?? 0) / totalCaPR : 1 / caList.length
+        const fator            = caList.length === 1 ? 1 : proporcao
+
+        const edsParaEstCA = editoras
+          .filter(e => e.nome?.trim())
+          .map(e => ({ ...e, pr_pct: (e.pr_pct ?? 0) * fator }))
+
+        const distribuicao = calcCaLink(ca, edsParaEstCA, linkTotalCorreto)
+
         const { data: linkRow, error: errLink } = await client
           .from('obras_links')
           .insert({
             obra_id:         obraId,
             tenant_id:       tenantId,
             numero_link:     linkNum,
-            percentual_link: ca.pr_pct ?? 0,
+            percentual_link: linkTotalCorreto,
             tipo_link:       'controlado',
             controlado:      true,
             status:          'ativo',
@@ -143,66 +286,62 @@ export async function POST(req: NextRequest) {
           .single()
 
         if (errLink || !linkRow) {
-          erros.push({ obra_id: obraId, error: errLink?.message ?? 'Erro ao criar link CA' })
+          erros.push({ obra_id: obraId, error: errLink?.message ?? 'Erro link CA' })
+          linkNum++
           continue
         }
 
-        const linkId    = linkRow.id as string
-        const proporcao = totalCaPR > 0 ? (ca.pr_pct ?? 0) / totalCaPR : (caList.length > 0 ? 1 / caList.length : 1)
-        const fator     = caList.length === 1 ? 1 : proporcao
-
+        const linkId = linkRow.id as string
         linkNum++
         totalLinks++
 
         const titulares: Record<string, unknown>[] = []
 
-        // CA
-        titulares.push({
-          obra_link_id:             linkId,
-          obra_id:                  obraId,
-          tenant_id:                tenantId,
-          nome:                     (ca.nome as string).trim(),
-          papel:                    mapPapelAutor(ca.papel ?? ''),
-          funcao_no_link:           'CA',
-          percentual_exec_publica:  ca.pr_pct ?? 0,
-          percentual_fonomecanico:  0,
-          percentual_sincronizacao: ca.sr_pct ?? 0,
-          controlado:               true,
-          status_controle:          'controlado',
-          ipi:                      ca.ipi ?? null,
-          cae:                      ca.ipi ?? null,
+        distribuicao.forEach((d, idx) => {
+          if (idx === 0) {
+            titulares.push({
+              obra_link_id:             linkId,
+              obra_id:                  obraId,
+              tenant_id:                tenantId,
+              nome:                     (d.nome ?? '').trim(),
+              papel:                    mapPapelAutor(d.papel ?? ca.papel ?? ''),
+              funcao_no_link:           'CA',
+              percentual_exec_publica:  d.pr_correto,
+              percentual_fonomecanico:  0,
+              percentual_sincronizacao: d.sr_pct ?? 0,
+              controlado:               true,
+              status_controle:          'controlado',
+              ipi:                      d.ipi ?? null,
+              cae:                      d.ipi ?? null,
+            })
+          } else {
+            const funcaoEd = mapFuncaoEditora((d.tipo ?? d.papel) ?? '')
+            const papelEd  = mapPapelEditora((d.tipo ?? d.papel) ?? '')
+            const isAM     = funcaoEd === 'AM'
+            titulares.push({
+              obra_link_id:             linkId,
+              obra_id:                  obraId,
+              tenant_id:                tenantId,
+              nome:                     (d.nome ?? '').trim(),
+              papel:                    papelEd,
+              funcao_no_link:           funcaoEd,
+              percentual_exec_publica:  d.pr_correto,
+              percentual_fonomecanico:  isAM ? d.pr_correto : 0,
+              percentual_sincronizacao: Math.round(((d.sr_pct ?? 0) * fator) * 100) / 100,
+              controlado:               d.controlled ?? false,
+              status_controle:          (d.controlled ?? false) ? 'controlado' : 'nao_controlado',
+              ipi:                      d.ipi ?? null,
+              cae:                      d.ipi ?? null,
+            })
+          }
         })
-
-        // Editoras proporcionais
-        for (const e of editoras) {
-          if (!e.nome?.trim()) continue
-          const funcaoEd = mapFuncaoEditora(e.tipo ?? e.papel ?? '')
-          const papelEd  = mapPapelEditora(e.tipo ?? e.papel ?? '')
-          const isAM     = funcaoEd === 'AM'
-          const mrEd     = isAM ? (ca.pr_pct ?? 0) * fator : 0
-
-          titulares.push({
-            obra_link_id:             linkId,
-            obra_id:                  obraId,
-            tenant_id:                tenantId,
-            nome:                     (e.nome as string).trim(),
-            papel:                    papelEd,
-            funcao_no_link:           funcaoEd,
-            percentual_exec_publica:  Math.round((e.pr_pct ?? 0) * fator * 100) / 100,
-            percentual_fonomecanico:  Math.round(mrEd * 100) / 100,
-            percentual_sincronizacao: Math.round((e.sr_pct ?? 0) * fator * 100) / 100,
-            controlado:               e.controlled ?? false,
-            status_controle:          (e.controlled ?? false) ? 'controlado' : 'nao_controlado',
-            ipi:                      e.ipi ?? null,
-            cae:                      e.ipi ?? null,
-          })
-        }
 
         const { error: errTit } = await client.from('obras_links_titulares').insert(titulares)
         if (!errTit) totalTit += titulares.length
+        else erros.push({ obra_id: obraId, error: 'titulares CA: ' + errTit.message })
       }
 
-      // ── Links dos autores NÃO CONTROLADOS (OWR) ───────────────────────────
+      // ── Links OWR ─────────────────────────────────────────────────────────
       for (const owr of owrList) {
         const { data: linkRow, error: errLink } = await client
           .from('obras_links')
@@ -219,7 +358,8 @@ export async function POST(req: NextRequest) {
           .single()
 
         if (errLink || !linkRow) {
-          erros.push({ obra_id: obraId, error: errLink?.message ?? 'Erro ao criar link OWR' })
+          erros.push({ obra_id: obraId, error: errLink?.message ?? 'Erro link OWR' })
+          linkNum++
           continue
         }
 
@@ -243,6 +383,7 @@ export async function POST(req: NextRequest) {
           cae:                      owr.ipi ?? null,
         })
         if (!errTit) totalTit++
+        else erros.push({ obra_id: obraId, error: 'titular OWR: ' + errTit.message })
       }
 
       totalObras++
@@ -254,18 +395,18 @@ export async function POST(req: NextRequest) {
 
   if (dryRun) {
     return NextResponse.json({
-      ok:       true,
-      dry_run:  true,
-      total_obras:     toProcess.length,
-      preview:  preview.slice(0, 50),
+      ok:            true,
+      dry_run:       true,
+      total_obras:   toProcess.length,
+      preview:       preview.slice(0, 50),
       preview_total: preview.length,
     })
   }
 
   return NextResponse.json({
-    ok:              totalErrors === 0,
+    ok:                totalErrors === 0,
     obras_processadas: totalObras,
-    links_criados:    totalLinks,
+    links_criados:     totalLinks,
     titulares_criados: totalTit,
     erros_total:       totalErrors,
     erros:             erros.length ? erros.slice(0, 20) : undefined,
