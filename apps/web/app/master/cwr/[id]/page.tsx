@@ -63,30 +63,24 @@ function PapelTag({ papel, cor }: { papel: string; cor: 'violet' | 'sky' | 'slat
   )
 }
 
+// Calcula o percentual de controle editorial real a partir dos dados CWR.
+// Soma os PR% de autores (SWR = controlled) + editoras (SPU = controlled).
+// Retorna número 0–100 com 2 casas e label explicativo.
 function calcCwrQuality(cwr: Record<string, any>): { score: number; label: string } {
-  const autores:   any[] = cwr.autores   ?? []
-  const editoras:  any[] = cwr.editoras  ?? []
-  const fonogramas:any[] = cwr.fonogramas ?? []
+  const autores:  any[] = cwr.autores  ?? []
+  const editoras: any[] = cwr.editoras ?? []
 
-  const somaPct = autores.reduce((s: number, a: any) => s + (Number(a.pr_pct ?? a.pct ?? 0)), 0)
+  let controladoPR = 0
+  for (const a of autores)  { if (a.controlled) controladoPR += Number(a.pr_pct ?? 0) }
+  for (const e of editoras) { if (e.controlled) controladoPR += Number(e.pr_pct ?? 0) }
 
-  const checks: { ok: boolean; desc: string }[] = [
-    { ok: !!cwr.titulo?.trim(),                                           desc: 'Título' },
-    { ok: !!cwr.iswc,                                                     desc: 'ISWC' },
-    { ok: autores.length > 0 && autores.every((a: any) => !!a.ipi),       desc: 'IPI de todos os autores' },
-    { ok: autores.length > 0 && Math.abs(somaPct - 100) < 1,             desc: 'Percentuais somam 100%' },
-    { ok: editoras.length > 0 && editoras.some((e: any) => !!e.ipi),      desc: 'Editora com IPI' },
-    { ok: fonogramas.length > 0 && fonogramas.some((f: any) => !!f.isrc), desc: 'ISRC no fonograma' },
-  ]
-
-  const ok = checks.filter(c => c.ok).length
-  const score = Math.round((ok / checks.length) * 100)
-  const missing = checks.filter(c => !c.ok).map(c => c.desc)
-  const label = score >= 80
-    ? 'Dados completos'
-    : score >= 50
-      ? `Dados parciais — faltam: ${missing.join(', ')}`
-      : `Dados incompletos — faltam: ${missing.join(', ')}`
+  const score = Math.min(100, Math.max(0, controladoPR))
+  const fmt   = score.toFixed(2).replace('.', ',')
+  const label = score >= 100
+    ? 'Controle total (100,00%)'
+    : score > 0
+      ? `Controle parcial: ${fmt}%`
+      : 'Sem controle editorial'
   return { score, label }
 }
 
@@ -148,12 +142,13 @@ function ObraCard({ obra, showConfirm }: { obra: any; showConfirm?: boolean }) {
           <span className={`text-[10px] font-semibold ${eb.cls}`}>{eb.label}</span>
           {obra.match_tipo === 'nova' ? (() => {
             const { score, label } = calcCwrQuality(cwr)
-            const scoreColor = score >= 80 ? 'text-emerald-400' : score >= 50 ? 'text-amber-400' : 'text-red-400'
+            const fmt = score.toFixed(2).replace('.', ',')
+            const scoreColor = score >= 100 ? 'text-emerald-400' : score >= 50 ? 'text-amber-400' : 'text-red-400'
             return (
-              <span className={`text-xs font-mono ${scoreColor}`} title={label}>{score}%</span>
+              <span className={`text-xs font-mono ${scoreColor}`} title={label}>{fmt}%</span>
             )
           })() : (
-            <span className="text-xs text-white/30 font-mono" title="Similaridade com obra existente">{obra.match_score ?? 0}%</span>
+            <span className="text-xs text-white/30 font-mono" title="Similaridade com obra existente">{Number(obra.match_score ?? 0).toFixed(2).replace('.', ',')}%</span>
           )}
           {open ? <ChevronUp className="w-3.5 h-3.5 text-white/30" /> : <ChevronDown className="w-3.5 h-3.5 text-white/30" />}
         </div>
