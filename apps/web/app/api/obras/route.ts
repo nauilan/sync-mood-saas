@@ -64,8 +64,7 @@ export async function GET(req: NextRequest) {
           ipi, controlado, titular_id
         )
       ),
-      fonogramas(id),
-      contrato_obras(count)`,
+      fonogramas(id)`,
       { count: 'exact' }
     )
     .eq('tenant_id', usuario.tenant_id)
@@ -102,14 +101,13 @@ export async function GET(req: NextRequest) {
 
   // Mapear obras_links → _links (formato esperado pelo frontend)
   const mapped = (data ?? []).map((obra: Record<string, unknown>) => {
-    const { obras_links, fonogramas: fono, contrato_obras: cObras, ...rest } = obra as any
+    const { obras_links, fonogramas: fono, ...rest } = obra as any
     return {
       ...rest,
       _links: (obras_links ?? []).map((l: any) => ({
         ...l,
         titulares: (l.obras_links_titulares ?? []).map((t: any) => ({
           ...t,
-          // se funcao_no_link preenchido, deriva papel correto (sobrescreve DEFAULT 'autor' do DB)
           papel: t.funcao_no_link
             ? (CWR_ROLE_MAP[t.funcao_no_link.toUpperCase()] ?? t.papel)
             : t.papel,
@@ -117,7 +115,6 @@ export async function GET(req: NextRequest) {
         obras_links_titulares: undefined,
       })),
       _fonogramas_count: (fono ?? []).length,
-      contrato_obras_count: (cObras as any)?.[0]?.count ?? null,
     }
   })
 
