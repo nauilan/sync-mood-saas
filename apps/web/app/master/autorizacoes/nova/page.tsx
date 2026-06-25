@@ -8,7 +8,7 @@ import {
   Calendar, DollarSign, FileText, Lock, RefreshCw, AlertCircle,
   Search, Building2, User, Phone, Mail, MapPin, CreditCard,
   Banknote, Smartphone, ArrowLeftRight, Layers, BookOpen, Shuffle,
-  Tv2, Megaphone, Music2, Info
+  Tv2, Megaphone, Music2, Info, Plus, Loader2
 } from 'lucide-react'
 import { useWizardSmartScroll } from '@/hooks/use-wizard-smart-scroll'
 import { authFetch } from '@/lib/supabase/client'
@@ -173,26 +173,35 @@ function TitularLookup({
   onSelect?: (t: TitularSelecionado) => void
   hint?: string
 }) {
-  const [open, setOpen] = React.useState(false)
-  const ref = React.useRef<HTMLDivElement>(null)
-  const [apiResults, setApiResults] = React.useState<any[]>([])
+  const [open,      setOpen]      = React.useState(false)
+  const ref                       = React.useRef<HTMLDivElement>(null)
+  const [apiResults,setApiResults]= React.useState<any[]>([])
+  const [loading,   setLoading]   = React.useState(false)
+  // Cadastro rápido inline
+  const [showForm,  setShowForm]  = React.useState(false)
+  const [novoNome,  setNovoNome]  = React.useState('')
+  const [novoDoc,   setNovoDoc]   = React.useState('')
+  const [novoTipo,  setNovoTipo]  = React.useState<'PF'|'PJ'>('PF')
+  const [novoEmail, setNovoEmail] = React.useState('')
+  const [salvando,  setSalvando]  = React.useState(false)
 
   React.useEffect(() => {
     const q = value.trim()
     if (!q) { setApiResults([]); return }
+    setLoading(true)
     const timer = setTimeout(async () => {
       try {
-        const res = await authFetch(`/api/titulares?search=${encodeURIComponent(q)}&limit=8`)
+        const res  = await authFetch(`/api/titulares?search=${encodeURIComponent(q)}&per_page=8`)
         const json = await res.json()
-        setApiResults(json.titulares ?? json.data ?? [])
+        setApiResults(json.data ?? json.titulares ?? [])
       } catch { setApiResults([]) }
+      finally { setLoading(false) }
     }, 300)
     return () => clearTimeout(timer)
   }, [value])
 
   const filtered = apiResults
 
-  // fecha ao clicar fora
   React.useEffect(() => {
     function handler(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
@@ -206,26 +215,51 @@ function TitularLookup({
     onChange(dados.nome)
     onSelect?.(dados)
     setOpen(false)
+    setShowForm(false)
+  }
+
+  async function handleSalvarNovo() {
+    if (!novoNome.trim()) return
+    setSalvando(true)
+    try {
+      const res  = await authFetch('/api/titulares', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nome_completo: novoNome.trim(),
+          tipo: novoTipo === 'PJ' ? 'editora' : 'autor',
+          pessoa: novoTipo,
+          cpf_cnpj: novoDoc.trim() || undefined,
+          email: novoEmail.trim() || undefined,
+        }),
+      })
+      const json = await res.json()
+      const novo = json.titular ?? json.data ?? json
+      if (novo?.id) {
+        handleSelect(novo)
+      }
+    } finally { setSalvando(false) }
   }
 
   return (
     <Field label={label} hint={hint}>
       <div className="relative" ref={ref}>
         <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-white/25 pointer-events-none" />
+        {loading && <Loader2 className="absolute right-2.5 top-2.5 w-3 h-3 text-white/30 animate-spin pointer-events-none" />}
         <input
           type="text"
           value={value}
-          onChange={e => { onChange(e.target.value); setOpen(true) }}
+          onChange={e => { onChange(e.target.value); setOpen(true); setShowForm(false) }}
           onFocus={() => setOpen(true)}
           placeholder="Buscar no banco de dados..."
           autoComplete="off"
           className={ic + ' pl-8'}
         />
-        {open && filtered.length > 0 && (
-          <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-[#0d1526] border border-violet-500/30 rounded-xl shadow-2xl overflow-hidden">
+        {open && value.trim().length >= 2 && (
+          <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-[#0d1526] border border-violet-500/30 rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto">
             {filtered.map((t: any) => {
-              const nome = t.nome_completo ?? t.nome ?? '(sem nome)'
-              const doc  = t.cpf ?? t.cpf_cnpj ?? t.cnpj ?? ''
+              const nome   = t.nome_completo ?? t.nome ?? '(sem nome)'
+              const doc    = t.cpf ?? t.cpf_cnpj ?? t.cnpj ?? ''
               const pseudo = Array.isArray(t.pseudonimos)
                 ? t.pseudonimos.find((p: any) => p.principal)?.pseudonimo
                 : undefined
@@ -246,6 +280,38 @@ function TitularLookup({
                 </button>
               )
             })}
+
+            {/* Nenhum resultado — oferecer cadastro rápido */}
+            {filtered.length === 0 && !loading && (
+              <div className="px-3 py-3">
+                <p className="text-xs text-white/40 mb-2">Nenhum titular encontrado.</p>
+                {!showForm ? (
+                  <button
+                    onMouseDown={e => { e.preventDefault(); setShowForm(true); setNovoNome(value.trim()) }}
+                    className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 font-semibold"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Cadastrar novo titular
+                  </button>
+                ) : (
+                  <div className="space-y-2" onMouseDown={e => e.preventDefault()}>
+                    <div className="flex gap-2">
+                      {(['PF','PJ'] as const).map(tp => (
+                        <button key={tp} onClick={() => setNovoTipo(tp)} className={`text-[10px] px-2.5 py-0.5 rounded-full border transition-colors ${novoTipo === tp ? 'border-violet-500 text-violet-400 bg-violet-500/10' : 'border-white/10 text-white/40'}`}>{tp}</button>
+                      ))}
+                    </div>
+                    <input value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="Nome completo / Razão Social *" className="w-full bg-white/5 border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50" />
+                    <input value={novoDoc}  onChange={e => setNovoDoc(e.target.value)}  placeholder={novoTipo === 'PF' ? 'CPF (opcional)' : 'CNPJ (opcional)'} className="w-full bg-white/5 border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50" />
+                    <input value={novoEmail} onChange={e => setNovoEmail(e.target.value)} placeholder="E-mail (opcional)" className="w-full bg-white/5 border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50" />
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={handleSalvarNovo} disabled={salvando || !novoNome.trim()} className="flex-1 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-semibold py-1.5 rounded-md transition-colors">
+                        {salvando ? 'Salvando...' : 'Salvar e selecionar'}
+                      </button>
+                      <button onClick={() => setShowForm(false)} className="text-xs text-white/40 hover:text-white/60 px-2">Cancelar</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -754,16 +820,19 @@ export default function NovaAutorizacaoPage() {
         // Calcular _percentual_controlado a partir dos links da obra
         const obrasComPct = obras.map((obra: any) => {
           const links: any[] = obra._links ?? obra.obras_links ?? []
+          // % controlado = soma dos percentual_link dos links onde controlado=true
           let pctControlado = 0
           for (const link of links) {
-            const titulares: any[] = link.titulares ?? link.obras_links_titulares ?? []
-            for (const t of titulares) {
-              if (t.controlado) {
-                pctControlado += Number(t.percentual_exec_publica ?? t.percentual ?? 0)
-              }
-            }
+            if (link.controlado) pctControlado += Number(link.percentual_link ?? 0)
           }
-          return { ...obra, _percentual_controlado: pctControlado }
+          // Editora administradora = primeiro titular com funcao E/SE nos links
+          const editoraNome = links
+            .flatMap((l: any) => l.titulares ?? [])
+            .find((t: any) =>
+              t.funcao_no_link === 'E' || t.funcao_no_link === 'SE' ||
+              t.papel === 'editora_original' || t.papel === 'co_editora'
+            )?.nome ?? obra.editora_nome ?? '—'
+          return { ...obra, _percentual_controlado: pctControlado, editora_nome: editoraNome }
         })
         setObrasResultado(obrasComPct)
       } catch { setObrasResultado([]) }
@@ -773,12 +842,9 @@ export default function NovaAutorizacaoPage() {
   }, [buscaObra])
 
   useEffect(() => {
-    if (!obraId) { setLinksObra([]); return }
-    authFetch(`/api/obras/${obraId}/links`)
-      .then(r => r.json())
-      .then(d => setLinksObra(d.links ?? []))
-      .catch(() => setLinksObra([]))
-  }, [obraId])
+    // Usa os _links já presentes na obra selecionada — sem fetch extra
+    setLinksObra(obraSelecionadaData?._links ?? [])
+  }, [obraSelecionadaData])
 
   // Smart scroll: top ao mudar step; scroll ao botao quando campo e preenchido
   const footerRef = useWizardSmartScroll(step, [tipo, obraId, dataInicio, dataFim, valorTotal, modeloNegocio])
