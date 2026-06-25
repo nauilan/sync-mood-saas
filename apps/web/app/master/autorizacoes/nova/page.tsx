@@ -1003,7 +1003,7 @@ export default function NovaAutorizacaoPage() {
                       )}
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-xs font-semibold text-violet-400">{pcControlado.toFixed(2)}%</p>
+                      <p className="text-xs font-semibold text-violet-400">{pcControlado.toFixed(2).replace('.', ',')}%</p>
                       <p className="text-[10px] text-white/30">controlado</p>
                     </div>
                     <CheckCircle2 className="w-4 h-4 text-violet-400 shrink-0" />
@@ -1035,7 +1035,7 @@ export default function NovaAutorizacaoPage() {
                       <p className="text-xs text-white/30">{obra.codigo_obra ?? obra.codigo} · Editora: {obra.editora_nome ?? obra.editora ?? '—'}</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-xs font-semibold text-violet-400">{pctCtrl.toFixed(2)}%</p>
+                      <p className="text-xs font-semibold text-violet-400">{pctCtrl.toFixed(2).replace('.', ',')}%</p>
                       <p className="text-[10px] text-white/30">controlado</p>
                     </div>
                     {sel2 && <CheckCircle2 className="w-4 h-4 text-violet-400 shrink-0" />}
@@ -1046,7 +1046,7 @@ export default function NovaAutorizacaoPage() {
           </div>
           {obraId && (
             <div className="mt-3 space-y-2">
-              <p className="text-xs font-medium text-white/50">Percentual Autorizado (maximo: {pcControlado.toFixed(2)}%)</p>
+              <p className="text-xs font-medium text-white/50">Percentual Autorizado (maximo: {pcControlado.toFixed(2).replace('.', ',')}%)</p>
               <div className="flex items-center gap-3">
                 <input type="range" min={0} max={pcControlado} step={0.01}
                   value={Math.min(pctAutorizado, pcControlado)}
@@ -1233,8 +1233,8 @@ export default function NovaAutorizacaoPage() {
                 { label: 'Tipo', value: TIPO_AUTORIZACAO_LABELS[tipo] },
                 { label: 'Obra', value: obraSelecionadaData?.titulo ?? obraId },
                 { label: 'Editora', value: (obraSelecionadaData as any)?.editora_nome ?? '—' },
-                { label: '% Controlado', value: pcControlado.toFixed(2) + '%' },
-                { label: '% Autorizado', value: pctAutorizado.toFixed(2) + '%' },
+                { label: '% Controlado', value: pcControlado.toFixed(2).replace('.', ',') + '%' },
+                { label: '% Autorizado', value: pctAutorizado.toFixed(2).replace('.', ',') + '%' },
                 { label: 'Territorio', value: TERRITORIOS.find(t => t.codigo === territorio)?.nome ?? territorio },
                 { label: 'Inicio', value: dataInicio ? new Date(dataInicio + 'T00:00:00').toLocaleDateString('pt-BR') : 'nao definido' },
                 { label: 'Termino', value: dataFim ? new Date(dataFim + 'T00:00:00').toLocaleDateString('pt-BR') : 'indeterminado' },
