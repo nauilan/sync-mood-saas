@@ -1,0 +1,64 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - img [ref=e8]
+        - generic [ref=e11]:
+          - paragraph [ref=e12]: sync.mood
+          - paragraph [ref=e13]: Gestao de Direitos Musicais
+      - generic [ref=e14]:
+        - heading "Plataforma completa para editoras musicais" [level=1] [ref=e15]:
+          - text: Plataforma completa
+          - text: para editoras musicais
+        - paragraph [ref=e16]: Gerencie contratos, distribuicao de royalties, demonstrativos e o catalogo completo da sua editora.
+      - generic [ref=e17]:
+        - generic [ref=e18]:
+          - img [ref=e20]
+          - generic [ref=e22]:
+            - paragraph [ref=e23]: Contratos Autorais
+            - paragraph [ref=e24]: Gestao completa com motor contratual avancado
+        - generic [ref=e25]:
+          - img [ref=e27]
+          - generic [ref=e29]:
+            - paragraph [ref=e30]: Distribuicao Automatica
+            - paragraph [ref=e31]: Royalties calculados e distribuidos em tempo real
+        - generic [ref=e32]:
+          - img [ref=e34]
+          - generic [ref=e36]:
+            - paragraph [ref=e37]: BI & Relatorios
+            - paragraph [ref=e38]: Insights detalhados sobre seu catalogo musical
+      - generic [ref=e39]:
+        - generic [ref=e40]:
+          - paragraph [ref=e41]: 12.400+
+          - paragraph [ref=e42]: Obras cadastradas
+        - generic [ref=e43]:
+          - paragraph [ref=e44]: 890+
+          - paragraph [ref=e45]: Titulares ativos
+        - generic [ref=e46]:
+          - paragraph [ref=e47]: 3.200+
+          - paragraph [ref=e48]: Contratos gerenciados
+        - generic [ref=e49]:
+          - paragraph [ref=e50]: 480+
+          - paragraph [ref=e51]: Distribuicoes realizadas
+      - paragraph [ref=e52]: 2025 Sync Mood. Todos os direitos reservados.
+    - generic [ref=e55]:
+      - generic [ref=e56]:
+        - heading "Entrar na plataforma" [level=2] [ref=e57]
+        - paragraph [ref=e58]: Use seu CPF e senha de acesso
+      - generic [ref=e59]:
+        - generic [ref=e60]:
+          - text: CPF
+          - textbox "000.000.000-00" [ref=e61]
+        - generic [ref=e62]:
+          - text: Senha
+          - generic [ref=e63]:
+            - textbox "••••••••" [ref=e64]
+            - button [ref=e65]:
+              - img [ref=e66]
+        - button "Entrar" [ref=e69]
+      - paragraph [ref=e70]:
+        - text: Problemas?
+        - link "suporte@syncmood.com.br" [ref=e71] [cursor=pointer]:
+          - /url: mailto:suporte@syncmood.com.br
+  - button "Open Next.js Dev Tools" [ref=e77] [cursor=pointer]:
+    - img [ref=e78]

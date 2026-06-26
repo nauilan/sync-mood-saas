@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/components/ui/page-header'
 import {
   ChevronRight, ChevronLeft, CheckCircle2, Shield, Music, Users,
@@ -784,6 +785,7 @@ function StepPagamento({ valorTotal, forma, setForma, condicao, setCondicao, par
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function NovaAutorizacaoPage() {
+  const router = useRouter()
   const [step, setStep] = useState(0)
   const [tipo, setTipo] = useState<TipoAutorizacao>('fonograma')
   const [obraId, setObraId] = useState('')
@@ -807,6 +809,8 @@ export default function NovaAutorizacaoPage() {
   const [buscandoObra, setBuscandoObra]               = useState(false)
   const [obraSelecionadaData, setObraSelecionadaData] = useState<any>(null)
   const [linksObra, setLinksObra]                     = useState<any[]>([])
+  const [salvando, setSalvando]                       = useState(false)
+  const [erroSalvar, setErroSalvar]                   = useState('')
 
   useEffect(() => {
     const q = buscaObra.trim()
@@ -893,6 +897,93 @@ export default function NovaAutorizacaoPage() {
   const fmtBRL = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 })
   const docNome = MODELO_NEGOCIO_DOCUMENTO_NOME[modeloNegocio]
   const valorParcela = condicao === 'parcelado' && parcelas > 0 ? (valorTotal - entrada) / parcelas : 0
+
+  // ── Licenciado: extrai campos especificos conforme tipo ──────────────────
+  function getLicenciadoNome() {
+    const c = camposEspecificos
+    return c.produtor_nome ?? c.razao_social ?? c.agencia_produtora ?? c.nome_licenciado ?? ''
+  }
+  function getLicenciadoDoc() {
+    const c = camposEspecificos
+    return c.produtor_cpf_cnpj ?? c.cnpj ?? c.cpf_cnpj ?? ''
+  }
+  function getLicenciadoEmail() {
+    const c = camposEspecificos
+    return c.produtor_email ?? c.email ?? ''
+  }
+  function getFinalidade() {
+    const c = camposEspecificos
+    const partes: string[] = []
+    if (tipo === 'fonograma') {
+      if (c.distribuidora) partes.push(`Distribuidora: ${c.distribuidora}`)
+      if (c.plataformas?.length) partes.push(`Plataformas: ${c.plataformas.join(', ')}`)
+    } else if (tipo === 'sincronizacao') {
+      if (c.meio_utilizacao) partes.push(c.meio_utilizacao)
+      if (c.tipo_sincronizacao) partes.push(c.tipo_sincronizacao)
+      if (c.descricao_uso) partes.push(c.descricao_uso)
+    } else if (tipo === 'publicidade') {
+      if (c.produto_servico) partes.push(`Produto: ${c.produto_servico}`)
+      if (c.descricao_uso) partes.push(c.descricao_uso)
+    }
+    return partes.join(' · ') || (TIPO_AUTORIZACAO_LABELS[tipo] ?? tipo)
+  }
+
+  async function handleGerarDocumento() {
+    if (salvando) return
+    setErroSalvar('')
+    setSalvando(true)
+    try {
+      const payload = {
+        obra_id:               obraId,
+        tipo_autorizacao:      tipo,
+        status_workflow:       'emitida',
+        finalidade:            getFinalidade(),
+        descricao:             obs,
+        observacoes:           obs,
+        licenciado_nome:       getLicenciadoNome(),
+        licenciado_cnpj_cpf:   getLicenciadoDoc(),
+        licenciado_email:      getLicenciadoEmail(),
+        valor_licenca:         valorTotal,
+        moeda:                 'BRL',
+        territorio,
+        prazo_inicio:          dataInicio || null,
+        prazo_fim:             dataFim || null,
+        prazo_indeterminado:   !dataFim,
+        modelo_negocio:        modeloNegocio,
+        forma_pagamento:       forma,
+        condicao_pagamento:    condicao,
+        parcelas:              condicao === 'parcelado' ? parcelas : 1,
+        entrada:               condicao === 'parcelado' ? entrada : 0,
+        percentual_autorizado: pctAutorizado,
+        exclusividade,
+        exclusividade_meses:   exclusividade ? exclMeses : null,
+        dados_especificos:     camposEspecificos,
+        // legados
+        licenciante:           obraSelecionadaData?.editora_nome ?? '',
+        licenciado:            getLicenciadoNome(),
+        tipo_uso:              TIPO_AUTORIZACAO_LABELS[tipo] ?? tipo,
+        data_inicio:           dataInicio || null,
+        data_fim:              dataFim || null,
+        valor:                 valorTotal,
+      }
+      const res = await authFetch('/api/autorizacoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setErroSalvar(json?.error ?? json?.message ?? `Erro ${res.status}`)
+        return
+      }
+      const id = json?.autorizacao?.id ?? json?.id ?? json?.data?.id
+      router.push(id ? `/master/autorizacoes/${id}` : '/master/autorizacoes')
+    } catch (e: any) {
+      setErroSalvar(e?.message ?? 'Erro ao salvar autorização')
+    } finally {
+      setSalvando(false)
+    }
+  }
 
   return (
     <div className="max-w-4xl space-y-5">
@@ -1287,9 +1378,16 @@ export default function NovaAutorizacaoPage() {
               Proximo <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
-            <button className="flex items-center gap-1.5 h-9 px-6 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm text-white font-semibold transition-colors">
-              <FileText className="w-4 h-4" /> Gerar Documento
-            </button>
+            <div className="flex flex-col items-end gap-1">
+              {erroSalvar && <p className="text-xs text-red-400">{erroSalvar}</p>}
+              <button
+                onClick={handleGerarDocumento}
+                disabled={salvando}
+                className="flex items-center gap-1.5 h-9 px-6 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:pointer-events-none text-sm text-white font-semibold transition-colors">
+                {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                {salvando ? 'Salvando...' : 'Gerar Documento'}
+              </button>
+            </div>
           )}
         </div>
       </div>
