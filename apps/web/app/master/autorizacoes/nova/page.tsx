@@ -257,7 +257,11 @@ function TitularLookup({
           className={ic + ' pl-8'}
         />
         {open && value.trim().length >= 2 && (
-          <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-[#0d1526] border border-violet-500/30 rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto">
+          <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-[#0d1526] border border-violet-500/30 rounded-xl shadow-2xl overflow-hidden max-h-80 overflow-y-auto">
+            {/* Resultados da busca */}
+            {filtered.length === 0 && !loading && (
+              <p className="px-3 pt-3 pb-1 text-xs text-white/40">Nenhum titular encontrado.</p>
+            )}
             {filtered.map((t: any) => {
               const nome   = t.nome_completo ?? t.nome ?? '(sem nome)'
               const doc    = t.cpf ?? t.cpf_cnpj ?? t.cnpj ?? ''
@@ -282,35 +286,34 @@ function TitularLookup({
               )
             })}
 
-            {/* Nenhum resultado — oferecer cadastro rápido */}
-            {filtered.length === 0 && !loading && (
-              <div className="px-3 py-3">
-                <p className="text-xs text-white/40 mb-2">Nenhum titular encontrado.</p>
-                {!showForm ? (
-                  <button
-                    onMouseDown={e => { e.preventDefault(); setShowForm(true); setNovoNome(value.trim()) }}
-                    className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 font-semibold"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Cadastrar novo titular
+            {/* Separador + opção de cadastro rápido — sempre visível */}
+            {!showForm ? (
+              <div className="border-t border-white/5 px-3 py-2.5">
+                <button
+                  onMouseDown={e => { e.preventDefault(); setShowForm(true); setNovoNome(value.trim()) }}
+                  className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 font-semibold w-full"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  {filtered.length === 0 ? 'Cadastrar novo titular' : 'Não encontrou? Cadastrar novo'}
+                </button>
+              </div>
+            ) : (
+              <div className="border-t border-white/5 px-3 py-3 space-y-2" onMouseDown={e => e.preventDefault()}>
+                <p className="text-[10px] font-semibold text-violet-400 uppercase tracking-wide">Novo Titular</p>
+                <div className="flex gap-2">
+                  {(['PF','PJ'] as const).map(tp => (
+                    <button key={tp} onClick={() => setNovoTipo(tp)} className={`text-[10px] px-2.5 py-0.5 rounded-full border transition-colors ${novoTipo === tp ? 'border-violet-500 text-violet-400 bg-violet-500/10' : 'border-white/10 text-white/40'}`}>{tp}</button>
+                  ))}
+                </div>
+                <input value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="Nome completo / Razão Social *" className="w-full bg-white/5 border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50" />
+                <input value={novoDoc}  onChange={e => setNovoDoc(e.target.value)}  placeholder={novoTipo === 'PF' ? 'CPF (opcional)' : 'CNPJ (opcional)'} className="w-full bg-white/5 border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50" />
+                <input value={novoEmail} onChange={e => setNovoEmail(e.target.value)} placeholder="E-mail (opcional)" className="w-full bg-white/5 border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50" />
+                <div className="flex gap-2 pt-1">
+                  <button onClick={handleSalvarNovo} disabled={salvando || !novoNome.trim()} className="flex-1 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-semibold py-1.5 rounded-md transition-colors">
+                    {salvando ? 'Salvando...' : 'Salvar e selecionar'}
                   </button>
-                ) : (
-                  <div className="space-y-2" onMouseDown={e => e.preventDefault()}>
-                    <div className="flex gap-2">
-                      {(['PF','PJ'] as const).map(tp => (
-                        <button key={tp} onClick={() => setNovoTipo(tp)} className={`text-[10px] px-2.5 py-0.5 rounded-full border transition-colors ${novoTipo === tp ? 'border-violet-500 text-violet-400 bg-violet-500/10' : 'border-white/10 text-white/40'}`}>{tp}</button>
-                      ))}
-                    </div>
-                    <input value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="Nome completo / Razão Social *" className="w-full bg-white/5 border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50" />
-                    <input value={novoDoc}  onChange={e => setNovoDoc(e.target.value)}  placeholder={novoTipo === 'PF' ? 'CPF (opcional)' : 'CNPJ (opcional)'} className="w-full bg-white/5 border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50" />
-                    <input value={novoEmail} onChange={e => setNovoEmail(e.target.value)} placeholder="E-mail (opcional)" className="w-full bg-white/5 border border-white/10 rounded-md px-2 py-1.5 text-xs text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50" />
-                    <div className="flex gap-2 pt-1">
-                      <button onClick={handleSalvarNovo} disabled={salvando || !novoNome.trim()} className="flex-1 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-semibold py-1.5 rounded-md transition-colors">
-                        {salvando ? 'Salvando...' : 'Salvar e selecionar'}
-                      </button>
-                      <button onClick={() => setShowForm(false)} className="text-xs text-white/40 hover:text-white/60 px-2">Cancelar</button>
-                    </div>
-                  </div>
-                )}
+                  <button onClick={() => setShowForm(false)} className="text-xs text-white/40 hover:text-white/60 px-2">Cancelar</button>
+                </div>
               </div>
             )}
           </div>
