@@ -121,6 +121,7 @@ export async function POST(req: NextRequest) {
     prazo_inicio, prazo_fim, prazo_indeterminado,
     status_workflow: statusReq,
     editora_administrada_id,
+    modelo_negocio,
     // campos legados de compatibilidade
     tipo_uso, licenciante, licenciado, data_inicio, data_fim, valor, descricao,
   } = body
@@ -159,6 +160,7 @@ export async function POST(req: NextRequest) {
     editora_administrada_id: editora_administrada_id ?? null,
     emitida_por:            status_workflow === 'emitida' ? usuario.id : null,
     emitida_em,
+    modelo_negocio:         modelo_negocio ?? 'pago_editora',
     // legados
     licenciante:            licenciante ?? null,
     licenciado:             licenciado ?? null,

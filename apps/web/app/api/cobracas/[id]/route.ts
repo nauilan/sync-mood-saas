@@ -92,6 +92,75 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // ── Quando cobrança vira "paga": acionar CC de obras se modelo_negocio = pago_editora ──
+  const statusAnterior = (anterior as any)?.status
+  const statusNovo     = safeBody.status as string | undefined
+  const autorizacaoId  = (data as any)?.autorizacao_id ?? (anterior as any)?.autorizacao_id
+
+  if (statusNovo === 'paga' && statusAnterior !== 'paga' && autorizacaoId) {
+    // Buscar autorização vinculada
+    const { data: aut } = await sb
+      .from('autorizacoes')
+      .select('id, obra_id, numero_autorizacao, licenciado_nome, valor_licenca, modelo_negocio, cc_movimento_id')
+      .eq('id', autorizacaoId)
+      .eq('tenant_id', usuario.tenant_id)
+      .single()
+
+    const modelo = (aut as any)?.modelo_negocio ?? 'pago_editora'
+
+    if (modelo === 'pago_editora' && aut && !(aut as any).cc_movimento_id) {
+      const obra_id    = (aut as any).obra_id
+      const valorFinal = Number((data as any)?.valor_liquido ?? (data as any)?.valor_bruto ?? (aut as any)?.valor_licenca ?? 0)
+      const numAut     = (aut as any).numero_autorizacao ?? autorizacaoId.slice(0, 8)
+      const licNome    = (aut as any).licenciado_nome ?? 'Licenciado'
+      const dataPag    = (data as any)?.data_pagamento ?? new Date().toISOString().slice(0, 10)
+
+      if (obra_id && valorFinal > 0) {
+        // Garantir cc_obras
+        const { data: ccExist } = await sb
+          .from('cc_obras')
+          .select('id, saldo_atual')
+          .eq('obra_id', obra_id)
+          .eq('tenant_id', usuario.tenant_id)
+          .maybeSingle()
+
+        let ccObraId: string
+        let saldoAnterior = 0
+
+        if (ccExist) {
+          ccObraId      = (ccExist as any).id
+          saldoAnterior = Number((ccExist as any).saldo_atual ?? 0)
+        } else {
+          const { data: ccNovo } = await sb
+            .from('cc_obras')
+            .insert({ tenant_id: usuario.tenant_id, obra_id, saldo_atual: 0, saldo_bloqueado: 0, saldo_distribuido: 0, saldo_pendente: 0, moeda: 'BRL', status: 'ativo' })
+            .select('id').single()
+          ccObraId = (ccNovo as any).id
+        }
+
+        const saldoPosterior = saldoAnterior + valorFinal
+        const { data: mov } = await sb
+          .from('cc_obras_movimentos')
+          .insert({
+            tenant_id: usuario.tenant_id, cc_obra_id: ccObraId, obra_id,
+            tipo: 'entrada', valor: valorFinal,
+            saldo_anterior: saldoAnterior, saldo_posterior: saldoPosterior,
+            descricao: `Autorização ${numAut} — ${licNome}`,
+            source: 'autorizacao', source_id: autorizacaoId,
+            criado_em: new Date(dataPag).toISOString(),
+          })
+          .select('id').single()
+
+        if (mov) {
+          await sb.from('cc_obras').update({ saldo_atual: saldoPosterior }).eq('id', ccObraId)
+          await sb.from('autorizacoes').update({ cc_movimento_id: (mov as any).id }).eq('id', autorizacaoId)
+        }
+      }
+    }
+    // pago_autor → não alimenta cc_obras (pagamento direto ao autor)
+    // sem_onus   → sem valor, não alimenta cc_obras
+  }
+
   await logAudit({
     tenant_id: usuario.tenant_id, usuario_id: usuario.id,
     acao: 'alterar', modulo: 'cobracas', tabela_afetada: 'cobracas',
