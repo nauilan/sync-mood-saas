@@ -73,9 +73,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Buscar nomes relacionados em queries separadas (evita ambiguidade de FK)
   const row = data as Record<string, any>
-  const [editoraRes, titularRes, obraRes] = await Promise.all([
+  const [editoraRes, editoraAdmRes, titularRes, obraRes] = await Promise.all([
     row.editora_id
       ? sb.from('editoras').select('id,nome').eq('id', row.editora_id).single()
+      : Promise.resolve({ data: null }),
+    row.editora_administrada_id
+      ? sb.from('editoras').select('id,nome').eq('id', row.editora_administrada_id).single()
       : Promise.resolve({ data: null }),
     row.titular_id
       ? sb.from('titulares').select('id,nome').eq('id', row.titular_id).single()
@@ -88,9 +91,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json({
     data: {
       ...row,
-      editora: editoraRes.data ?? null,
-      titular: titularRes.data ?? null,
-      obra:    obraRes.data ?? null,
+      editora:              editoraRes.data ?? null,
+      editora_administrada: editoraAdmRes.data ?? null,
+      titular:              titularRes.data ?? null,
+      obra:                 obraRes.data ?? null,
     }
   })
 }

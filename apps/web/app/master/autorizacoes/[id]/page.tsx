@@ -132,7 +132,7 @@ export default function AutorizacaoDetailPage({ params }: { params: Promise<{ id
       ? 'Autor (diretamente)'
       : aut.modelo_negocio === 'sem_onus'
         ? 'N/A (sem ônus)'
-        : (aut.editora?.nome ?? aut.licenciante ?? 'Editora')
+        : (aut.editora_administrada?.nome ?? aut.editora?.nome ?? aut.licenciante ?? 'Editora Administradora')
     const periodo = aut.prazo_indeterminado
       ? 'Indeterminado'
       : `${fmtDate(aut.prazo_inicio)} a ${fmtDate(aut.prazo_fim)}`
@@ -248,7 +248,7 @@ export default function AutorizacaoDetailPage({ params }: { params: Promise<{ id
     ? 'Autor (diretamente)'
     : aut.modelo_negocio === 'sem_onus'
       ? 'N/A (sem ônus)'
-      : (aut.editora?.nome ?? aut.licenciante ?? 'Editora')
+      : (aut.editora_administrada?.nome ?? aut.editora?.nome ?? aut.licenciante ?? 'Editora Administradora')
 
   const Card = ({ label, value, icon: Icon }: { label: string; value: string; icon: any }) => (
     <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4">

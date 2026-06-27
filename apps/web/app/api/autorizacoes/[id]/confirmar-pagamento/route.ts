@@ -66,7 +66,7 @@ export async function POST(
   // ── Buscar autorização ────────────────────────────────────────────────────
   const { data: aut, error: autErr } = await sb
     .from('autorizacoes')
-    .select('id, tenant_id, obra_id, numero_autorizacao, licenciado_nome, valor_licenca, modelo_negocio, status_workflow, cc_movimento_id')
+    .select('id, tenant_id, obra_id, numero_autorizacao, licenciado_nome, valor_licenca, modelo_negocio, status_workflow, cc_movimento_id, editora_administrada_id')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
@@ -79,6 +79,14 @@ export async function POST(
   const obra_id     = (aut as any).obra_id
   const numAut      = (aut as any).numero_autorizacao ?? id.slice(0, 8)
   const licNome     = (aut as any).licenciado_nome ?? 'Licenciado'
+  const editoraAdmId = (aut as any).editora_administrada_id ?? null
+
+  // Buscar nome da editora administradora para descrição do movimento
+  let editoraAdmNome = 'Editora Administradora'
+  if (editoraAdmId) {
+    const { data: edAdm } = await sb.from('editoras').select('nome').eq('id', editoraAdmId).single()
+    if (edAdm) editoraAdmNome = (edAdm as any).nome
+  }
 
   // ── Atualizar status da autorização ──────────────────────────────────────
   const patchAut: Record<string, unknown> = {
@@ -144,7 +152,7 @@ export async function POST(
         valor:           valorFinal,
         saldo_anterior:  saldoAnterior,
         saldo_posterior: saldoPosterior,
-        descricao:       `Autorização ${numAut} — ${licNome}`,
+        descricao:       `Autorização ${numAut} — ${licNome} → ${editoraAdmNome}`,
         source:          'autorizacao',
         source_id:       id,
         forma_pagamento: forma_pagamento ?? null,
