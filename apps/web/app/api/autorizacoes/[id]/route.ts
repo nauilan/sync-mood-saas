@@ -60,18 +60,39 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   const { data, error } = await sb.from('autorizacoes')
-    .select(`*, obra:obras!autorizacoes_obra_id_fkey(id,titulo), editora:editoras!autorizacoes_editora_id_fkey(id,nome), titular:titulares!autorizacoes_titular_id_fkey(id,nome)`)
+    .select('*')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .is('deleted_at', null)
     .single()
 
   if (error) {
-    // PGRST116 = ".single() encontrou 0 linhas" → realmente não encontrado
     const status = (error as any).code === 'PGRST116' ? 404 : 500
     return NextResponse.json({ error: error.message, code: (error as any).code }, { status })
   }
-  return NextResponse.json({ data })
+
+  // Buscar nomes relacionados em queries separadas (evita ambiguidade de FK)
+  const row = data as Record<string, any>
+  const [editoraRes, titularRes, obraRes] = await Promise.all([
+    row.editora_id
+      ? sb.from('editoras').select('id,nome').eq('id', row.editora_id).single()
+      : Promise.resolve({ data: null }),
+    row.titular_id
+      ? sb.from('titulares').select('id,nome').eq('id', row.titular_id).single()
+      : Promise.resolve({ data: null }),
+    row.obra_id
+      ? sb.from('obras').select('id,titulo').eq('id', row.obra_id).single()
+      : Promise.resolve({ data: null }),
+  ])
+
+  return NextResponse.json({
+    data: {
+      ...row,
+      editora: editoraRes.data ?? null,
+      titular: titularRes.data ?? null,
+      obra:    obraRes.data ?? null,
+    }
+  })
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
