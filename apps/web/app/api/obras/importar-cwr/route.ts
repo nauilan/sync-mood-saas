@@ -44,6 +44,16 @@ export async function POST(req: NextRequest) {
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'JSON inválido' }, { status: 400 }) }
 
+  const obras = Array.isArray(body?.obras) ? body.obras : []
+  const titulares = Array.isArray(body?.titulares) ? body.titulares : []
+
+  if (obras.length === 0 && titulares.length === 0) {
+    return NextResponse.json(
+      { error: 'Payload CWR vazio. Envie ao menos uma obra ou titular.' },
+      { status: 400 }
+    )
+  }
+
   const result = {
     obras_saved: 0,
     titulares_criados: 0,
@@ -55,7 +65,7 @@ export async function POST(req: NextRequest) {
 
   // ── 1. Processar TODOS os titulares do CWR (autores + editoras) ─────────────
   // Matching em 2 camadas: (1) codigo_interno_legado, (2) IPI/codigo_ipi
-  const todosTitulares = body.titulares ?? []
+  const todosTitulares = titulares
 
   if (todosTitulares.length > 0) {
     const codigosNoCwr = todosTitulares
@@ -217,8 +227,8 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 3. Upsert obras ──────────────────────────────────────────────────────────
-  if (body.obras?.length > 0) {
-    const obrasData = body.obras.map((o: Record<string, unknown>) => ({
+  if (obras.length > 0) {
+    const obrasData = obras.map((o: Record<string, unknown>) => ({
       tenant_id:                tenantId,
       titulo:                   o.titulo,
       titulo_alternativo:       o.titulo_original ?? null,
