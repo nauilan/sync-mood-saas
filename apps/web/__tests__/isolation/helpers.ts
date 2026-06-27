@@ -206,6 +206,8 @@ export async function seedTenantResources(tenant: TestTenant): Promise<TestResou
       status_workflow:    'rascunho',
       status:             'pendente',
       numero_autorizacao: `AUT-TST-${ts}`,
+      tipo_uso:           'sync',
+      tipo_autorizacao:   'sync',
       territorio:         'BR',
       moeda:              'BRL',
       valor:              0,
