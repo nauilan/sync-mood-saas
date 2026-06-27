@@ -56,7 +56,10 @@ export default function AutorizacaoDetailPage({ params }: { params: Promise<{ id
       setLoading(true)
       try {
         const res = await authFetch(`/api/autorizacoes/${id}`)
-        if (!res.ok) throw new Error(`Erro ${res.status}`)
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}))
+          throw new Error(json?.error ?? `Erro ${res.status}`)
+        }
         const json = await res.json()
         setAut(json.data ?? json)
       } catch (e: any) {

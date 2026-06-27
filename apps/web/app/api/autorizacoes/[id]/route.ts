@@ -60,7 +60,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   const { data, error } = await sb.from('autorizacoes')
-    .select(`*, obra:obra_id(id,titulo), editora:editora_id(id,nome), titular:titular_id(id,nome)`)
+    .select(`*, obra:obras!autorizacoes_obra_id_fkey(id,titulo), editora:editoras!autorizacoes_editora_id_fkey(id,nome), titular:titulares!autorizacoes_titular_id_fkey(id,nome)`)
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .is('deleted_at', null)
