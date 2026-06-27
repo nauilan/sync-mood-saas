@@ -60,3 +60,7 @@ Setting a custom Cache-Control header can break Next.js development behavior.
  GET /auth/login 200 in 199ms (next.js: 79ms, proxy.ts: 76ms, application-code: 45ms)
  GET /auth/login 200 in 206ms (next.js: 74ms, proxy.ts: 78ms, application-code: 54ms)
  GET /sw.js 404 in 71ms (next.js: 19ms, proxy.ts: 3ms, application-code: 48ms)
+ GET /auth/login 200 in 429ms (next.js: 27ms, proxy.ts: 9ms, application-code: 393ms)
+ GET /favicon.svg 404 in 95ms (next.js: 13ms, application-code: 82ms)
+ GET /sw.js 404 in 99ms (next.js: 15ms, proxy.ts: 9ms, application-code: 75ms)
+ GET /sw.js 404 in 44ms (next.js: 7ms, proxy.ts: 4ms, application-code: 33ms)

@@ -130,6 +130,16 @@ export async function POST(req: NextRequest) {
 
   if (!obra_id) return NextResponse.json({ error: 'obra_id obrigatório' }, { status: 400 })
 
+  // Segurança: verificar que obra_id pertence ao tenant do usuário
+  // Impede contaminação cross-tenant (Tenant B criando autorização para obra do Tenant A)
+  const { data: obraCheck } = await sb
+    .from('obras')
+    .select('id')
+    .eq('id', obra_id)
+    .eq('tenant_id', usuario.tenant_id)
+    .single()
+  if (!obraCheck) return NextResponse.json({ error: 'Obra não encontrada' }, { status: 404 })
+
   const isAdmin = ['master', 'admin', 'administrador'].includes(usuario.role?.toLowerCase() ?? '')
 
   // Somente Admin/Master pode emitir diretamente

@@ -6,6 +6,8 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     include: ['**/__tests__/**/*.test.ts'],
+    // Carrega .env.local antes de todos os testes (necessário para testes de isolamento)
+    setupFiles: ['./__tests__/isolation/env.setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
