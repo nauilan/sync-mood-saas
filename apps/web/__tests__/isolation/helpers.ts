@@ -10,6 +10,14 @@
 
 import { createClient } from '@supabase/supabase-js'
 
+// Polyfill WebSocket para Node.js/CI — Supabase Realtime precisa no construtor
+if (typeof (globalThis as any).WebSocket === 'undefined') {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    ;(globalThis as any).WebSocket = require('ws')
+  } catch { /* sem ws — ok, testes não usam subscriptions */ }
+}
+
 export const API_BASE = (process.env.ISOLATION_TEST_API_URL ?? '').replace(/\/$/, '')
 
 // ── Clientes Supabase ─────────────────────────────────────────────────────────
