@@ -1234,23 +1234,18 @@ export default function NovaAutorizacaoPage() {
             <div className="space-y-2">
               <p className="text-xs font-medium text-white/50">Intérprete(s)</p>
               {interpretesProduto.map((interp, idx) => (
-                <div key={idx} className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <TitularLookup
-                      label=""
-                      value={interp.nome}
-                      onChange={v => {
-                        const novo = [...interpretesProduto]
-                        novo[idx] = { ...novo[idx], nome: v }
-                        setInterpretesProduto(novo)
-                      }}
-                      onSelect={t => {
-                        const novo = [...interpretesProduto]
-                        novo[idx] = { nome: t.nome, id: t.id }
-                        setInterpretesProduto(novo)
-                      }}
-                    />
-                  </div>
+                <div key={idx} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={interp.nome}
+                    onChange={e => {
+                      const novo = [...interpretesProduto]
+                      novo[idx] = { ...novo[idx], nome: e.target.value }
+                      setInterpretesProduto(novo)
+                    }}
+                    placeholder="Nome artístico, pseudônimo ou coletivo..."
+                    className={ic + ' flex-1'}
+                  />
                   {interpretesProduto.length > 1 && (
                     <button type="button"
                       onClick={() => setInterpretesProduto(interpretesProduto.filter((_, i) => i !== idx))}

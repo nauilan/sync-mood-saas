@@ -164,9 +164,11 @@ export async function POST(req: NextRequest) {
     emitida_em,
     modelo_negocio:         modelo_negocio ?? 'pago_editora',
     observacoes:            observacoes ?? null,
-    dados_especificos:      dados_especificos ?? {},
-    dados_produto:          dados_produto ?? {},
-    validada_em:            (status_workflow === 'emitida' && (modelo_negocio ?? 'pago_editora') === 'sem_onus') ? new Date().toISOString() : null,
+    // dados_especificos e dados_produto: requerem migration 064 no Supabase
+    // (064_autorizacoes_produto_validacao.sql — executar antes de ativar)
+    // dados_especificos:   dados_especificos ?? {},
+    // dados_produto:       dados_produto ?? {},
+    // validada_em:         (status_workflow === 'emitida' && (modelo_negocio ?? 'pago_editora') === 'sem_onus') ? new Date().toISOString() : null,
     // legados
     licenciante:            licenciante ?? null,
     licenciado:             licenciado ?? null,
