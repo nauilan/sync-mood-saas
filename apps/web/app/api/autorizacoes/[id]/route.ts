@@ -128,6 +128,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { data: anterior } = await sb.from('autorizacoes')
     .select('*').eq('id', id).eq('tenant_id', usuario.tenant_id).single()
 
+  // Trava de integridade editorial: ao alterar status para 'emitida', verificar obra apta
+  if (safeBody.status_workflow === 'emitida') {
+    const obraId = (anterior as Record<string, unknown> | null)?.obra_id as string | null
+    if (obraId) {
+      const { data: obraInteg } = await sb.from('obras')
+        .select('status_integridade')
+        .eq('id', obraId)
+        .eq('tenant_id', usuario.tenant_id)
+        .single()
+      const si = (obraInteg as Record<string, unknown> | null)?.status_integridade as string | null
+      if (si !== 'apta') {
+        return NextResponse.json({
+          error: `Autorização não pode ser emitida: a obra possui integridade editorial "${si ?? 'não calculada'}". Regularize via Saneamento Editorial antes de emitir.`,
+          status_integridade: si ?? null,
+        }, { status: 422 })
+      }
+    }
+  }
+
   const { data, error } = await sb.from('autorizacoes')
     .update({ ...safeBody, updated_at: new Date().toISOString() })
     .eq('id', id)

@@ -148,6 +148,23 @@ export async function POST(req: NextRequest) {
     status_workflow = 'aguardando_aprovacao_admin'
   }
 
+  // Trava de integridade editorial: autorização só pode ser EMITIDA se a obra estiver apta.
+  // Rascunhos e aguardando_aprovacao_admin passam livremente.
+  if (status_workflow === 'emitida') {
+    const { data: obraInteg } = await sb.from('obras')
+      .select('status_integridade')
+      .eq('id', obra_id)
+      .eq('tenant_id', usuario.tenant_id)
+      .single()
+    const si = (obraInteg as Record<string, unknown> | null)?.status_integridade as string | null
+    if (si !== 'apta') {
+      return NextResponse.json({
+        error: `Autorização não pode ser emitida: a obra possui integridade editorial "${si ?? 'não calculada'}". Regularize via Saneamento Editorial antes de emitir.`,
+        status_integridade: si ?? null,
+      }, { status: 422 })
+    }
+  }
+
   const emitida_em = status_workflow === 'emitida' ? new Date().toISOString() : null
 
   const payload: Record<string, unknown> = {
