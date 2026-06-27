@@ -80,13 +80,12 @@ describe.skipIf(MISSING.length > 0)('Storage — Isolamento de Contratos e PDFs'
     } else {
       // Registrar metadados na tabela obras_contratos para Tenant A
       const { data: oc } = await sb.from('obras_contratos').insert({
-        tenant_id:        tenantA.tenantId,
-        obra_id:          resA.obraId,
-        storage_path:     storagePath,
-        nome_arquivo:     `test-${ts}.pdf`,
-        mime_type:        'application/pdf',
-        tamanho_arquivo:  4,
-        status_processamento_ia: 'pendente',
+        tenant_id:    tenantA.tenantId,
+        obra_id:      resA.obraId,
+        tipo:         'manual',
+        arquivo_url:  storagePath,
+        arquivo_nome: `test-${ts}.pdf`,
+        vigente:      true,
       }).select('id').single()
       obraContratoId = oc?.id ?? null
     }
