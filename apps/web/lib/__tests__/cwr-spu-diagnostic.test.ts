@@ -1,12 +1,14 @@
 /**
  * Diagnóstico SPU — identifica posições exatas dos campos no registro real.
+ * Teste local: só roda quando o arquivo CWR existir na máquina do desenvolvedor.
  */
 import { describe, it } from 'vitest'
 import * as fs from 'fs'
 
 const CWR_FILE = 'C:\\Users\\Usuário\\Downloads\\cwr\\CW260020TSL_189.V21'
+const FILE_EXISTS = fs.existsSync(CWR_FILE)
 
-describe('SPU Diagnóstico de posições', () => {
+describe.skipIf(!FILE_EXISTS)('SPU Diagnóstico de posições', () => {
   it('imprime campos SPU char a char', () => {
     const raw = fs.readFileSync(CWR_FILE, 'latin1')
     const linhas = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')

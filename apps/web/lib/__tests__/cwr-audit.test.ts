@@ -10,6 +10,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 const CWR_FILE = 'C:\\Users\\Usuário\\Downloads\\cwr\\CW260020TSL_189.V21'
+const FILE_EXISTS = fs.existsSync(CWR_FILE)
 
 function lerArquivo(): string | null {
   try {
@@ -19,7 +20,7 @@ function lerArquivo(): string | null {
   }
 }
 
-describe('Auditoria CWR real — parser corrigido', () => {
+describe.skipIf(!FILE_EXISTS)('Auditoria CWR real — parser corrigido', () => {
   const conteudo = lerArquivo()
   const skip = !conteudo
 
