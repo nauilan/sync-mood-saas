@@ -205,6 +205,16 @@ export async function GET(
 
   const { id: obraId } = await params
 
+  // Verificar que a obra pertence ao tenant — retorna 404 para não expor obras de outros tenants
+  const { data: obraCheck } = await sb
+    .from('obras')
+    .select('id')
+    .eq('id', obraId)
+    .eq('tenant_id', usuario.tenant_id)
+    .single()
+
+  if (!obraCheck) return NextResponse.json({ error: 'Obra não encontrada' }, { status: 404 })
+
   const { data, error } = await sb
     .from('obras_contratos')
     .select('*')
