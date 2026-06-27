@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { extrairLetraDaLegal, validarArquivoContrato } from '@/lib/contrato-integridade'
+import { logAudit } from '@/lib/audit'
 
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
@@ -160,6 +161,23 @@ export async function POST(
       letraExtraida = extrairLetraDaLegal(textoCompleto) || null
     }
   }
+
+  await logAudit({
+    tenant_id:      usuario.tenant_id,
+    usuario_id:     usuario.id,
+    acao:           'upload_contrato',
+    modulo:         'contratos',
+    tabela_afetada: 'obras_contratos',
+    registro_id:    ocRow?.id ?? null,
+    dados_novos: {
+      obra_id:    obraId,
+      nome:       arquivo.name,
+      tamanho:    arquivo.size,
+      path:       storagePath,
+    } as Record<string, unknown>,
+    ip:             req.headers.get('x-forwarded-for') ?? null,
+    origem_execucao: 'usuario',
+  })
 
   return NextResponse.json({
     ok: true,
