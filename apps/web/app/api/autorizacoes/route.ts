@@ -191,10 +191,11 @@ export async function POST(req: NextRequest) {
     origem_execucao: 'usuario',
   })
 
-  // Ao emitir: atualizar interprete_referencia da obra se dados_produto tiver interprete
-  if (status_workflow === 'emitida' && (dados_produto as any)?.interprete_nome) {
+  // Ao emitir: atualizar interprete_referencia da obra com primeiro interprete do produto
+  const primeiroInterp = (dados_produto as any)?.interpretes?.[0]?.nome
+  if (status_workflow === 'emitida' && primeiroInterp) {
     await sb.from('obras').update({
-      interprete_referencia: (dados_produto as any).interprete_nome,
+      interprete_referencia: primeiroInterp,
     }).eq('id', obra_id).eq('tenant_id', usuario.tenant_id)
   }
 

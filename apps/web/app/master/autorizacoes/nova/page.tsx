@@ -56,12 +56,14 @@ const STEPS = [
 const ic = 'w-full h-9 bg-white/5 border border-white/[0.08] rounded-lg px-3 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 transition-colors'
 const sel = ic + ' cursor-pointer'
 
-function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: React.ReactNode }) {
+function Field({ label, required, hint, children }: { label?: string; required?: boolean; hint?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <label className="text-xs font-medium text-white/50">
-        {label} {required && <span className="text-rose-400">*</span>}
-      </label>
+      {label && (
+        <label className="text-xs font-medium text-white/50">
+          {label} {required && <span className="text-rose-400">*</span>}
+        </label>
+      )}
       {children}
       {hint && <p className="text-[10px] text-white/25">{hint}</p>}
     </div>
@@ -111,15 +113,26 @@ function CurrencyInput({ value, onChange, disabled }: { value: number; onChange:
   )
 }
 
-function MultiSelect({ options, value, onChange, label }: { options: string[]; value: string[]; onChange: (v: string[]) => void; label?: string }) {
+function MultiSelect({ options, value, onChange, label, selectAll }: { options: string[]; value: string[]; onChange: (v: string[]) => void; label?: string; selectAll?: boolean }) {
+  const allSelected = options.length > 0 && options.every(o => value.includes(o))
   return (
     <div className="space-y-1">
-      {label && <p className="text-xs font-medium text-white/50">{label}</p>}
+      {label && (
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium text-white/50">{label}</p>
+          {selectAll && (
+            <button type="button" onClick={() => onChange(allSelected ? [] : [...options])}
+              className="text-[10px] text-violet-400 hover:text-violet-300 transition-colors">
+              {allSelected ? 'Desmarcar todos' : 'Selecionar todos'}
+            </button>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap gap-1.5">
         {options.map(opt => {
           const sel2 = value.includes(opt)
           return (
-            <button key={opt} onClick={() => onChange(sel2 ? value.filter(x => x !== opt) : [...value, opt])}
+            <button key={opt} type="button" onClick={() => onChange(sel2 ? value.filter(x => x !== opt) : [...value, opt])}
               className={`h-7 px-2.5 rounded-lg border text-xs font-medium transition-colors ${sel2 ? 'bg-violet-500/15 border-violet-500/40 text-violet-300' : 'bg-white/[0.03] border-white/[0.06] text-white/45 hover:text-white/70'}`}>
               {opt}
             </button>
@@ -132,6 +145,7 @@ function MultiSelect({ options, value, onChange, label }: { options: string[]; v
 
 // ── Titular lookup ────────────────────────────────────────────────────────────
 interface TitularSelecionado {
+  id?: string
   nome: string
   cpf_cnpj: string
   endereco: string
@@ -153,6 +167,7 @@ function extrairTitular(t: any): TitularSelecionado {
             ?? {}
   const mail = contatos.find((c: any) => c.tipo === 'email') ?? {}
   return {
+    id:        t.id ?? undefined,
     nome,
     cpf_cnpj,
     endereco:  end.logradouro
@@ -816,11 +831,17 @@ export default function NovaAutorizacaoPage() {
   const [salvando, setSalvando]                       = useState(false)
   const [erroSalvar, setErroSalvar]                   = useState('')
   // ── Produto fonográfico ──────────────────────────────────────────────────
-  const [interpreteNome, setInterpreteNome]             = useState('')
-  const [interpreteTitularId, setInterpreteTitularId]   = useState<string | null>(null)
+  const [tituloProduto, setTituloProduto]               = useState('')
+  const [interpretesProduto, setInterpretesProduto]     = useState<{ nome: string; id?: string }[]>([{ nome: '' }])
+  const [tiposProduto, setTiposProduto]                 = useState<string[]>([])
   const [formatosFisicos, setFormatosFisicos]           = useState<string[]>([])
   const [formatosDigitais, setFormatosDigitais]         = useState<string[]>([])
   const [isrcs, setIsrcs]                               = useState<string[]>([''])
+  const [dataPrevLancamento, setDataPrevLancamento]     = useState('')
+  const [territorioProduto, setTerritorioProduto]       = useState('BR')
+  const [paisesEspecificos, setPaisesEspecificos]       = useState('')
+  const [seloGravadora, setSeloGravadora]               = useState('')
+  const [distribuidoraNome, setDistribuidoraNome]       = useState('')
 
   useEffect(() => {
     const q = buscaObra.trim()
@@ -970,11 +991,17 @@ export default function NovaAutorizacaoPage() {
         exclusividade_meses:   exclusividade ? exclMeses : null,
         dados_especificos:     camposEspecificos,
         dados_produto: {
-          interprete_nome:   interpreteNome || null,
-          interprete_id:     interpreteTitularId || null,
-          formatos_fisicos:  formatosFisicos,
-          formatos_digitais: formatosDigitais,
-          isrcs:             isrcs.filter(Boolean),
+          titulo:             tituloProduto || null,
+          interpretes:        interpretesProduto.filter(i => i.nome),
+          tipos:              tiposProduto,
+          formatos_fisicos:   formatosFisicos,
+          formatos_digitais:  formatosDigitais,
+          isrcs:              isrcs.filter(Boolean),
+          data_lancamento:    dataPrevLancamento || null,
+          territorio:         territorioProduto,
+          paises_especificos: paisesEspecificos || null,
+          selo_gravadora:     seloGravadora || null,
+          distribuidora:      distribuidoraNome || null,
         },
         // legados
         licenciante:           obraSelecionadaData?.editora_nome ?? '',
@@ -1189,33 +1216,88 @@ export default function NovaAutorizacaoPage() {
 
       {/* ─── Step 3: Produto ─── */}
       {step === 3 && (
-        <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            <Music2 className="w-4 h-4 text-violet-400" />
-            <h2 className="text-sm font-semibold text-white">Produto Fonografico</h2>
+        <div className="space-y-4">
+
+          {/* Card 1: Identificação */}
+          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <Music2 className="w-4 h-4 text-violet-400" />
+              <h2 className="text-sm font-semibold text-white">Produto Fonografico</h2>
+            </div>
+
+            <Field label="Titulo do produto">
+              <input type="text" value={tituloProduto} onChange={e => setTituloProduto(e.target.value)}
+                placeholder="Nome do album, EP, single..." className={ic} />
+            </Field>
+
+            {/* Intérpretes múltiplos */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-white/50">Intérprete(s)</p>
+              {interpretesProduto.map((interp, idx) => (
+                <div key={idx} className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <TitularLookup
+                      label=""
+                      value={interp.nome}
+                      onChange={v => {
+                        const novo = [...interpretesProduto]
+                        novo[idx] = { ...novo[idx], nome: v }
+                        setInterpretesProduto(novo)
+                      }}
+                      onSelect={t => {
+                        const novo = [...interpretesProduto]
+                        novo[idx] = { nome: t.nome, id: t.id }
+                        setInterpretesProduto(novo)
+                      }}
+                    />
+                  </div>
+                  {interpretesProduto.length > 1 && (
+                    <button type="button"
+                      onClick={() => setInterpretesProduto(interpretesProduto.filter((_, i) => i !== idx))}
+                      className="h-9 w-9 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 flex items-center justify-center text-lg leading-none shrink-0">
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button type="button"
+                onClick={() => setInterpretesProduto([...interpretesProduto, { nome: '' }])}
+                className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 transition-colors">
+                <Plus className="w-3.5 h-3.5" /> Adicionar intérprete
+              </button>
+            </div>
+
+            <MultiSelect
+              label="Tipo de produto"
+              options={['Single', 'EP', 'Álbum', 'DVD', 'Blu-ray', 'Videoclipe']}
+              value={tiposProduto}
+              onChange={setTiposProduto}
+            />
           </div>
-          <p className="text-xs text-white/40">Informe os dados do produto em que a obra sera inserida. Ao emitir, o interprete e os ISRCs serao vinculados ao cadastro da obra.</p>
-          <TitularLookup
-            label="Interprete"
-            value={interpreteNome}
-            onChange={v => { setInterpreteNome(v); if (!v) setInterpreteTitularId(null) }}
-            onSelect={t => { setInterpreteNome(t.nome); setInterpreteTitularId(t.id) }}
-            hint="Selecione o interprete principal do fonograma"
-          />
-          <MultiSelect
-            label="Formato Fisico"
-            options={['CD', 'DVD', 'Blu-ray']}
-            value={formatosFisicos}
-            onChange={setFormatosFisicos}
-          />
-          <MultiSelect
-            label="Formatos Digitais"
-            options={['Truetone', 'Ringbacktone', 'Video', 'Full Track']}
-            value={formatosDigitais}
-            onChange={setFormatosDigitais}
-          />
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-white/50">ISRCs</p>
+
+          {/* Card 2: Suportes */}
+          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6 space-y-4">
+            <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">Suportes</p>
+
+            <MultiSelect
+              label="Formato Fisico"
+              options={['CD', 'DVD', 'Blu-ray', 'Vinil']}
+              value={formatosFisicos}
+              onChange={setFormatosFisicos}
+            />
+
+            <MultiSelect
+              label="Formatos Digitais"
+              options={['Full Track', 'Vídeo', 'Truetone', 'Ringbacktone', 'Streaming', 'Download digital', 'Redes sociais', 'UGC / user generated content']}
+              value={formatosDigitais}
+              onChange={setFormatosDigitais}
+              selectAll
+            />
+          </div>
+
+          {/* Card 3: ISRCs */}
+          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6 space-y-3">
+            <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">ISRCs dos Fonogramas</p>
             {isrcs.map((isrc, idx) => (
               <div key={idx} className="flex gap-2">
                 <input
@@ -1227,27 +1309,63 @@ export default function NovaAutorizacaoPage() {
                     setIsrcs(novo)
                   }}
                   placeholder="Ex: BRRGE2400001"
-                  className={ic + ' flex-1 font-mono'}
+                  className={ic + ' flex-1 font-mono tracking-widest'}
                 />
                 {isrcs.length > 1 && (
-                  <button
-                    type="button"
+                  <button type="button"
                     onClick={() => setIsrcs(isrcs.filter((_, i) => i !== idx))}
-                    className="h-9 w-9 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 flex items-center justify-center text-lg leading-none shrink-0"
-                  >
+                    className="h-9 w-9 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 flex items-center justify-center text-lg leading-none shrink-0">
                     ×
                   </button>
                 )}
               </div>
             ))}
-            <button
-              type="button"
+            <button type="button"
               onClick={() => setIsrcs([...isrcs, ''])}
-              className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" /> Adicionar ISRC
+              className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 transition-colors">
+              <Plus className="w-3.5 h-3.5" /> Adicionar fonograma
             </button>
           </div>
+
+          {/* Card 4: Distribuição e Lançamento */}
+          <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6 space-y-4">
+            <p className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">Distribuição e Lançamento</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Data prevista de lançamento">
+                <input type="date" value={dataPrevLancamento} onChange={e => setDataPrevLancamento(e.target.value)} className={ic} />
+              </Field>
+              <Field label="Território do produto">
+                <select value={territorioProduto} onChange={e => setTerritorioProduto(e.target.value)} className={sel}>
+                  <option value="BR">Brasil</option>
+                  <option value="mundial">Mundial</option>
+                  <option value="especifico">Países específicos</option>
+                </select>
+              </Field>
+            </div>
+
+            {territorioProduto === 'especifico' && (
+              <Field label="Países">
+                <input type="text" value={paisesEspecificos} onChange={e => setPaisesEspecificos(e.target.value)}
+                  placeholder="Ex: Brasil, Argentina, Portugal..." className={ic} />
+              </Field>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Selo / Gravadora">
+                <input type="text" value={seloGravadora} onChange={e => setSeloGravadora(e.target.value)}
+                  placeholder="Nome do selo ou gravadora..." className={ic} />
+              </Field>
+              <TitularLookup
+                label="Distribuidora"
+                value={distribuidoraNome}
+                onChange={v => setDistribuidoraNome(v)}
+                onSelect={t => setDistribuidoraNome(t.nome)}
+                hint="Distribuidora do produto fonografico"
+              />
+            </div>
+          </div>
+
         </div>
       )}
 
@@ -1425,6 +1543,35 @@ export default function NovaAutorizacaoPage() {
               ))}
             </div>
           </div>
+
+          {/* Produto (se preenchido) */}
+          {(tituloProduto || interpretesProduto.some(i => i.nome) || tiposProduto.length > 0 || isrcs.filter(Boolean).length > 0) && (
+            <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Music2 className="w-4 h-4 text-violet-400" />
+                <h3 className="text-sm font-semibold text-white">Produto</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-y-3 gap-x-6">
+                {[
+                  { label: 'Titulo', value: tituloProduto || '—' },
+                  { label: 'Tipo', value: tiposProduto.length ? tiposProduto.join(', ') : '—' },
+                  { label: 'Interprete(s)', value: interpretesProduto.filter(i => i.nome).map(i => i.nome).join(' / ') || '—' },
+                  { label: 'Selo / Gravadora', value: seloGravadora || '—' },
+                  { label: 'Distribuidora', value: distribuidoraNome || '—' },
+                  { label: 'Lancamento', value: dataPrevLancamento ? new Date(dataPrevLancamento + 'T00:00:00').toLocaleDateString('pt-BR') : '—' },
+                  { label: 'Formatos Fisicos', value: formatosFisicos.length ? formatosFisicos.join(', ') : '—' },
+                  { label: 'Formatos Digitais', value: formatosDigitais.length ? formatosDigitais.join(', ') : '—' },
+                  { label: 'ISRCs', value: isrcs.filter(Boolean).join(', ') || '—' },
+                ].map(f => (
+                  <div key={f.label}>
+                    <p className="text-[10px] text-white/30">{f.label}</p>
+                    <p className="text-xs text-white/70 font-medium">{f.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl p-4 flex items-start gap-2">
             <Info className="w-4 h-4 text-violet-400 shrink-0 mt-0.5" />
             <p className="text-xs text-violet-400">
