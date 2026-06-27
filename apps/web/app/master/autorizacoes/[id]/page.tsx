@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { PageHeader } from '@/components/ui/page-header'
@@ -41,7 +41,8 @@ const TABS = [
   { id: 'condicoes', label: 'Condições',  icon: FileText },
 ]
 
-export default function AutorizacaoDetailPage({ params }: { params: { id: string } }) {
+export default function AutorizacaoDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = React.use(params)
   const router = useRouter()
   const [aut, setAut]         = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -54,7 +55,7 @@ export default function AutorizacaoDetailPage({ params }: { params: { id: string
     async function load() {
       setLoading(true)
       try {
-        const res = await authFetch(`/api/autorizacoes/${params.id}`)
+        const res = await authFetch(`/api/autorizacoes/${id}`)
         if (!res.ok) throw new Error(`Erro ${res.status}`)
         const json = await res.json()
         setAut(json.data ?? json)
@@ -65,14 +66,14 @@ export default function AutorizacaoDetailPage({ params }: { params: { id: string
       }
     }
     load()
-  }, [params.id])
+  }, [id])
 
   async function handleAprovar() {
     if (!confirm('Confirmar aprovação desta autorização?')) return
     setActionLoading(true)
     setActionResult(null)
     try {
-      const res = await authFetch(`/api/autorizacoes/${params.id}`, {
+      const res = await authFetch(`/api/autorizacoes/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'emitida' }),
@@ -94,7 +95,7 @@ export default function AutorizacaoDetailPage({ params }: { params: { id: string
     setActionLoading(true)
     setActionResult(null)
     try {
-      const res = await authFetch(`/api/autorizacoes/${params.id}`, {
+      const res = await authFetch(`/api/autorizacoes/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'cancelada', observacoes: motivo }),

@@ -122,6 +122,8 @@ export async function POST(req: NextRequest) {
     status_workflow: statusReq,
     editora_administrada_id,
     modelo_negocio,
+    dados_especificos,
+    dados_produto,
     // campos legados de compatibilidade
     tipo_uso, licenciante, licenciado, data_inicio, data_fim, valor, descricao,
   } = body
@@ -155,12 +157,16 @@ export async function POST(req: NextRequest) {
     territorio:             territorio ?? 'BR',
     prazo_inicio:           prazo_inicio ?? data_inicio ?? null,
     prazo_fim:              prazo_fim ?? data_fim ?? null,
-    prazo_indeter:          prazo_indeterminado ?? false,
+    prazo_indeterminado:    prazo_indeterminado ?? false,
     numero_autorizacao:     gerarNumeroAutorizacao(),
     editora_administrada_id: editora_administrada_id ?? null,
     emitida_por:            status_workflow === 'emitida' ? usuario.id : null,
     emitida_em,
     modelo_negocio:         modelo_negocio ?? 'pago_editora',
+    observacoes:            observacoes ?? null,
+    dados_especificos:      dados_especificos ?? {},
+    dados_produto:          dados_produto ?? {},
+    validada_em:            (status_workflow === 'emitida' && (modelo_negocio ?? 'pago_editora') === 'sem_onus') ? new Date().toISOString() : null,
     // legados
     licenciante:            licenciante ?? null,
     licenciado:             licenciado ?? null,
@@ -184,6 +190,13 @@ export async function POST(req: NextRequest) {
     dados_novos:     data as Record<string, unknown>,
     origem_execucao: 'usuario',
   })
+
+  // Ao emitir: atualizar interprete_referencia da obra se dados_produto tiver interprete
+  if (status_workflow === 'emitida' && (dados_produto as any)?.interprete_nome) {
+    await sb.from('obras').update({
+      interprete_referencia: (dados_produto as any).interprete_nome,
+    }).eq('id', obra_id).eq('tenant_id', usuario.tenant_id)
+  }
 
   return NextResponse.json({ data }, { status: 201 })
 }

@@ -84,6 +84,7 @@ export async function POST(
   const patchAut: Record<string, unknown> = {
     data_pagamento_confirmado: new Date(data_pagamento).toISOString(),
     valor_pago: valorFinal,
+    validada_em: new Date().toISOString(),   // pago_editora/pago_autor validam aqui
   }
   // Só muda status se ainda não estiver em estado final
   const statusAtual = (aut as any).status_workflow

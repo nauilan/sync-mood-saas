@@ -45,6 +45,7 @@ const STEPS = [
   'Tipo',
   'Obra',
   'Dados Especificos',
+  'Produto',
   'Periodo & Exclusividade',
   'Modelo de Negocio',
   'Pagamento',
@@ -814,6 +815,12 @@ export default function NovaAutorizacaoPage() {
   const [linksObra, setLinksObra]                     = useState<any[]>([])
   const [salvando, setSalvando]                       = useState(false)
   const [erroSalvar, setErroSalvar]                   = useState('')
+  // ── Produto fonográfico ──────────────────────────────────────────────────
+  const [interpreteNome, setInterpreteNome]             = useState('')
+  const [interpreteTitularId, setInterpreteTitularId]   = useState<string | null>(null)
+  const [formatosFisicos, setFormatosFisicos]           = useState<string[]>([])
+  const [formatosDigitais, setFormatosDigitais]         = useState<string[]>([])
+  const [isrcs, setIsrcs]                               = useState<string[]>([''])
 
   useEffect(() => {
     const q = buscaObra.trim()
@@ -891,6 +898,7 @@ export default function NovaAutorizacaoPage() {
     true,
     !!obraId && !bloqueioExcl.bloqueada,
     true,
+    true,
     !!dataInicio,
     true,
     true,
@@ -961,6 +969,13 @@ export default function NovaAutorizacaoPage() {
         exclusividade,
         exclusividade_meses:   exclusividade ? exclMeses : null,
         dados_especificos:     camposEspecificos,
+        dados_produto: {
+          interprete_nome:   interpreteNome || null,
+          interprete_id:     interpreteTitularId || null,
+          formatos_fisicos:  formatosFisicos,
+          formatos_digitais: formatosDigitais,
+          isrcs:             isrcs.filter(Boolean),
+        },
         // legados
         licenciante:           obraSelecionadaData?.editora_nome ?? '',
         licenciado:            getLicenciadoNome(),
@@ -1172,8 +1187,72 @@ export default function NovaAutorizacaoPage() {
         </div>
       )}
 
-      {/* ─── Step 3: Periodo & Exclusividade ─── */}
+      {/* ─── Step 3: Produto ─── */}
       {step === 3 && (
+        <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <Music2 className="w-4 h-4 text-violet-400" />
+            <h2 className="text-sm font-semibold text-white">Produto Fonografico</h2>
+          </div>
+          <p className="text-xs text-white/40">Informe os dados do produto em que a obra sera inserida. Ao emitir, o interprete e os ISRCs serao vinculados ao cadastro da obra.</p>
+          <TitularLookup
+            label="Interprete"
+            value={interpreteNome}
+            onChange={v => { setInterpreteNome(v); if (!v) setInterpreteTitularId(null) }}
+            onSelect={t => { setInterpreteNome(t.nome); setInterpreteTitularId(t.id) }}
+            hint="Selecione o interprete principal do fonograma"
+          />
+          <MultiSelect
+            label="Formato Fisico"
+            options={['CD', 'DVD', 'Blu-ray']}
+            value={formatosFisicos}
+            onChange={setFormatosFisicos}
+          />
+          <MultiSelect
+            label="Formatos Digitais"
+            options={['Truetone', 'Ringbacktone', 'Video', 'Full Track']}
+            value={formatosDigitais}
+            onChange={setFormatosDigitais}
+          />
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-white/50">ISRCs</p>
+            {isrcs.map((isrc, idx) => (
+              <div key={idx} className="flex gap-2">
+                <input
+                  type="text"
+                  value={isrc}
+                  onChange={e => {
+                    const novo = [...isrcs]
+                    novo[idx] = e.target.value.toUpperCase()
+                    setIsrcs(novo)
+                  }}
+                  placeholder="Ex: BRRGE2400001"
+                  className={ic + ' flex-1 font-mono'}
+                />
+                {isrcs.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsrcs(isrcs.filter((_, i) => i !== idx))}
+                    className="h-9 w-9 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 flex items-center justify-center text-lg leading-none shrink-0"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setIsrcs([...isrcs, ''])}
+              className="flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> Adicionar ISRC
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Step 4: Periodo & Exclusividade ─── */}
+      {step === 4 && (
         <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6 space-y-4">
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-violet-400" />
@@ -1219,8 +1298,8 @@ export default function NovaAutorizacaoPage() {
         </div>
       )}
 
-      {/* ─── Step 4: Modelo Negocio ─── */}
-      {step === 4 && (
+      {/* ─── Step 5: Modelo Negocio ─── */}
+      {step === 5 && (
         <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6 space-y-4">
           <div className="flex items-center gap-2">
             <FileText className="w-4 h-4 text-violet-400" />
@@ -1249,8 +1328,8 @@ export default function NovaAutorizacaoPage() {
         </div>
       )}
 
-      {/* ─── Step 5: Pagamento ─── */}
-      {step === 5 && (
+      {/* ─── Step 6: Pagamento ─── */}
+      {step === 6 && (
         <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6">
           <StepPagamento
             valorTotal={valorTotal}
@@ -1264,8 +1343,8 @@ export default function NovaAutorizacaoPage() {
         </div>
       )}
 
-      {/* ─── Step 6: Revisao ─── */}
-      {step === 6 && (() => {
+      {/* ─── Step 7: Revisao ─── */}
+      {step === 7 && (() => {
         // Calcula autores da obra selecionada a partir dos links
         const todosLinks = linksObra
         const PAPEIS_AUTOR = ['compositor', 'co_compositor', 'arranjador', 'versionista', 'tradutor', 'autor']
