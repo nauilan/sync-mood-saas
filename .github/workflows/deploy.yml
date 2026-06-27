@@ -1,11 +1,12 @@
 # ════════════════════════════════════════════════════════════
 #  Deploy — Sync Mood
-#  Pipeline: typecheck → unit tests → deploy → isolation tests
 #
-#  Os isolation tests rodam APÓS o deploy, contra a Vercel.
-#  Isso elimina o servidor local frágil em CI.
-#  Se isolamento falhar, o commit é sinalizado como falho (visível
-#  no PR/branch), mas o artefato já está na Vercel para debug.
+#  GATE REAL DE PRODUÇÃO (Opção B):
+#    1. typecheck
+#    2. unit-tests
+#    3. deploy-preview   → Vercel preview (NÃO é produção ainda)
+#    4. isolation-tests  → contra preview URL (bloqueia se falhar)
+#    5. promote          → só após isolation verde, promove para prod
 #
 #  GitHub Secrets necessários:
 #    VERCEL_TOKEN                  — token da Vercel CLI
@@ -65,13 +66,13 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY:     ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
-  # ── 3. Deploy para Vercel ──────────────────────────────────
-  deploy:
-    name: Deploy to Vercel
+  # ── 3. Deploy PREVIEW (não é produção) ─────────────────────
+  deploy-preview:
+    name: Deploy preview
     runs-on: ubuntu-latest
     needs: unit-tests
     outputs:
-      vercel_url: ${{ steps.deploy.outputs.url }}
+      preview_url: ${{ steps.deploy.outputs.preview_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -83,19 +84,24 @@ jobs:
           mkdir -p apps/web/.vercel
           echo '{"projectId":"prj_81eomK8Uie2j1dPv0mIbJEgbn4Eg","orgId":"team_oSlrnl2yyOTFvhvjIgtBZan7"}' > apps/web/.vercel/project.json
 
-      - name: Deploy to Production
+      - name: Deploy to preview (sem --prod)
         id: deploy
         run: |
-          vercel --prod --yes --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | tee /tmp/vercel.log
-          echo "url=https://sync-mood-saas.vercel.app" >> $GITHUB_OUTPUT
+          DEPLOY_URL=$(vercel deploy --yes --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | grep -E "https://sync-mood-saas-[a-z0-9-]+\.vercel\.app" | tail -1)
+          if [ -z "$DEPLOY_URL" ]; then
+            # fallback: pega qualquer URL vercel.app da saída
+            DEPLOY_URL=$(vercel deploy --yes --token=${{ secrets.VERCEL_TOKEN }} 2>&1 | grep -E "https://[^ ]+\.vercel\.app" | tail -1 || echo "https://sync-mood-saas.vercel.app")
+          fi
+          echo "Preview URL: $DEPLOY_URL"
+          echo "preview_url=$DEPLOY_URL" >> $GITHUB_OUTPUT
         working-directory: apps/web
 
-  # ── 4. Isolation tests contra a Vercel (pós-deploy) ───────
+  # ── 4. Isolation tests contra PREVIEW ─────────────────────
+  #       Se falhar aqui, produção NÃO recebe o deploy.
   isolation-tests:
-    name: Multi-tenant isolation
+    name: Multi-tenant isolation (gate)
     runs-on: ubuntu-latest
-    needs: deploy
-    continue-on-error: true   # não bloqueia deploy — corrigir ANON_KEY no GitHub Secrets
+    needs: deploy-preview
     defaults:
       run:
         working-directory: apps/web
@@ -108,24 +114,48 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
 
-      - name: Aguardar Vercel pronto
+      - name: Aguardar preview pronto
         run: |
-          echo "Verificando se a Vercel está respondendo..."
-          for i in $(seq 1 20); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://sync-mood-saas.vercel.app/api/me || true)
+          TARGET="${{ needs.deploy-preview.outputs.preview_url }}"
+          echo "Aguardando: $TARGET"
+          for i in $(seq 1 24); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$TARGET/api/me" || true)
             if [ "$STATUS" != "000" ]; then
-              echo "Vercel respondeu com HTTP $STATUS (try ${i})"
+              echo "Preview respondeu HTTP $STATUS (tentativa $i)"
               exit 0
             fi
             sleep 5
           done
-          echo "Vercel não respondeu. Abortando."
+          echo "Preview não respondeu em 120s."
           exit 1
 
       - name: Run isolation tests
         run: npm run test:isolation
         env:
-          ISOLATION_TEST_API_URL:        https://sync-mood-saas.vercel.app
+          ISOLATION_TEST_API_URL:        ${{ needs.deploy-preview.outputs.preview_url }}
           NEXT_PUBLIC_SUPABASE_URL:      ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY:     ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+  # ── 5. Promote para PRODUÇÃO (só após isolation verde) ─────
+  promote:
+    name: Promote to production
+    runs-on: ubuntu-latest
+    needs: [deploy-preview, isolation-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Create Vercel project config
+        run: |
+          mkdir -p apps/web/.vercel
+          echo '{"projectId":"prj_81eomK8Uie2j1dPv0mIbJEgbn4Eg","orgId":"team_oSlrnl2yyOTFvhvjIgtBZan7"}' > apps/web/.vercel/project.json
+
+      - name: Promote preview to production
+        run: |
+          vercel promote "${{ needs.deploy-preview.outputs.preview_url }}" \
+            --token=${{ secrets.VERCEL_TOKEN }} \
+            --yes
+        working-directory: apps/web
