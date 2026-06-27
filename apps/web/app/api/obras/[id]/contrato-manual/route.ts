@@ -111,11 +111,12 @@ export async function POST(
     }, { status: 500 })
   }
 
-  // Obter URL pública/signed do arquivo
-  const { data: urlData } = sb.storage
+  // URL assinada de curta duração (1h) — nunca URL pública permanente
+  const { data: urlData } = await sb.storage
     .from('contratos-manuais')
-    .getPublicUrl(storagePath)
-  const arquivoUrl = urlData?.publicUrl ?? storagePath
+    .createSignedUrl(storagePath, 3600)
+  // Salva o path, não a URL assinada (URLs assinadas são geradas on-demand)
+  const arquivoUrl = storagePath
 
   // Marcar contratos anteriores como não vigentes (se substituição)
   if (substituirVigente) {
