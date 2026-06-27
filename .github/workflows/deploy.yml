@@ -81,28 +81,39 @@ jobs:
 
       - name: Build Next.js
         run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL:      ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY:     ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
       - name: Start production server
         run: nohup npm run start > /tmp/nextjs.log 2>&1 &
+        env:
+          NEXT_PUBLIC_SUPABASE_URL:      ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY:     ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
       - name: Wait for server
         run: |
           echo "Waiting for Next.js server..."
-          for i in $(seq 1 20); do
-            if curl -sf http://localhost:3000 > /dev/null 2>&1; then
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/health > /dev/null 2>&1 || curl -sf http://localhost:3000 > /dev/null 2>&1; then
               echo "Server ready (try ${i})"
               exit 0
             fi
             sleep 3
           done
           echo "=== Server failed to start. Logs: ==="
-          cat /tmp/nextjs.log
+          cat /tmp/nextjs.log || true
           exit 1
 
       - name: Run isolation tests
         run: npm run test:isolation
         env:
-          ISOLATION_TEST_API_URL: http://localhost:3000
+          ISOLATION_TEST_API_URL:        http://localhost:3000
+          NEXT_PUBLIC_SUPABASE_URL:      ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY:     ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
   # ── 4. Deploy para Vercel (só se tudo passar) ──────────────
   deploy:
