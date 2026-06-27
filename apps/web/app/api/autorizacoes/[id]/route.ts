@@ -66,7 +66,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .is('deleted_at', null)
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 404 })
+  if (error) {
+    // PGRST116 = ".single() encontrou 0 linhas" → realmente não encontrado
+    const status = (error as any).code === 'PGRST116' ? 404 : 500
+    return NextResponse.json({ error: error.message, code: (error as any).code }, { status })
+  }
   return NextResponse.json({ data })
 }
 
