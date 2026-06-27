@@ -376,7 +376,6 @@ function FormFonograma({ data, set }: { data: any; set: (k: string, v: any) => v
         <Field label="E-mail"><input type="email" value={data.produtor_email || ''} onChange={e => set('produtor_email', e.target.value)} placeholder="contato@email.com" className={ic} /></Field>
         <Field label="Distribuidora"><input type="text" value={data.distribuidora || ''} onChange={e => set('distribuidora', e.target.value)} placeholder="Nome da distribuidora" className={ic} /></Field>
       </div>
-      <MultiSelect label="Plataformas de distribuicao" options={['Spotify','Apple Music','Amazon Music','YouTube','Deezer','Tidal','Redes Sociais','Download Digital','DVD/Blu-ray']} value={data.plataformas || []} onChange={v => set('plataformas', v)} />
     </div>
   )
 }
