@@ -42,6 +42,47 @@ export async function POST(req: NextRequest) {
   }
   const tenantId: string = usuario.tenant_id
 
+  let body: { obra_ids?: string[]; editora_destino_id?: string | null } | null = null
+  try {
+    body = await req.json()
+  } catch {
+    body = null
+  }
+
+  const obraIds = Array.isArray(body?.obra_ids) ? body!.obra_ids.filter(Boolean) : []
+  if (obraIds.length > 0) {
+    const { data: obrasDoTenant, error: obrasErr } = await sb
+      .from('obras')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .in('id', obraIds)
+
+    if (obrasErr) {
+      return NextResponse.json({ error: `Erro ao validar obras: ${obrasErr.message}` }, { status: 500 })
+    }
+
+    if ((obrasDoTenant ?? []).length !== obraIds.length) {
+      return NextResponse.json({ error: 'Uma ou mais obras não pertencem ao tenant autenticado' }, { status: 403 })
+    }
+  }
+
+  if (body?.editora_destino_id) {
+    const { data: editoraDestino, error: editoraErr } = await sb
+      .from('editoras')
+      .select('id')
+      .eq('id', body.editora_destino_id)
+      .eq('tenant_id', tenantId)
+      .single()
+
+    if (editoraErr) {
+      return NextResponse.json({ error: `Erro ao validar editora de destino: ${editoraErr.message}` }, { status: 500 })
+    }
+
+    if (!editoraDestino) {
+      return NextResponse.json({ error: 'Editora de destino não pertence ao tenant autenticado' }, { status: 403 })
+    }
+  }
+
   // 1. Buscar todos os titulares com tipo='editora' do tenant
   const { data: titulares, error: tErr } = await sb
     .from('titulares')
