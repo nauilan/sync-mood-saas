@@ -117,7 +117,9 @@ export async function GET(
     const somaGeral = lt.reduce((s, t) => s + (Number(t.percentual) || 0), 0)
     const soma = somaExec > 0 ? somaExec : somaGeral
     const percentuaisOk = lt.length === 0 || Math.abs(soma - 100) <= 0.5
-    const recebedoresOk = lt.every(t => !t.controlado || t.editora_administradora_id)
+    const recebedoresOk = lt.every(
+      t => !t.controlado || t.editora_administradora_id || (t as any).editora_original_id
+    )
 
     return {
       ...link,
@@ -150,7 +152,7 @@ export async function GET(
       sem_links:             'Cadastrar a formação editorial (links/participantes) da obra',
       link_sem_titular:      'Adicionar titulares ao link indicado',
       percentual_invalido:   'Corrigir percentuais para que somem 100%',
-      recebedor_pendente:    'Definir editora administradora para os titulares controlados',
+      recebedor_pendente:    'Definir administradora ou editora original recebedora para os titulares controlados',
       cwr_nao_confirmado:    'Confirmar os dados editoriais da obra importada via CWR',
     }
     return { codigo: p.codigo, mensagem: p.mensagem, acao: ACOES[p.codigo] ?? 'Regularizar pendência' }

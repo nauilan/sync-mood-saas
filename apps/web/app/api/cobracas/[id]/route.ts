@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient }              from '@supabase/supabase-js'
 import { logAudit }                  from '@/lib/audit'
+import { resolverRecebedorEditorial } from '@/lib/editorial-recebedor'
 
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
@@ -101,7 +102,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // Buscar autorização vinculada
     const { data: aut } = await sb
       .from('autorizacoes')
-      .select('id, obra_id, numero_autorizacao, licenciado_nome, valor_licenca, modelo_negocio, cc_movimento_id')
+      .select('id, obra_id, numero_autorizacao, licenciado_nome, valor_licenca, modelo_negocio, cc_movimento_id, pago_a')
       .eq('id', autorizacaoId)
       .eq('tenant_id', usuario.tenant_id)
       .single()
@@ -114,6 +115,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const numAut     = (aut as any).numero_autorizacao ?? autorizacaoId.slice(0, 8)
       const licNome    = (aut as any).licenciado_nome ?? 'Licenciado'
       const dataPag    = (data as any)?.data_pagamento ?? new Date().toISOString().slice(0, 10)
+      let recebedorEditoraId = (aut as any)?.pago_a ?? null
+
+      if (!recebedorEditoraId) {
+        const { data: linksRecebedor } = await sb.from('obras_links_titulares')
+          .select('papel:funcao_no_link, controlado, status_controle, percentual_controle_brasil, percentual_controle_exterior, percentual:percentual_exec_publica, editora:editoras!obras_links_titulares_editora_original_id_fkey(id,nome), editora_original:editoras!obras_links_titulares_editora_original_id_fkey(id,nome), editora_administradora:editoras!obras_links_titulares_editora_administradora_id_fkey(id,nome)')
+          .eq('obra_id', obra_id)
+          .eq('tenant_id', usuario.tenant_id)
+
+        const recebedor = resolverRecebedorEditorial((linksRecebedor ?? []) as any)
+        if (!recebedor.ok) {
+          return NextResponse.json({
+            error: 'Cobrança não pode gerar conta corrente: falta recebedor válido (administradora ou editora original controlada).',
+          }, { status: 422 })
+        }
+        recebedorEditoraId = recebedor.editoraId
+      }
 
       if (obra_id && valorFinal > 0) {
         // Garantir cc_obras
@@ -147,6 +164,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             saldo_anterior: saldoAnterior, saldo_posterior: saldoPosterior,
             descricao: `Autorização ${numAut} — ${licNome}`,
             source: 'autorizacao', source_id: autorizacaoId,
+            editora_id: recebedorEditoraId,
             criado_em: new Date(dataPag).toISOString(),
           })
           .select('id').single()

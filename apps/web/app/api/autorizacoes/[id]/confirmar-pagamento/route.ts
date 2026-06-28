@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient }              from '@supabase/supabase-js'
 import { logAudit }                  from '@/lib/audit'
+import { resolverRecebedorEditorial } from '@/lib/editorial-recebedor'
 
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
@@ -66,7 +67,7 @@ export async function POST(
   // ── Buscar autorização ────────────────────────────────────────────────────
   const { data: aut, error: autErr } = await sb
     .from('autorizacoes')
-    .select('id, tenant_id, obra_id, numero_autorizacao, licenciado_nome, valor_licenca, modelo_negocio, status_workflow, cc_movimento_id, editora_administrada_id')
+    .select('id, tenant_id, obra_id, numero_autorizacao, licenciado_nome, valor_licenca, modelo_negocio, status_workflow, cc_movimento_id, editora_administrada_id, pago_a')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
@@ -79,13 +80,27 @@ export async function POST(
   const obra_id     = (aut as any).obra_id
   const numAut      = (aut as any).numero_autorizacao ?? id.slice(0, 8)
   const licNome     = (aut as any).licenciado_nome ?? 'Licenciado'
-  const editoraAdmId = (aut as any).editora_administrada_id ?? null
+  let recebedorEditoraId = (aut as any).pago_a ?? (aut as any).editora_administrada_id ?? null
 
-  // Buscar nome da editora administradora para descrição do movimento
-  let editoraAdmNome = 'Editora Administradora'
-  if (editoraAdmId) {
-    const { data: edAdm } = await sb.from('editoras').select('nome').eq('id', editoraAdmId).single()
-    if (edAdm) editoraAdmNome = (edAdm as any).nome
+  if (modelo === 'pago_editora' && obra_id && !recebedorEditoraId) {
+    const { data: linksRecebedor } = await sb.from('obras_links_titulares')
+      .select('papel:funcao_no_link, controlado, status_controle, percentual_controle_brasil, percentual_controle_exterior, percentual:percentual_exec_publica, editora:editoras!obras_links_titulares_editora_original_id_fkey(id,nome), editora_original:editoras!obras_links_titulares_editora_original_id_fkey(id,nome), editora_administradora:editoras!obras_links_titulares_editora_administradora_id_fkey(id,nome)')
+      .eq('obra_id', obra_id)
+      .eq('tenant_id', usuario.tenant_id)
+
+    const recebedor = resolverRecebedorEditorial((linksRecebedor ?? []) as any)
+    if (!recebedor.ok) {
+      return NextResponse.json({
+        error: 'Pagamento não pode ser confirmado: falta recebedor válido (administradora ou editora original controlada).',
+      }, { status: 422 })
+    }
+    recebedorEditoraId = recebedor.editoraId
+  }
+
+  let recebedorNome = 'Recebedor Editorial'
+  if (recebedorEditoraId) {
+    const { data: edAdm } = await sb.from('editoras').select('nome').eq('id', recebedorEditoraId).single()
+    if (edAdm) recebedorNome = (edAdm as any).nome
   }
 
   // ── Atualizar status da autorização ──────────────────────────────────────
@@ -152,9 +167,10 @@ export async function POST(
         valor:           valorFinal,
         saldo_anterior:  saldoAnterior,
         saldo_posterior: saldoPosterior,
-        descricao:       `Autorização ${numAut} — ${licNome} → ${editoraAdmNome}`,
+        descricao:       `Autorização ${numAut} — ${licNome} → ${recebedorNome}`,
         source:          'autorizacao',
         source_id:       id,
+        editora_id:      recebedorEditoraId,
         forma_pagamento: forma_pagamento ?? null,
         observacoes:     observacoes ?? null,
         criado_em:       new Date(data_pagamento).toISOString(),
