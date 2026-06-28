@@ -20,6 +20,7 @@ import {
   createTestTenant,
   seedTenantResources,
   apiFetch,
+  apiHeaders,
   apiUrl,
   isBlocked,
   adminSb,
@@ -171,7 +172,7 @@ describe.skipIf(MISSING.length > 0)('Storage — Isolamento de Contratos e PDFs'
       apiUrl(`/api/obras/${resA.obraId}/contrato-manual`),
       {
         method: 'POST',
-        headers: { Authorization: `Bearer ${tenantB.token}` },
+        headers: apiHeaders(tenantB.token),
         // Sem body FormData — apenas testa se a rota bloqueia antes de processar
         body: new FormData(),
       }

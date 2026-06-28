@@ -23,12 +23,14 @@ export const VERCEL_BYPASS_SECRET = (process.env.VERCEL_AUTOMATION_BYPASS_SECRET
 
 export function apiUrl(path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
-  const url = new URL(`${API_BASE}${normalizedPath}`)
-  if (VERCEL_BYPASS_SECRET) {
-    url.searchParams.set('x-vercel-protection-bypass', VERCEL_BYPASS_SECRET)
-    url.searchParams.set('x-vercel-set-bypass-cookie', 'true')
+  return `${API_BASE}${normalizedPath}`
+}
+
+export function apiHeaders(token?: string): Record<string, string> {
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(VERCEL_BYPASS_SECRET ? { 'x-vercel-protection-bypass': VERCEL_BYPASS_SECRET } : {}),
   }
-  return url.toString()
 }
 
 // ── Clientes Supabase ─────────────────────────────────────────────────────────
@@ -256,7 +258,7 @@ export async function apiFetch(
     method,
     headers: {
       'Content-Type':  'application/json',
-      'Authorization': `Bearer ${token}`,
+      ...apiHeaders(token),
     },
     body: payload !== undefined ? JSON.stringify(payload) : undefined,
   })
