@@ -52,6 +52,7 @@ export interface ObraInput {
   exportacao_bloqueada?: boolean | null
   origem_cadastro?:      string | null   // 'cwr' | 'manual' | 'backoffice'
   socinpro_status?:      string | null
+  validacao_editorial_origem?: string | null
 }
 
 export interface LinkInput {
@@ -64,8 +65,15 @@ export interface TitularLinkInput {
   id:                       string
   link_id:                  string
   titular_id?:              string | null
+  funcao_no_link?:          string | null
   controlado?:              boolean | null
+  status_controle?:         string | null
+  contrato_id?:             string | null
+  editora_original_id?:     string | null
   editora_administradora_id?: string | null
+  percentual_controle_brasil?: number | null
+  percentual_controle_exterior?: number | null
+  validacao_contratual_origem?: string | null
   percentual?:              number | null          // share total dentro do link
   percentual_exec_publica?: number | null          // % de execução pública (absoluto)
   percentual_fonomecanico?: number | null
@@ -96,6 +104,7 @@ export function calcularIntegridade(
     Boolean(obra.contrato_origem_id) ||
     Boolean(obra.contrato_manual_url) ||
     Boolean(obra.contrato_manual_nome) ||
+    obra.validacao_editorial_origem === 'declaratoria' ||
     ['valido', 'contrato_sistema', 'contrato_manual'].includes(statusContrato)
   )
 
@@ -144,11 +153,15 @@ export function calcularIntegridade(
 
   // ── 5. Recebedores ───────────────────────────────────────────────────────
   for (const t of titulares) {
-    if (t.controlado && !t.editora_administradora_id) {
+    if (
+      (t.controlado || t.status_controle === 'controlado') &&
+      !t.editora_administradora_id &&
+      !t.editora_original_id
+    ) {
       const link = links.find(l => l.id === t.link_id)
       pendencias.push({
         codigo:      'recebedor_pendente',
-        mensagem:    `Titular controlado sem editora administradora (link ${link?.numero_link ?? '?'})`,
+        mensagem:    `Titular controlado sem recebedor editorial definido (link ${link?.numero_link ?? '?'})`,
         link_numero: link?.numero_link ?? undefined,
       })
     }

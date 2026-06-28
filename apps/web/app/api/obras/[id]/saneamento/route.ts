@@ -65,6 +65,7 @@ export async function GET(
         'status_contrato', 'exportacao_bloqueada', 'exportacao_bloqueio_motivo',
         'origem_cadastro', 'socinpro_status',
         'status_integridade', 'integridade_calculada_em', 'integridade_pendencias',
+        'validacao_editorial_origem', 'validacao_editorial_referencia',
       ].join(', '))
       .eq('id', obraId)
       .eq('tenant_id', usuario.tenant_id)
@@ -82,6 +83,9 @@ export async function GET(
         'id', 'link_id', 'titular_id', 'funcao_no_link',
         'controlado', 'contrato_id',
         'editora_original_id', 'editora_administradora_id',
+        'status_controle', 'percentual_controle_brasil', 'percentual_controle_exterior',
+        'data_contrato', 'tipo_contrato', 'territorio_contrato', 'prazo_contrato',
+        'validacao_contratual_origem', 'referencia_documental', 'observacao_validacao',
         'percentual', 'percentual_exec_publica',
         'percentual_fonomecanico', 'percentual_sincronizacao',
       ].join(', '))
@@ -167,4 +171,54 @@ export async function GET(
       calculado_em: new Date().toISOString(),
     }
   })
+}
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const sb = getAdminClient()
+  if (!sb) return NextResponse.json({ error: 'Supabase nÃ£o configurado' }, { status: 503 })
+
+  const token = getToken(req)
+  if (!token) return NextResponse.json({ error: 'NÃ£o autorizado' }, { status: 401 })
+
+  const { data: { user } } = await sb.auth.getUser(token)
+  if (!user) return NextResponse.json({ error: 'NÃ£o autorizado' }, { status: 401 })
+
+  const { data: usuario } = await sb
+    .from('usuarios').select('id, tenant_id').eq('auth_user_id', user.id).single()
+  if (!usuario?.tenant_id) return NextResponse.json({ error: 'NÃ£o autorizado' }, { status: 401 })
+
+  const { id: obraId } = await params
+  const body = await req.json().catch(() => ({}))
+  const linkId = body?.link_id as string | undefined
+  if (!linkId) return NextResponse.json({ error: 'link_id obrigatÃ³rio' }, { status: 400 })
+
+  const patch = {
+    data_contrato: body?.data_contrato ?? null,
+    tipo_contrato: body?.tipo_contrato ?? null,
+    territorio_contrato: body?.territorio_contrato ?? null,
+    prazo_contrato: body?.prazo_contrato ?? null,
+    percentual_controle_brasil: body?.percentual_controle_brasil ?? null,
+    percentual_controle_exterior: body?.percentual_controle_exterior ?? null,
+    validacao_contratual_origem: body?.validacao_contratual_origem ?? 'declaratoria',
+    referencia_documental: body?.referencia_documental ?? null,
+    observacao_validacao: body?.observacao_validacao ?? null,
+    controlado: body?.controlado ?? true,
+    status_controle: body?.status_controle ?? 'controlado',
+    editora_original_id: body?.editora_original_id ?? null,
+    editora_administradora_id: body?.editora_administradora_id ?? null,
+    validado_por_usuario_id: usuario.id,
+    validado_em: new Date().toISOString(),
+  }
+
+  const { error } = await sb.from('obras_links_titulares')
+    .update(patch)
+    .eq('id', linkId)
+    .eq('obra_id', obraId)
+    .eq('tenant_id', usuario.tenant_id)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return GET(req, { params: Promise.resolve({ id: obraId }) })
 }

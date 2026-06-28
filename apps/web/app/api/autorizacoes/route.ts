@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient }              from '@supabase/supabase-js'
 import { logAudit }                  from '@/lib/audit'
+import { resolverRecebedorEditorial } from '@/lib/editorial-recebedor'
 
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
@@ -124,6 +125,7 @@ export async function POST(req: NextRequest) {
     modelo_negocio,
     dados_especificos,
     dados_produto,
+    pago_a,
     // campos legados de compatibilidade
     tipo_uso, licenciante, licenciado, data_inicio, data_fim, valor, descricao,
   } = body
@@ -165,6 +167,23 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  let recebedorPagoA = pago_a ?? null
+  const modeloNegocioResolvido = modelo_negocio ?? 'pago_editora'
+  if (modeloNegocioResolvido === 'pago_editora') {
+    const { data: linksRecebedor } = await sb.from('obras_links_titulares')
+      .select('papel:funcao_no_link, controlado, status_controle, percentual_controle_brasil, percentual_controle_exterior, percentual:percentual_exec_publica, editora:editoras!obras_links_titulares_editora_original_id_fkey(id,nome), editora_original:editoras!obras_links_titulares_editora_original_id_fkey(id,nome), editora_administradora:editoras!obras_links_titulares_editora_administradora_id_fkey(id,nome)')
+      .eq('obra_id', obra_id)
+      .eq('tenant_id', usuario.tenant_id)
+
+    const recebedor = resolverRecebedorEditorial((linksRecebedor ?? []) as any)
+    if (!recebedor.ok) {
+      return NextResponse.json({
+        error: 'AutorizaÃ§Ã£o paga Ã  editora exige recebedor vÃ¡lido (administradora ou editora original controlada).',
+      }, { status: 422 })
+    }
+    recebedorPagoA = recebedor.editoraId
+  }
+
   const emitida_em = status_workflow === 'emitida' ? new Date().toISOString() : null
 
   const payload: Record<string, unknown> = {
@@ -189,7 +208,8 @@ export async function POST(req: NextRequest) {
     editora_administrada_id: editora_administrada_id ?? null,
     emitida_por:            status_workflow === 'emitida' ? usuario.id : null,
     emitida_em,
-    modelo_negocio:         modelo_negocio ?? 'pago_editora',
+    modelo_negocio:         modeloNegocioResolvido,
+    pago_a:                 recebedorPagoA,
     observacoes:            observacoes ?? null,
     dados_especificos:      dados_especificos ?? {},
     dados_produto:          dados_produto ?? {},

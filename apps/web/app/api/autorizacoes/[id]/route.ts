@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient }              from '@supabase/supabase-js'
 import { logAudit }                  from '@/lib/audit'
+import { resolverRecebedorEditorial } from '@/lib/editorial-recebedor'
 
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
@@ -145,6 +146,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         }, { status: 422 })
       }
     }
+  }
+
+  const modeloNegocioAtual = (safeBody.modelo_negocio ?? (anterior as Record<string, unknown> | null)?.modelo_negocio) as string | null
+  const obraIdAtual = (safeBody.obra_id ?? (anterior as Record<string, unknown> | null)?.obra_id) as string | null
+  if (modeloNegocioAtual === 'pago_editora' && obraIdAtual && safeBody.pago_a === undefined) {
+    const { data: linksRecebedor } = await sb.from('obras_links_titulares')
+      .select('papel:funcao_no_link, controlado, status_controle, percentual_controle_brasil, percentual_controle_exterior, percentual:percentual_exec_publica, editora:editoras!obras_links_titulares_editora_original_id_fkey(id,nome), editora_original:editoras!obras_links_titulares_editora_original_id_fkey(id,nome), editora_administradora:editoras!obras_links_titulares_editora_administradora_id_fkey(id,nome)')
+      .eq('obra_id', obraIdAtual)
+      .eq('tenant_id', usuario.tenant_id)
+
+    const recebedor = resolverRecebedorEditorial((linksRecebedor ?? []) as any)
+    if (!recebedor.ok) {
+      return NextResponse.json({
+        error: 'AutorizaÃ§Ã£o paga Ã  editora exige recebedor vÃ¡lido (administradora ou editora original controlada).',
+      }, { status: 422 })
+    }
+    safeBody.pago_a = recebedor.editoraId
   }
 
   const { data, error } = await sb.from('autorizacoes')
