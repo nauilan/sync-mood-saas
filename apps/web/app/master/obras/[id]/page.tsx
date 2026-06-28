@@ -371,6 +371,10 @@ export default function ObraDetailPage() {
   const [exportacoesObra, setExportacoesObra] = useState<any[]>([])
   const [exportacoesLdg, setExportacoesLdg] = useState(false)
   const [exportacoesCarregado, setExportacoesCarregado] = useState(false)
+  const [saneamento, setSaneamento] = useState<any>(null)
+  const [saneamentoLoading, setSaneamentoLdg] = useState(false)
+  const [saneamentoSaving, setSaneamentoSaving] = useState(false)
+  const [saneamentoMsg, setSaneamentoMsg] = useState('')
 
   // Lazy loaders por tab
   useEffect(() => {
@@ -383,6 +387,9 @@ export default function ObraDetailPage() {
     }
     if (activeTab === 'exportacoes' && !exportacoesCarregado && !exportacoesLdg) {
       loadExportacoes()
+    }
+    if (activeTab === 'saneamento' && !saneamento && !saneamentoLoading) {
+      loadSaneamento()
     }
     if (activeTab === 'interpretes' && !interpretesCarregado && !interpretesLoading) {
       loadInterpretes()
@@ -420,6 +427,47 @@ export default function ObraDetailPage() {
       setExportacoesCarregado(true)
     } catch (e) { console.error('[exportacoes]', e) }
     finally { setExportacoesLdg(false) }
+  }
+
+  async function loadSaneamento() {
+    setSaneamentoLdg(true)
+    setSaneamentoMsg('')
+    try {
+      const res = await authFetch(`/api/obras/${obraId}/saneamento`)
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error ?? 'Erro ao carregar saneamento')
+      setSaneamento(d.data ?? null)
+      if (d.data?.integridade?.status) {
+        setObra((prev: any) => ({ ...prev, status_integridade: d.data.integridade.status }))
+      }
+    } catch (e) {
+      setSaneamentoMsg(String(e))
+    } finally {
+      setSaneamentoLdg(false)
+    }
+  }
+
+  async function salvarSaneamentoLink(linkId: string, patch: Record<string, any>) {
+    setSaneamentoSaving(true)
+    setSaneamentoMsg('')
+    try {
+      const res = await authFetch(`/api/obras/${obraId}/saneamento`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ link_id: linkId, ...patch }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error ?? 'Erro ao salvar saneamento')
+      setSaneamento(d.data ?? null)
+      if (d.data?.integridade?.status) {
+        setObra((prev: any) => ({ ...prev, status_integridade: d.data.integridade.status }))
+      }
+      setSaneamentoMsg('Saneamento salvo com sucesso.')
+    } catch (e) {
+      setSaneamentoMsg(String(e))
+    } finally {
+      setSaneamentoSaving(false)
+    }
   }
 
   async function calcularDireitos(linkId: string) {
@@ -1584,6 +1632,155 @@ export default function ObraDetailPage() {
       {/* Tab: Contratos */}
       {activeTab === 'contratos' && (
         <TabContratos obraId={obra.id} statusContrato={obra.status_contrato} motivoRecontracao={obra.motivo_recontracao} />
+      )}
+
+      {/* Tab: Saneamento */}
+      {activeTab === 'saneamento' && (
+        <div className="space-y-4">
+          {saneamentoLoading ? (
+            <div className="flex items-center justify-center py-10 gap-2 text-white/30 text-sm">
+              <Loader2 className="w-4 h-4 animate-spin" /> Carregando saneamento...
+            </div>
+          ) : saneamento ? (
+            <>
+              <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5 space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-violet-400" /> Saneamento Editorial
+                    </h3>
+                    <p className="text-xs text-white/35 mt-1">
+                      Status atual: <span className="text-white/70 font-semibold">{saneamento.integridade?.status ?? 'não calculado'}</span>
+                    </p>
+                  </div>
+                  <button
+                    onClick={loadSaneamento}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white/60 hover:text-white/80 transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Recarregar
+                  </button>
+                </div>
+
+                {saneamentoMsg && (
+                  <div className={`text-xs rounded-lg px-3 py-2 border ${saneamentoMsg.includes('sucesso') ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' : 'bg-rose-500/10 text-rose-300 border-rose-500/20'}`}>
+                    {saneamentoMsg}
+                  </div>
+                )}
+
+                {(saneamento.acoes_sugeridas ?? []).length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-semibold text-white/50 uppercase tracking-wider">Ações sugeridas</h4>
+                    {(saneamento.acoes_sugeridas ?? []).map((acao: any, idx: number) => (
+                      <div key={idx} className="rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2">
+                        <p className="text-[11px] text-amber-300 font-semibold">{acao.codigo}</p>
+                        <p className="text-xs text-white/65">{acao.acao}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                {(saneamento.links ?? []).map((link: any) => {
+                  const titularControlado = (link.titulares ?? []).find((t: any) => t.controlado || t.status_controle === 'controlado') ?? (link.titulares ?? [])[0]
+                  const payload = {
+                    data_contrato: titularControlado?.data_contrato ?? '',
+                    tipo_contrato: titularControlado?.tipo_contrato ?? '',
+                    territorio_contrato: titularControlado?.territorio_contrato ?? '',
+                    prazo_contrato: titularControlado?.prazo_contrato ?? '',
+                    percentual_controle_brasil: titularControlado?.percentual_controle_brasil ?? titularControlado?.percentual_exec_publica ?? '',
+                    percentual_controle_exterior: titularControlado?.percentual_controle_exterior ?? titularControlado?.percentual_exec_publica ?? '',
+                    editora_original_id: titularControlado?.editora_original_id ?? '',
+                    editora_administradora_id: titularControlado?.editora_administradora_id ?? '',
+                    referencia_documental: titularControlado?.referencia_documental ?? '',
+                    observacao_validacao: titularControlado?.observacao_validacao ?? '',
+                  }
+
+                  return (
+                    <div key={link.id} className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5 space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-sm font-semibold text-white">Link {link.numero_link ?? '?'}</h4>
+                          <p className="text-xs text-white/35">
+                            {link.link_ok ? 'Link apto editorialmente' : 'Link com pendências editoriais'}
+                          </p>
+                        </div>
+                        <span className={`text-[11px] font-semibold px-2 py-1 rounded-full ${link.link_ok ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'}`}>
+                          {link.link_ok ? 'OK' : 'Pendente'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div>
+                          <label className="block text-[10px] text-white/35 mb-1 uppercase tracking-wider">Data contrato</label>
+                          <input defaultValue={payload.data_contrato} onChange={e => (payload.data_contrato = e.target.value)} type="date" className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-white/35 mb-1 uppercase tracking-wider">Tipo contrato</label>
+                          <input defaultValue={payload.tipo_contrato} onChange={e => (payload.tipo_contrato = e.target.value)} className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-white/35 mb-1 uppercase tracking-wider">Território</label>
+                          <input defaultValue={payload.territorio_contrato} onChange={e => (payload.territorio_contrato = e.target.value)} className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-white/35 mb-1 uppercase tracking-wider">Prazo</label>
+                          <input defaultValue={payload.prazo_contrato} onChange={e => (payload.prazo_contrato = e.target.value)} className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-white/35 mb-1 uppercase tracking-wider">% Controle BR</label>
+                          <input defaultValue={payload.percentual_controle_brasil} onChange={e => (payload.percentual_controle_brasil = e.target.value)} className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-white/35 mb-1 uppercase tracking-wider">% Controle EX</label>
+                          <input defaultValue={payload.percentual_controle_exterior} onChange={e => (payload.percentual_controle_exterior = e.target.value)} className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-white/35 mb-1 uppercase tracking-wider">Editora original ID</label>
+                          <input defaultValue={payload.editora_original_id} onChange={e => (payload.editora_original_id = e.target.value)} className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white font-mono" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-white/35 mb-1 uppercase tracking-wider">AM ID</label>
+                          <input defaultValue={payload.editora_administradora_id} onChange={e => (payload.editora_administradora_id = e.target.value)} className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white font-mono" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] text-white/35 mb-1 uppercase tracking-wider">Referência documental</label>
+                          <input defaultValue={payload.referencia_documental} onChange={e => (payload.referencia_documental = e.target.value)} className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-white/35 mb-1 uppercase tracking-wider">Observação</label>
+                          <input defaultValue={payload.observacao_validacao} onChange={e => (payload.observacao_validacao = e.target.value)} className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white" />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => salvarSaneamentoLink(link.id, payload)}
+                          disabled={saneamentoSaving}
+                          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-xs font-semibold text-white transition-colors"
+                        >
+                          {saneamentoSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                          {saneamentoSaving ? 'Salvando...' : 'Salvar saneamento'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-10 text-center">
+              <Shield className="w-8 h-8 text-white/20 mx-auto mb-2" />
+              <p className="text-xs text-white/30">Saneamento editorial ainda não carregado.</p>
+              <button onClick={loadSaneamento} className="mt-3 text-xs text-violet-400 hover:text-violet-300 transition-colors">
+                Carregar saneamento
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Tab: Completude */}
