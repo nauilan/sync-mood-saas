@@ -83,6 +83,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (obraIds.length > 0 || body?.editora_destino_id) {
+    return NextResponse.json({ error: 'Operação administrativa não permitida para dados de tenant via usuário comum' }, { status: 403 })
+  }
+
   // 1. Buscar todos os titulares com tipo='editora' do tenant
   const { data: titulares, error: tErr } = await sb
     .from('titulares')

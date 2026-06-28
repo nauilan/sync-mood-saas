@@ -27,6 +27,8 @@ import {
   createTestTenant,
   seedTenantResources,
   apiFetch,
+  apiHeaders,
+  apiUrl,
   isBlocked,
   extractIds,
   type TestTenant,
@@ -92,17 +94,17 @@ describe.skipIf(MISSING.length > 0)('Isolamento Multi-Tenant', () => {
 
   describe('Acesso sem autenticação', () => {
     it('GET /api/obras sem token → 401', async () => {
-      const res = await fetch(`${process.env.ISOLATION_TEST_API_URL}/api/obras`)
+      const res = await fetch(apiUrl('/api/obras'), { headers: apiHeaders() })
       expect([401, 403]).toContain(res.status)
     })
 
     it('GET /api/autorizacoes sem token → 401', async () => {
-      const res = await fetch(`${process.env.ISOLATION_TEST_API_URL}/api/autorizacoes`)
+      const res = await fetch(apiUrl('/api/autorizacoes'), { headers: apiHeaders() })
       expect([401, 403]).toContain(res.status)
     })
 
     it('GET /api/titulares sem token → 401', async () => {
-      const res = await fetch(`${process.env.ISOLATION_TEST_API_URL}/api/titulares`)
+      const res = await fetch(apiUrl('/api/titulares'), { headers: apiHeaders() })
       expect([401, 403]).toContain(res.status)
     })
   })

@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
   const srvKey = sanitize(process.env.SUPABASE_SERVICE_ROLE_KEY)
 
   if (!srvKey || secret !== srvKey) {
-    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 403 })
   }
 
   const body     = await req.json().catch(() => ({}))

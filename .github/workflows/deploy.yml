@@ -1,13 +1,3 @@
-# ════════════════════════════════════════════════════════════
-#  CI + Deploy — Sync Mood
-#  typecheck → unit-tests → deploy → isolation-tests
-#
-#  GitHub Secrets necessários:
-#    VERCEL_TOKEN                  — token da Vercel CLI
-#    NEXT_PUBLIC_SUPABASE_URL      — https://tigubwxotanaznqqxogf.supabase.co
-#    NEXT_PUBLIC_SUPABASE_ANON_KEY — chave anon (eyJ...)
-#    SUPABASE_SERVICE_ROLE_KEY     — chave service_role (eyJ...)
-# ════════════════════════════════════════════════════════════
 name: CI + Deploy
 
 on:
@@ -20,8 +10,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-
-  # ── 1. TypeScript ──────────────────────────────────────────
   typecheck:
     name: TypeScript
     runs-on: ubuntu-latest
@@ -38,7 +26,6 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
 
-  # ── 2. Testes unitários ────────────────────────────────────
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest
@@ -56,15 +43,128 @@ jobs:
       - run: npm ci
       - run: npx vitest run --exclude '**/__tests__/isolation/**'
         env:
-          NEXT_PUBLIC_SUPABASE_URL:      ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY:     ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
-  # ── 3. Deploy para Vercel ──────────────────────────────────
-  deploy:
-    name: Deploy to Vercel
+  deploy-preview:
+    name: Deploy preview
     runs-on: ubuntu-latest
     needs: unit-tests
+    outputs:
+      preview_url: ${{ steps.deploy.outputs.preview_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+      - name: Create Vercel project config
+        run: |
+          mkdir -p .vercel
+          echo '{"projectId":"prj_81eomK8Uie2j1dPv0mIbJEgbn4Eg","orgId":"team_oSlrnl2yyOTFvhvjIgtBZan7"}' > .vercel/project.json
+      - name: Deploy preview
+        id: deploy
+        run: |
+          DEPLOYMENT_JSON=$(vercel --yes --token=${{ secrets.VERCEL_TOKEN }} --format json)
+          echo "$DEPLOYMENT_JSON" > vercel-output.json
+          PREVIEW_URL=$(node -e "const fs=require('fs'); const raw=fs.readFileSync('vercel-output.json','utf8'); const data=JSON.parse(raw); const url=data?.url || data?.inspectorUrl || ''; if(!url){process.exit(2)}; console.log(url.startsWith('http') ? url : 'https://' + url)")
+          if [ -z "$PREVIEW_URL" ]; then
+            cat vercel-output.json
+            exit 1
+          fi
+          echo "Preview URL capturada: $PREVIEW_URL"
+          echo "preview_url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+
+  isolation-tests:
+    name: Isolation tests
+    runs-on: ubuntu-latest
+    needs: deploy-preview
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - name: Aguardar preview pronto
+        run: |
+          HEALTH_URL="${{ needs.deploy-preview.outputs.preview_url }}/api/health"
+          BYPASS_ARGS=()
+          COOKIE_JAR="$(mktemp)"
+          if [ -n "${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}" ]; then
+            BYPASS_ARGS+=(-H "x-vercel-protection-bypass: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}")
+            BYPASS_ARGS+=(-H "x-vercel-set-bypass-cookie: true")
+            BYPASS_ARGS+=(-c "$COOKIE_JAR" -b "$COOKIE_JAR")
+          fi
+          for i in $(seq 1 24); do
+            HEADERS_FILE="$(mktemp)"
+            BODY_FILE="$(mktemp)"
+            curl -sS -D "$HEADERS_FILE" -o "$BODY_FILE" -L "${BYPASS_ARGS[@]}" "$HEALTH_URL" >/dev/null || true
+            HEADERS="$(cat "$HEADERS_FILE" 2>/dev/null || true)"
+            BODY="$(cat "$BODY_FILE" 2>/dev/null || true)"
+            if echo "$HEADERS" | grep -qi '^x-sync-mood-health:[[:space:]]*ok' \
+              && echo "$BODY" | grep -q '"ok"[[:space:]]*:[[:space:]]*true' \
+              && echo "$BODY" | grep -q '"service"[[:space:]]*:[[:space:]]*"sync-mood"' \
+              && echo "$BODY" | grep -q '"runtime"[[:space:]]*:[[:space:]]*"next-api"'; then echo "Preview URL validada: $HEALTH_URL"; echo "OK: sync-mood next-api (try $i)"; exit 0; fi
+            if echo "$HEADERS" | grep -qi '^[Ll]ocation: https://vercel.com/sso-api'; then
+              echo "Preview protegido pela Vercel Preview Protection."
+              echo "Configure o secret VERCEL_AUTOMATION_BYPASS_SECRET no GitHub Actions para liberar a automação."
+              exit 1
+            fi
+            if echo "$BODY" | grep -qi '<!DOCTYPE html>\|<html'; then
+              echo "Preview não está expondo API JSON. Recebido HTML 200 em /api/health."
+              echo "Verificar Vercel preview protection, root directory ou URL de deploy."
+              exit 1
+            fi
+            echo "Tentativa $i sem health válido ainda."
+            echo "Headers observados:"
+            echo "$HEADERS" | tr '\n' ' ' | cut -c1-400
+            echo "Body observado:"
+            echo "$BODY" | tr '\n' ' ' | cut -c1-400
+            sleep 5
+          done
+          echo "Preview nao respondeu com JSON válido em /api/health."
+          exit 1
+      - name: Run isolation tests
+        run: npm run test:isolation
+        env:
+          ISOLATION_TEST_API_URL: ${{ needs.deploy-preview.outputs.preview_url }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+
+  editorial-e2e:
+    name: Editorial E2E
+    runs-on: ubuntu-latest
+    needs: isolation-tests
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - name: Run editorial E2E
+        run: npm run test:editorial-e2e
+        env:
+          ISOLATION_TEST_API_URL: ${{ needs.deploy-preview.outputs.preview_url }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+
+  promote-production:
+    name: Promote to production
+    runs-on: ubuntu-latest
+    needs: editorial-e2e
     steps:
       - uses: actions/checkout@v4
       - name: Install Vercel CLI
@@ -76,35 +176,3 @@ jobs:
       - name: Deploy to Production
         run: vercel --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
         working-directory: apps/web
-
-  # ── 4. Isolation tests contra a Vercel ────────────────────
-  isolation-tests:
-    name: Isolation tests
-    runs-on: ubuntu-latest
-    needs: deploy
-    defaults:
-      run:
-        working-directory: apps/web
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'   # Node 22 tem WebSocket nativo (necessário para Supabase Realtime)
-          cache: npm
-          cache-dependency-path: apps/web/package-lock.json
-      - run: npm ci
-      - name: Aguardar Vercel pronto
-        run: |
-          for i in $(seq 1 24); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://sync-mood-saas.vercel.app/api/me || true)
-            if [ "$STATUS" != "000" ]; then echo "OK (HTTP $STATUS, try $i)"; exit 0; fi
-            sleep 5
-          done
-          echo "Vercel nao respondeu."; exit 1
-      - name: Run isolation tests
-        run: npm run test:isolation
-        env:
-          ISOLATION_TEST_API_URL:        https://sync-mood-saas.vercel.app
-          NEXT_PUBLIC_SUPABASE_URL:      ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY:     ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

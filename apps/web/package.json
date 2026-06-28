@@ -9,7 +9,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:isolation": "vitest run --reporter=verbose __tests__/isolation"
+    "test:isolation": "vitest run --reporter=verbose __tests__/isolation",
+    "test:editorial-e2e": "vitest run --reporter=verbose __tests__/editorial-e2e.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

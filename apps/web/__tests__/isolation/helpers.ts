@@ -19,6 +19,19 @@ if (typeof (globalThis as any).WebSocket === 'undefined') {
 }
 
 export const API_BASE = (process.env.ISOLATION_TEST_API_URL ?? '').replace(/\/$/, '')
+export const VERCEL_BYPASS_SECRET = (process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? '').trim()
+
+export function apiUrl(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${API_BASE}${normalizedPath}`
+}
+
+export function apiHeaders(token?: string): Record<string, string> {
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(VERCEL_BYPASS_SECRET ? { 'x-vercel-protection-bypass': VERCEL_BYPASS_SECRET } : {}),
+  }
+}
 
 // ── Clientes Supabase ─────────────────────────────────────────────────────────
 
@@ -31,9 +44,15 @@ export function adminSb() {
 }
 
 export function anonSb() {
+  const apiKey = (
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    process.env.SUPABASE_ANON_KEY ??
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    ''
+  ).trim()
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    apiKey,
     { auth: { persistSession: false } }
   )
 }
@@ -235,11 +254,11 @@ export async function apiFetch(
   token: string,
   payload?: unknown
 ): Promise<{ status: number; body: unknown }> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(apiUrl(path), {
     method,
     headers: {
       'Content-Type':  'application/json',
-      'Authorization': `Bearer ${token}`,
+      ...apiHeaders(token),
     },
     body: payload !== undefined ? JSON.stringify(payload) : undefined,
   })

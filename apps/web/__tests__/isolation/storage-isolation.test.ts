@@ -20,6 +20,8 @@ import {
   createTestTenant,
   seedTenantResources,
   apiFetch,
+  apiHeaders,
+  apiUrl,
   isBlocked,
   adminSb,
   type TestTenant,
@@ -167,10 +169,10 @@ describe.skipIf(MISSING.length > 0)('Storage — Isolamento de Contratos e PDFs'
     // A rota de upload usa FormData — aqui testamos a validação de acesso
     // sem enviar um arquivo real (a rota deve bloquear antes)
     const res = await fetch(
-      `${process.env.ISOLATION_TEST_API_URL}/api/obras/${resA.obraId}/contrato-manual`,
+      apiUrl(`/api/obras/${resA.obraId}/contrato-manual`),
       {
         method: 'POST',
-        headers: { Authorization: `Bearer ${tenantB.token}` },
+        headers: apiHeaders(tenantB.token),
         // Sem body FormData — apenas testa se a rota bloqueia antes de processar
         body: new FormData(),
       }

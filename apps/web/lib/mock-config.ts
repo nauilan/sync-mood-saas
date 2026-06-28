@@ -171,11 +171,193 @@ export const MOCK_MODELOS_CONTRATO: ModeloContratoConfig[] = [
 // ============================================================
 
 export const MOCK_MODELOS_AUTORIZACAO: ModeloAutorizacaoConfig[] = [
-  { id: 'ma-001', codigo: 'AUT-FONOGRAMA', nome: 'Autorização de Inclusão em Fonograma', tipo_autorizacao: 'fonograma', template_text: 'Autorizamos a inclusão da obra {{TITULO_OBRA}} no fonograma do intérprete {{INTERPRETE}}, gravadora {{GRAVADORA}}...', variaveis_json: { TITULO_OBRA: 'string', INTERPRETE: 'string', GRAVADORA: 'string' }, ativo: true, editora_id: 'ed-tsm', created_at: '2020-01-15T10:00:00Z' },
-  { id: 'ma-002', codigo: 'AUT-SYNC', nome: 'Autorização de Sincronização Audiovisual', tipo_autorizacao: 'sincronizacao', template_text: 'Autorizamos a sincronização da obra {{TITULO_OBRA}} no projeto audiovisual {{TITULO_PROJETO}} da produtora {{PRODUTORA}}...', variaveis_json: { TITULO_OBRA: 'string', TITULO_PROJETO: 'string', PRODUTORA: 'string' }, ativo: true, editora_id: 'ed-tsm', created_at: '2020-01-15T10:00:00Z' },
-  { id: 'ma-003', codigo: 'AUT-PUBLICIDADE', nome: 'Autorização de Uso Publicitário', tipo_autorizacao: 'publicidade', template_text: 'Autorizamos o uso da obra {{TITULO_OBRA}} na campanha publicitária da marca {{MARCA}} pela agência {{AGENCIA}}...', variaveis_json: { TITULO_OBRA: 'string', MARCA: 'string', AGENCIA: 'string' }, ativo: true, editora_id: 'ed-tsm', created_at: '2020-01-15T10:00:00Z' },
-  { id: 'ma-004', codigo: 'AUT-VIDEOFONOGRAMA', nome: 'Autorização de Inclusão em Videofonograma', tipo_autorizacao: 'videofonograma', template_text: 'Autorizamos a inclusão da obra {{TITULO_OBRA}} no videoclipe do intérprete {{INTERPRETE}}...', variaveis_json: { TITULO_OBRA: 'string', INTERPRETE: 'string' }, ativo: true, editora_id: 'ed-tsm', created_at: '2020-06-01T10:00:00Z' },
-  { id: 'ma-005', codigo: 'AUT-INCIDENTAL', nome: 'Autorização de Uso Incidental', tipo_autorizacao: 'incidental', template_text: 'Autorizamos o uso incidental/secundário da obra {{TITULO_OBRA}} no conteúdo {{TITULO_CONTEUDO}}...', variaveis_json: { TITULO_OBRA: 'string', TITULO_CONTEUDO: 'string' }, ativo: true, editora_id: 'ed-tsm', created_at: '2020-06-01T10:00:00Z' },
+  {
+    id: 'ma-001',
+    codigo: 'AUT-FONOGRAMA',
+    nome: 'Autorização de Inclusão em Fonograma',
+    tipo_autorizacao: 'fonograma',
+    template_text: `AUTORIZAÇÃO DE INCLUSÃO EM FONOGRAMA
+
+A presente autorização limita-se exclusivamente à parte controlada pela editora/licenciante e aos fonogramas, videofonogramas e ISRCs expressamente identificados nesta solicitação.
+
+Obra autorizada: {{TITULO_OBRA}}
+Código interno da obra: {{CODIGO_OBRA}}
+ISWC: {{ISWC}}
+Intérprete(s): {{INTERPRETE}}
+Produto: {{TITULO_PRODUTO}}
+Tipo do produto: {{TIPO_PRODUTO}}
+Formatos físicos: {{FORMATOS_FISICOS}}
+Formatos digitais: {{FORMATOS_DIGITAIS}}
+ISRCs vinculados: {{ISRCS}}
+Faixa / versão: {{TITULO_FAIXA}} / {{VERSAO}}
+Selo / gravadora: {{GRAVADORA}}
+Distribuidora: {{DISTRIBUIDORA}}
+Território: {{TERRITORIO}}
+Data prevista de lançamento: {{DATA_LANCAMENTO}}
+
+FICHA EDITORIAL DA OBRA AUTORIZADA
+{{FICHA_EDITORIAL}}
+
+Parte efetivamente autorizada: {{PARTE_AUTORIZADA}}
+Parte não controlada: {{PARTE_NAO_CONTROLADA}}
+Recebedor definido: {{RECEBEDOR}}
+Status de integridade editorial: {{STATUS_INTEGRIDADE}}
+Pendências editoriais no rascunho: {{PENDENCIAS}}
+
+Qualquer novo ISRC, remix, nova versão, novo fonograma, novo videoclipe ou novo produto dependerá de autorização adicional ou aditivo contratual, salvo previsão expressa em contrário.`,
+    variaveis_json: {
+      TITULO_OBRA: 'string',
+      CODIGO_OBRA: 'string',
+      ISWC: 'string',
+      INTERPRETE: 'string',
+      TITULO_PRODUTO: 'string',
+      TIPO_PRODUTO: 'string',
+      FORMATOS_FISICOS: 'string',
+      FORMATOS_DIGITAIS: 'string',
+      ISRCS: 'string',
+      TITULO_FAIXA: 'string',
+      VERSAO: 'string',
+      GRAVADORA: 'string',
+      DISTRIBUIDORA: 'string',
+      TERRITORIO: 'string',
+      DATA_LANCAMENTO: 'string',
+      FICHA_EDITORIAL: 'string',
+      PARTE_AUTORIZADA: 'string',
+      PARTE_NAO_CONTROLADA: 'string',
+      RECEBEDOR: 'string',
+      STATUS_INTEGRIDADE: 'string',
+      PENDENCIAS: 'string',
+    },
+    ativo: true,
+    editora_id: 'ed-tsm',
+    created_at: '2020-01-15T10:00:00Z',
+  },
+  {
+    id: 'ma-002',
+    codigo: 'AUT-SYNC',
+    nome: 'Autorização de Sincronização Audiovisual',
+    tipo_autorizacao: 'sincronizacao',
+    template_text: `AUTORIZAÇÃO DE SINCRONIZAÇÃO AUDIOVISUAL
+
+Autorizamos o uso da obra {{TITULO_OBRA}} no projeto audiovisual {{TITULO_PROJETO}}, observando exclusivamente a parte controlada pela editora/licenciante.
+
+FICHA EDITORIAL DA OBRA AUTORIZADA
+{{FICHA_EDITORIAL}}
+
+Parte efetivamente autorizada: {{PARTE_AUTORIZADA}}
+Parte não controlada: {{PARTE_NAO_CONTROLADA}}
+Status de integridade editorial: {{STATUS_INTEGRIDADE}}
+Pendências editoriais no rascunho: {{PENDENCIAS}}
+Produtora / Solicitante: {{PRODUTORA}}
+Território: {{TERRITORIO}}`,
+    variaveis_json: {
+      TITULO_OBRA: 'string',
+      TITULO_PROJETO: 'string',
+      PRODUTORA: 'string',
+      FICHA_EDITORIAL: 'string',
+      PARTE_AUTORIZADA: 'string',
+      PARTE_NAO_CONTROLADA: 'string',
+      STATUS_INTEGRIDADE: 'string',
+      PENDENCIAS: 'string',
+      TERRITORIO: 'string',
+    },
+    ativo: true,
+    editora_id: 'ed-tsm',
+    created_at: '2020-01-15T10:00:00Z',
+  },
+  {
+    id: 'ma-003',
+    codigo: 'AUT-PUBLICIDADE',
+    nome: 'Autorização de Uso Publicitário',
+    tipo_autorizacao: 'publicidade',
+    template_text: `AUTORIZAÇÃO DE USO PUBLICITÁRIO
+
+Autorizamos o uso da obra {{TITULO_OBRA}} na campanha {{MARCA}}, pela agência {{AGENCIA}}, limitado à parte editorial efetivamente controlada.
+
+FICHA EDITORIAL DA OBRA AUTORIZADA
+{{FICHA_EDITORIAL}}
+
+Parte efetivamente autorizada: {{PARTE_AUTORIZADA}}
+Parte não controlada: {{PARTE_NAO_CONTROLADA}}
+Status de integridade editorial: {{STATUS_INTEGRIDADE}}
+Pendências editoriais no rascunho: {{PENDENCIAS}}`,
+    variaveis_json: {
+      TITULO_OBRA: 'string',
+      MARCA: 'string',
+      AGENCIA: 'string',
+      FICHA_EDITORIAL: 'string',
+      PARTE_AUTORIZADA: 'string',
+      PARTE_NAO_CONTROLADA: 'string',
+      STATUS_INTEGRIDADE: 'string',
+      PENDENCIAS: 'string',
+    },
+    ativo: true,
+    editora_id: 'ed-tsm',
+    created_at: '2020-01-15T10:00:00Z',
+  },
+  {
+    id: 'ma-004',
+    codigo: 'AUT-VIDEOFONOGRAMA',
+    nome: 'Autorização de Inclusão em Videofonograma',
+    tipo_autorizacao: 'videofonograma',
+    template_text: `AUTORIZAÇÃO DE INCLUSÃO EM VIDEOFONOGRAMA
+
+Autorizamos a inclusão da obra {{TITULO_OBRA}} no videoclipe / videofonograma solicitado, observando exclusivamente a parte controlada pela editora/licenciante.
+
+FICHA EDITORIAL DA OBRA AUTORIZADA
+{{FICHA_EDITORIAL}}
+
+Intérprete(s): {{INTERPRETE}}
+Produto: {{TITULO_PRODUTO}}
+ISRCs vinculados: {{ISRCS}}
+Parte efetivamente autorizada: {{PARTE_AUTORIZADA}}
+Parte não controlada: {{PARTE_NAO_CONTROLADA}}
+Status de integridade editorial: {{STATUS_INTEGRIDADE}}
+Pendências editoriais no rascunho: {{PENDENCIAS}}`,
+    variaveis_json: {
+      TITULO_OBRA: 'string',
+      INTERPRETE: 'string',
+      TITULO_PRODUTO: 'string',
+      ISRCS: 'string',
+      FICHA_EDITORIAL: 'string',
+      PARTE_AUTORIZADA: 'string',
+      PARTE_NAO_CONTROLADA: 'string',
+      STATUS_INTEGRIDADE: 'string',
+      PENDENCIAS: 'string',
+    },
+    ativo: true,
+    editora_id: 'ed-tsm',
+    created_at: '2020-06-01T10:00:00Z',
+  },
+  {
+    id: 'ma-005',
+    codigo: 'AUT-INCIDENTAL',
+    nome: 'Autorização de Uso Incidental',
+    tipo_autorizacao: 'incidental',
+    template_text: `AUTORIZAÇÃO DE USO INCIDENTAL
+
+Autorizamos o uso incidental/secundário da obra {{TITULO_OBRA}} no conteúdo {{TITULO_CONTEUDO}}, limitado à parte controlada pela editora/licenciante.
+
+FICHA EDITORIAL DA OBRA AUTORIZADA
+{{FICHA_EDITORIAL}}
+
+Parte efetivamente autorizada: {{PARTE_AUTORIZADA}}
+Parte não controlada: {{PARTE_NAO_CONTROLADA}}
+Status de integridade editorial: {{STATUS_INTEGRIDADE}}
+Pendências editoriais no rascunho: {{PENDENCIAS}}`,
+    variaveis_json: {
+      TITULO_OBRA: 'string',
+      TITULO_CONTEUDO: 'string',
+      FICHA_EDITORIAL: 'string',
+      PARTE_AUTORIZADA: 'string',
+      PARTE_NAO_CONTROLADA: 'string',
+      STATUS_INTEGRIDADE: 'string',
+      PENDENCIAS: 'string',
+    },
+    ativo: true,
+    editora_id: 'ed-tsm',
+    created_at: '2020-06-01T10:00:00Z',
+  },
 ]
 
 // ============================================================

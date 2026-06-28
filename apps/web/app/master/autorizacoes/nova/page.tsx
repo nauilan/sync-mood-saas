@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useWizardSmartScroll } from '@/hooks/use-wizard-smart-scroll'
 import { authFetch } from '@/lib/supabase/client'
+import { ValidacaoEditorialStep } from './validacao-editorial-step'
 import {
   TIPO_AUTORIZACAO_LABELS, TIPO_AUTORIZACAO_DESCRICAO, TIPO_AUTORIZACAO_COLORS,
   MODELO_NEGOCIO_LABELS, MODELO_NEGOCIO_DESCRICAO, MODELO_NEGOCIO_DOCUMENTO_NOME, MODELO_NEGOCIO_COLORS,
@@ -49,6 +50,7 @@ const STEPS = [
   'Periodo & Exclusividade',
   'Modelo de Negocio',
   'Pagamento',
+  'Validacao Editorial',
   'Revisao',
 ]
 
@@ -111,6 +113,11 @@ function CurrencyInput({ value, onChange, disabled }: { value: number; onChange:
       />
     </div>
   )
+}
+
+function fmtPct(v?: number | null) {
+  if (v == null) return '—'
+  return `${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%`
 }
 
 function MultiSelect({ options, value, onChange, label, selectAll }: { options: string[]; value: string[]; onChange: (v: string[]) => void; label?: string; selectAll?: boolean }) {
@@ -827,6 +834,8 @@ export default function NovaAutorizacaoPage() {
   const [buscandoObra, setBuscandoObra]               = useState(false)
   const [obraSelecionadaData, setObraSelecionadaData] = useState<any>(null)
   const [linksObra, setLinksObra]                     = useState<any[]>([])
+  const [saneamentoObra, setSaneamentoObra]           = useState<any>(null)
+  const [carregandoSaneamento, setCarregandoSaneamento] = useState(false)
   const [salvando, setSalvando]                       = useState(false)
   const [erroSalvar, setErroSalvar]                   = useState('')
   // ── Produto fonográfico ──────────────────────────────────────────────────
@@ -876,6 +885,28 @@ export default function NovaAutorizacaoPage() {
   }, [buscaObra])
 
   useEffect(() => {
+    async function loadSaneamento() {
+      if (!obraId) {
+        setSaneamentoObra(null)
+        return
+      }
+      setCarregandoSaneamento(true)
+      try {
+        const res = await authFetch(`/api/obras/${obraId}/saneamento`)
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error((json as any)?.error ?? `Erro ${res.status}`)
+        setSaneamentoObra((json as any).data ?? null)
+      } catch {
+        setSaneamentoObra(null)
+      } finally {
+        setCarregandoSaneamento(false)
+      }
+    }
+
+    loadSaneamento()
+  }, [obraId])
+
+  useEffect(() => {
     // Usa os _links já presentes na obra selecionada — sem fetch extra
     setLinksObra(obraSelecionadaData?._links ?? [])
   }, [obraSelecionadaData])
@@ -889,6 +920,38 @@ export default function NovaAutorizacaoPage() {
 
   const pcControlado = obraSelecionadaData?._percentual_controlado ?? 0
   const bloqueioExcl = { bloqueada: false }
+  const integridade = saneamentoObra?.integridade ?? null
+  const statusIntegridade = integridade?.status ?? null
+  const obraAptaEditorialmente = statusIntegridade === 'apta'
+  const titularesEditorial = (saneamentoObra?.links ?? [])
+    .flatMap((link: any) => (link?.titulares ?? []).map((titular: any) => ({
+      link_numero: link?.numero_link,
+      nome: titular?.titular?.nome_artistico ?? titular?.titular?.nome_completo ?? titular?.nome ?? '—',
+      documento: titular?.titular?.cpf_cnpj ?? '—',
+      controlado: Boolean(titular?.controlado || titular?.status_controle === 'controlado'),
+      funcao: titular?.funcao_no_link ?? '—',
+      percentual_brasil: Number(titular?.percentual_controle_brasil) || 0,
+      percentual_exterior: Number(titular?.percentual_controle_exterior) || 0,
+      editora_original: titular?.editora_original?.nome_fantasia ?? titular?.editora_original?.nome ?? '—',
+      administradora: titular?.editora_administradora?.nome_fantasia ?? titular?.editora_administradora?.nome ?? '—',
+    })))
+  const titularesControlados = titularesEditorial.filter((item: any) => item.controlado)
+  const titularesNaoControlados = titularesEditorial.filter((item: any) => !item.controlado)
+  const percentualControladoBr = titularesControlados.reduce((total: number, item: any) => total + item.percentual_brasil, 0)
+  const percentualControladoEx = titularesControlados.reduce((total: number, item: any) => total + item.percentual_exterior, 0)
+  const percentualNaoControladoBr = Math.max(0, 100 - percentualControladoBr)
+  const editorasOriginais: string[] = Array.from(new Set(
+    titularesControlados
+      .map((item: any) => item.editora_original)
+      .filter((v: any): v is string => typeof v === 'string' && v.length > 0 && v !== '—')
+  ))
+  const administradoras: string[] = Array.from(new Set(
+    titularesControlados
+      .map((item: any) => item.administradora)
+      .filter((v: any): v is string => typeof v === 'string' && v.length > 0 && v !== '—')
+  ))
+  const recebedorDefinido: string = administradoras[0] ?? editorasOriginais[0] ?? '—'
+  const pendenciasEditorial = (integridade?.pendencias ?? []) as Array<any>
 
   const exclusividadeDataFim = useMemo(() => {
     if (!exclusividade || !dataInicio) return null
@@ -922,6 +985,7 @@ export default function NovaAutorizacaoPage() {
     !!dataInicio,
     true,
     true,
+    obraAptaEditorialmente,
     true,
   ]
 
@@ -1455,8 +1519,27 @@ export default function NovaAutorizacaoPage() {
         </div>
       )}
 
-      {/* ─── Step 7: Revisao ─── */}
-      {step === 7 && (() => {
+      {/* ─── Step 7: Validacao Editorial ─── */}
+      {step === 7 && (
+        <ValidacaoEditorialStep
+          obraAptaEditorialmente={obraAptaEditorialmente}
+          carregandoSaneamento={carregandoSaneamento}
+          statusIntegridade={statusIntegridade}
+          recebedorDefinido={recebedorDefinido}
+          percentualControladoBr={percentualControladoBr}
+          percentualControladoEx={percentualControladoEx}
+          editorasOriginais={editorasOriginais}
+          administradoras={administradoras}
+          titularesControlados={titularesControlados}
+          titularesNaoControlados={titularesNaoControlados}
+          percentualNaoControladoBr={percentualNaoControladoBr}
+          pendenciasEditorial={pendenciasEditorial}
+          obraId={obraId}
+        />
+      )}
+
+      {/* ─── Step 8: Revisao ─── */}
+      {step === 8 && (() => {
         // Calcula autores da obra selecionada a partir dos links
         const todosLinks = linksObra
         const PAPEIS_AUTOR = ['compositor', 'co_compositor', 'arranjador', 'versionista', 'tradutor', 'autor']

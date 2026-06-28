@@ -41,6 +41,77 @@ function getToken(req: NextRequest): string {
   return ''
 }
 
+async function fetchObraCompat(sb: any, obraId: string, tenantId: string) {
+  const tentativaNova = await sb.from('obras')
+    .select('id, contrato_origem_id, status_contrato, titulo')
+    .eq('id', obraId)
+    .eq('tenant_id', tenantId)
+    .is('deleted_at', null)
+    .single()
+
+  if (!tentativaNova.error && tentativaNova.data) return tentativaNova.data
+
+  const tentativaLegada = await sb.from('obras')
+    .select('id, contrato_origem_id, titulo')
+    .eq('id', obraId)
+    .eq('tenant_id', tenantId)
+    .is('deleted_at', null)
+    .single()
+
+  return tentativaLegada.data ?? null
+}
+
+async function fetchContratoCompat(sb: any, contratoId: string, tenantId: string) {
+  const tentativaNova = await sb.from('contratos')
+    .select('id, titular_id, editora_id, status_contrato, numero, data_inicio, tipo, territorio, prazo')
+    .eq('id', contratoId)
+    .eq('tenant_id', tenantId)
+    .single()
+
+  if (!tentativaNova.error && tentativaNova.data) return tentativaNova.data
+
+  const tentativaLegada = await sb.from('contratos')
+    .select('id, titular_id, editora_id, status, numero, data_inicio, tipo, territorio')
+    .eq('id', contratoId)
+    .eq('tenant_id', tenantId)
+    .single()
+
+  if (!tentativaLegada.data) return null
+
+  return {
+    ...tentativaLegada.data,
+    status_contrato: (tentativaLegada.data as any).status ?? null,
+    prazo: null,
+  }
+}
+
+async function fetchTitularesCompat(sb: any, obraId: string, tenantId: string) {
+  const tentativaNova = await sb.from('obras_links_titulares')
+    .select('id, link_id, titular_id, controlado, contrato_id, editora_original_id, editora_administradora_id, percentual, percentual_exec_publica')
+    .eq('obra_id', obraId)
+    .eq('tenant_id', tenantId)
+
+  if (!tentativaNova.error && (tentativaNova.data?.length ?? 0) > 0) return tentativaNova.data ?? []
+
+  const tentativaLegada = await sb.from('obras_links_titulares')
+    .select('id, obra_link_id, titular_id, controlado, contrato_id, editora_id, editora_original_id, editora_administradora_id, status_controle, percentual_exec_publica')
+    .eq('obra_id', obraId)
+    .eq('tenant_id', tenantId)
+
+  return ((tentativaLegada.data ?? []) as Array<Record<string, unknown>>).map((item) => ({
+    id: item.id,
+    link_id: item.obra_link_id,
+    titular_id: item.titular_id,
+    controlado: item.controlado,
+    contrato_id: item.contrato_id ?? null,
+    editora_original_id: item.editora_original_id ?? item.editora_id ?? null,
+    editora_administradora_id: item.editora_administradora_id,
+    status_controle: item.status_controle ?? null,
+    percentual: item.percentual_exec_publica ?? null,
+    percentual_exec_publica: item.percentual_exec_publica ?? null,
+  }))
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -73,12 +144,7 @@ export async function POST(
   } catch { /* body vazio é ok */ }
 
   // 1. Buscar a obra
-  const { data: obra } = await sb.from('obras')
-    .select('id, contrato_origem_id, status_contrato, titulo')
-    .eq('id', obraId)
-    .eq('tenant_id', usuario.tenant_id)
-    .is('deleted_at', null)
-    .single()
+  const obra = await fetchObraCompat(sb, obraId, usuario.tenant_id)
 
   if (!obra) return NextResponse.json({ error: 'Obra não encontrada' }, { status: 404 })
 
@@ -90,11 +156,7 @@ export async function POST(
   }
 
   // 2. Buscar o contrato (deve pertencer ao mesmo tenant)
-  const { data: contrato } = await sb.from('contratos')
-    .select('id, titular_id, editora_id, status_contrato, numero, data_inicio, tipo, territorio, prazo')
-    .eq('id', contratoId)
-    .eq('tenant_id', usuario.tenant_id)
-    .single()
+  const contrato = await fetchContratoCompat(sb, contratoId, usuario.tenant_id)
 
   if (!contrato) {
     return NextResponse.json({ error: 'Contrato não encontrado ou não pertence a este tenant' }, { status: 404 })
@@ -105,10 +167,7 @@ export async function POST(
   const editoraIdContrato  = ctr.editora_id  as string | null
 
   // 3. Buscar titulares da obra
-  const { data: titulares } = await sb.from('obras_links_titulares')
-    .select('id, link_id, titular_id, controlado, contrato_id, editora_administradora_id, percentual, percentual_exec_publica')
-    .eq('obra_id', obraId)
-    .eq('tenant_id', usuario.tenant_id)
+  const titulares = await fetchTitularesCompat(sb, obraId, usuario.tenant_id)
 
   if (!titulares || titulares.length === 0) {
     return NextResponse.json({
@@ -151,10 +210,23 @@ export async function POST(
   }
 
   for (const { id, patch } of atualizacoes) {
-    await sb.from('obras_links_titulares')
+    let atualizado = await sb.from('obras_links_titulares')
       .update(patch)
       .eq('id', id)
       .eq('tenant_id', usuario.tenant_id)
+    if (atualizado.error) {
+      const patchLegado: Record<string, unknown> = {
+        contrato_id: patch.contrato_id ?? null,
+        controlado: patch.controlado,
+        status_controle: patch.status_controle ?? null,
+        editora_original_id: patch.editora_original_id ?? null,
+        editora_administradora_id: patch.editora_administradora_id ?? patch.editora_original_id ?? null,
+      }
+      atualizado = await sb.from('obras_links_titulares')
+        .update(patchLegado)
+        .eq('id', id)
+        .eq('tenant_id', usuario.tenant_id)
+    }
     amarrados++
   }
 
@@ -162,7 +234,7 @@ export async function POST(
   const statusCtr = (ctr.status_contrato as string) ?? ''
   const contratoAtivo = ['ativo','assinado','vigente','aprovado','aprovado_admin'].includes(statusCtr)
   if (amarrados > 0 && contratoAtivo) {
-    await sb.from('obras').update({
+    const tentativaNova = await sb.from('obras').update({
       status_contrato: 'valido',
       validacao_editorial_origem: validacaoDeclaratoria ? 'declaratoria' : 'contrato',
       validacao_editorial_referencia: referenciaDocumental,
@@ -170,6 +242,12 @@ export async function POST(
       validacao_editorial_em: new Date().toISOString(),
     })
       .eq('id', obraId).eq('tenant_id', usuario.tenant_id)
+
+    if (tentativaNova.error) {
+      await sb.from('obras').update({
+        contrato_origem_id: contratoId,
+      }).eq('id', obraId).eq('tenant_id', usuario.tenant_id)
+    }
   }
 
   // 6. Vincular na tabela obras_contratos (evitar duplicata)

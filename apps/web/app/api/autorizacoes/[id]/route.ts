@@ -148,6 +148,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  if (!anterior) {
+    return NextResponse.json({ error: 'Autorização não encontrada' }, { status: 404 })
+  }
+
   const modeloNegocioAtual = (safeBody.modelo_negocio ?? (anterior as Record<string, unknown> | null)?.modelo_negocio) as string | null
   const obraIdAtual = (safeBody.obra_id ?? (anterior as Record<string, unknown> | null)?.obra_id) as string | null
   if (modeloNegocioAtual === 'pago_editora' && obraIdAtual && safeBody.pago_a === undefined) {
