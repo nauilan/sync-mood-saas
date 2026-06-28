@@ -32,9 +32,15 @@ export function adminSb() {
 }
 
 export function anonSb() {
+  const apiKey = (
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+    process.env.SUPABASE_ANON_KEY ??
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    ''
+  ).trim()
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    apiKey,
     { auth: { persistSession: false } }
   )
 }
