@@ -77,12 +77,14 @@ jobs:
       - name: Deploy preview
         id: deploy
         run: |
-          vercel --yes --token=${{ secrets.VERCEL_TOKEN }} > vercel-output.txt
-          PREVIEW_URL=$(grep -Eo 'https://[^ ]+\.vercel\.app' vercel-output.txt | tail -n 1)
+          DEPLOYMENT_JSON=$(vercel --yes --token=${{ secrets.VERCEL_TOKEN }} --format json)
+          echo "$DEPLOYMENT_JSON" > vercel-output.json
+          PREVIEW_URL=$(node -e "const fs=require('fs'); const raw=fs.readFileSync('vercel-output.json','utf8'); const data=JSON.parse(raw); const url=data?.url || data?.inspectorUrl || ''; if(!url){process.exit(2)}; console.log(url.startsWith('http') ? url : 'https://' + url)")
           if [ -z "$PREVIEW_URL" ]; then
-            cat vercel-output.txt
+            cat vercel-output.json
             exit 1
           fi
+          echo "Preview URL capturada: $PREVIEW_URL"
           echo "preview_url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
 
   isolation-tests:
@@ -105,17 +107,18 @@ jobs:
 
       - name: Wait for preview
         run: |
-          BYPASS_HEADER=()
+          HEALTH_URL="${{ needs.deploy-preview.outputs.preview_url }}/api/health"
           if [ -n "${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}" ]; then
-            BYPASS_HEADER=(-H "x-vercel-protection-bypass: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}")
+            HEALTH_URL="${HEALTH_URL}?x-vercel-protection-bypass=${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}&x-vercel-set-bypass-cookie=true"
           fi
           for i in $(seq 1 24); do
-            BODY=$(curl -sS -L --max-redirs 0 "${BYPASS_HEADER[@]}" "${{ needs.deploy-preview.outputs.preview_url }}/api/health" || true)
+            BODY=$(curl -sS -L "$HEALTH_URL" || true)
             if echo "$BODY" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
-              echo "OK (health JSON, try $i)"
+              echo "Preview URL validada: $HEALTH_URL"
+              echo "OK: sync-mood next-api (try $i)"
               exit 0
             fi
-            HEADERS=$(curl -sSI --max-redirs 0 "${BYPASS_HEADER[@]}" "${{ needs.deploy-preview.outputs.preview_url }}/api/health" || true)
+            HEADERS=$(curl -sSI --max-redirs 0 "$HEALTH_URL" || true)
             if echo "$HEADERS" | grep -qi '^[Ll]ocation: https://vercel.com/sso-api'; then
               echo "Preview protegido pela Vercel Preview Protection."
               echo "Configure o secret VERCEL_AUTOMATION_BYPASS_SECRET no GitHub Actions para liberar a automação."
