@@ -21,6 +21,16 @@ if (typeof (globalThis as any).WebSocket === 'undefined') {
 export const API_BASE = (process.env.ISOLATION_TEST_API_URL ?? '').replace(/\/$/, '')
 export const VERCEL_BYPASS_SECRET = (process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? '').trim()
 
+export function apiUrl(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  const url = new URL(`${API_BASE}${normalizedPath}`)
+  if (VERCEL_BYPASS_SECRET) {
+    url.searchParams.set('x-vercel-protection-bypass', VERCEL_BYPASS_SECRET)
+    url.searchParams.set('x-vercel-set-bypass-cookie', 'true')
+  }
+  return url.toString()
+}
+
 // ── Clientes Supabase ─────────────────────────────────────────────────────────
 
 export function adminSb() {
@@ -242,13 +252,11 @@ export async function apiFetch(
   token: string,
   payload?: unknown
 ): Promise<{ status: number; body: unknown }> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(apiUrl(path), {
     method,
     headers: {
       'Content-Type':  'application/json',
       'Authorization': `Bearer ${token}`,
-      ...(VERCEL_BYPASS_SECRET ? { 'x-vercel-protection-bypass': VERCEL_BYPASS_SECRET } : {}),
-      ...(VERCEL_BYPASS_SECRET ? { 'x-vercel-set-bypass-cookie': 'true' } : {}),
     },
     body: payload !== undefined ? JSON.stringify(payload) : undefined,
   })
