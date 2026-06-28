@@ -242,6 +242,7 @@ export async function apiFetch(
       'Content-Type':  'application/json',
       'Authorization': `Bearer ${token}`,
       ...(VERCEL_BYPASS_SECRET ? { 'x-vercel-protection-bypass': VERCEL_BYPASS_SECRET } : {}),
+      ...(VERCEL_BYPASS_SECRET ? { 'x-vercel-set-bypass-cookie': 'true' } : {}),
     },
     body: payload !== undefined ? JSON.stringify(payload) : undefined,
   })

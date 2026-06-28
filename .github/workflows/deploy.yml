@@ -92,12 +92,16 @@ jobs:
       - name: Aguardar preview pronto
         run: |
           HEALTH_URL="${{ needs.deploy-preview.outputs.preview_url }}/api/health"
+          BYPASS_ARGS=()
+          COOKIE_JAR="$(mktemp)"
           if [ -n "${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}" ]; then
-            HEALTH_URL="${HEALTH_URL}?x-vercel-protection-bypass=${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}&x-vercel-set-bypass-cookie=true"
+            BYPASS_ARGS+=(-H "x-vercel-protection-bypass: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}")
+            BYPASS_ARGS+=(-H "x-vercel-set-bypass-cookie: true")
+            BYPASS_ARGS+=(-c "$COOKIE_JAR" -b "$COOKIE_JAR")
           fi
           for i in $(seq 1 24); do
-            HEADERS=$(curl -sSI -L "$HEALTH_URL" || true)
-            BODY=$(curl -sS -L "$HEALTH_URL" || true)
+            HEADERS=$(curl -sSI -L "${BYPASS_ARGS[@]}" "$HEALTH_URL" || true)
+            BODY=$(curl -sS -L "${BYPASS_ARGS[@]}" "$HEALTH_URL" || true)
             if echo "$HEADERS" | grep -qi '^x-sync-mood-health:[[:space:]]*ok' && echo "$BODY" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then echo "Preview URL validada: $HEALTH_URL"; echo "OK: sync-mood next-api (try $i)"; exit 0; fi
             if echo "$HEADERS" | grep -qi '^[Ll]ocation: https://vercel.com/sso-api'; then
               echo "Preview protegido pela Vercel Preview Protection."
