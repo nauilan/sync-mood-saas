@@ -96,9 +96,9 @@ jobs:
             HEALTH_URL="${HEALTH_URL}?x-vercel-protection-bypass=${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}&x-vercel-set-bypass-cookie=true"
           fi
           for i in $(seq 1 24); do
+            HEADERS=$(curl -sSI -L "$HEALTH_URL" || true)
             BODY=$(curl -sS -L "$HEALTH_URL" || true)
-            if echo "$BODY" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then echo "Preview URL validada: $HEALTH_URL"; echo "OK: sync-mood next-api (try $i)"; exit 0; fi
-            HEADERS=$(curl -sSI --max-redirs 0 "$HEALTH_URL" || true)
+            if echo "$HEADERS" | grep -qi '^x-sync-mood-health:[[:space:]]*ok' && echo "$BODY" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then echo "Preview URL validada: $HEALTH_URL"; echo "OK: sync-mood next-api (try $i)"; exit 0; fi
             if echo "$HEADERS" | grep -qi '^[Ll]ocation: https://vercel.com/sso-api'; then
               echo "Preview protegido pela Vercel Preview Protection."
               echo "Configure o secret VERCEL_AUTOMATION_BYPASS_SECRET no GitHub Actions para liberar a automação."
@@ -109,6 +109,7 @@ jobs:
               echo "Verificar Vercel preview protection, root directory ou URL de deploy."
               exit 1
             fi
+            echo "Tentativa $i sem health válido ainda."
             sleep 5
           done
           echo "Preview nao respondeu com JSON válido em /api/health."
