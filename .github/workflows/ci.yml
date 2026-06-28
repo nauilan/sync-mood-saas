@@ -56,3 +56,99 @@ jobs:
 
       - name: Vitest (excl. isolation)
         run: npx vitest run --exclude '**/__tests__/isolation/**'
+
+  deploy-preview:
+    name: Deploy preview
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    defaults:
+      run:
+        working-directory: apps/web
+    outputs:
+      preview_url: ${{ steps.deploy.outputs.preview_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Create Vercel project config
+        run: |
+          mkdir -p .vercel
+          echo '{"projectId":"prj_81eomK8Uie2j1dPv0mIbJEgbn4Eg","orgId":"team_oSlrnl2yyOTFvhvjIgtBZan7"}' > .vercel/project.json
+
+      - name: Deploy preview
+        id: deploy
+        run: |
+          vercel --yes --token=${{ secrets.VERCEL_TOKEN }} > vercel-output.txt
+          PREVIEW_URL=$(grep -Eo 'https://[^ ]+\.vercel\.app' vercel-output.txt | tail -n 1)
+          if [ -z "$PREVIEW_URL" ]; then
+            cat vercel-output.txt
+            exit 1
+          fi
+          echo "preview_url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+
+  isolation-tests:
+    name: Isolation tests
+    runs-on: ubuntu-latest
+    needs: deploy-preview
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - run: npm ci
+
+      - name: Wait for preview
+        run: |
+          for i in $(seq 1 24); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${{ needs.deploy-preview.outputs.preview_url }}/api/me" || true)
+            if [ "$STATUS" != "000" ]; then
+              echo "OK (HTTP $STATUS, try $i)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Preview nao respondeu."
+          exit 1
+
+      - name: Run isolation tests
+        run: npm run test:isolation
+        env:
+          ISOLATION_TEST_API_URL: ${{ needs.deploy-preview.outputs.preview_url }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+  editorial-e2e:
+    name: Editorial E2E
+    runs-on: ubuntu-latest
+    needs: isolation-tests
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - run: npm ci
+
+      - name: Run editorial E2E
+        run: npm run test:editorial-e2e
+        env:
+          ISOLATION_TEST_API_URL: ${{ needs.deploy-preview.outputs.preview_url }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

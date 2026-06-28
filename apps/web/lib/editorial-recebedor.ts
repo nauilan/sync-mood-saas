@@ -22,7 +22,6 @@ function numeroPositivo(valor: unknown): boolean {
 export function resolverRecebedorEditorial(titulares: LinkTitularRecebedor[]): RecebedorResultado {
   const controlados = (titulares ?? []).filter((titular) => {
     if (!titular?.controlado) return false
-    if (!PAPEL_EDITORA.has(String(titular.papel ?? ''))) return false
     return (
       numeroPositivo(titular.percentual_controle) ||
       numeroPositivo(titular.percentual_controle_brasil) ||
@@ -32,7 +31,14 @@ export function resolverRecebedorEditorial(titulares: LinkTitularRecebedor[]): R
 
   if (controlados.length === 0) return { ok: false, motivo: 'sem_percentual_controlado' }
 
-  const administradora = controlados.find((titular) => titular.editora_administradora?.id)
+  const controladosEditoriais = controlados.filter((titular) => {
+    if (PAPEL_EDITORA.has(String(titular.papel ?? ''))) return true
+    return Boolean(titular.editora_administradora?.id || titular.editora_original?.id || titular.editora?.id)
+  })
+
+  const candidatos = controladosEditoriais.length > 0 ? controladosEditoriais : controlados
+
+  const administradora = candidatos.find((titular) => titular.editora_administradora?.id)
   if (administradora?.editora_administradora?.id) {
     return {
       ok: true,
@@ -42,7 +48,7 @@ export function resolverRecebedorEditorial(titulares: LinkTitularRecebedor[]): R
     }
   }
 
-  const editoraOriginal = controlados.find(
+  const editoraOriginal = candidatos.find(
     (titular) => titular.editora_original?.id || titular.editora?.id
   )
 

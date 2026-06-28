@@ -1,14 +1,6 @@
-/**
- * POST /api/autorizacoes/[id]/confirmar-pagamento
- *
- * Regras de negócio:
- *  - pago_editora : confirma pagamento → cria entrada em cc_obras_movimentos
- *  - pago_autor   : confirma pagamento → NÃO alimenta cc_obras (pagamento direto ao autor)
- *  - sem_onus     : sem valor          → NÃO alimenta cc_obras
- */
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient }              from '@supabase/supabase-js'
-import { logAudit }                  from '@/lib/audit'
+﻿import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+import { logAudit } from '@/lib/audit'
 import { resolverRecebedorEditorial } from '@/lib/editorial-recebedor'
 
 function getAdminClient() {
@@ -24,13 +16,22 @@ function getToken(req: NextRequest): string {
   const chunks: string[] = []
   for (const c of req.cookies.getAll()) {
     const m = c.name.match(/auth-token\.(\d+)$/)
-    if (m) { chunks[parseInt(m[1])] = c.value; continue }
-    if (c.name.endsWith('auth-token') && !c.name.match(/\.\d+$/)) { chunks[0] = c.value }
+    if (m) {
+      chunks[parseInt(m[1])] = c.value
+      continue
+    }
+    if (c.name.endsWith('auth-token') && !c.name.match(/\.\d+$/)) chunks[0] = c.value
   }
   const joined = chunks.filter(Boolean).join('')
   if (joined) {
-    try { const p = JSON.parse(decodeURIComponent(joined)); if (p?.access_token) return p.access_token } catch { /**/ }
-    try { const p = JSON.parse(joined); if (p?.access_token) return p.access_token } catch { /**/ }
+    try {
+      const p = JSON.parse(decodeURIComponent(joined))
+      if (p?.access_token) return p.access_token
+    } catch {}
+    try {
+      const p = JSON.parse(joined)
+      if (p?.access_token) return p.access_token
+    } catch {}
   }
   return ''
 }
@@ -45,18 +46,78 @@ async function autenticar(sb: NonNullable<ReturnType<typeof getAdminClient>>, re
   return usuario as { id: string; tenant_id: string; role: string } | null
 }
 
+async function fetchRecebedorLinksCompat(sb: any, obraId: string, tenantId: string) {
+  const { data: rows } = await sb.from('obras_links_titulares')
+    .select([
+      'funcao_no_link',
+      'papel',
+      'controlado',
+      'status_controle',
+      'percentual_controle_brasil',
+      'percentual_controle_exterior',
+      'percentual_exec_publica',
+      'editora_id',
+      'editora_original_id',
+      'editora_administradora_id',
+    ].join(', '))
+    .eq('obra_id', obraId)
+    .eq('tenant_id', tenantId)
+
+  const baseRows = (rows ?? []) as Array<Record<string, unknown>>
+  if (baseRows.length === 0) return []
+
+  const editoraIds = Array.from(new Set(
+    baseRows
+      .flatMap((item) => [
+        item.editora_id,
+        item.editora_original_id,
+        item.editora_administradora_id,
+      ])
+      .filter((value): value is string => typeof value === 'string' && value.length > 0),
+  ))
+
+  const { data: editoras } = editoraIds.length > 0
+    ? await sb.from('editoras')
+      .select('id, nome_fantasia, razao_social')
+      .eq('tenant_id', tenantId)
+      .in('id', editoraIds)
+    : { data: [] as Array<Record<string, unknown>> }
+
+  const editorasPorId = new Map(
+    ((editoras ?? []) as Array<Record<string, unknown>>).map((item) => [
+      String(item.id),
+      {
+        id: String(item.id),
+        nome: String(item.nome_fantasia ?? item.razao_social ?? ''),
+      },
+    ]),
+  )
+
+  return baseRows.map((item) => ({
+    papel: item.funcao_no_link ?? item.papel ?? null,
+    controlado: item.controlado ?? null,
+    status_controle: item.status_controle ?? null,
+    percentual_controle_brasil: item.percentual_controle_brasil ?? item.percentual_exec_publica ?? null,
+    percentual_controle_exterior: item.percentual_controle_exterior ?? item.percentual_exec_publica ?? null,
+    percentual_controle: item.percentual_exec_publica ?? null,
+    editora: item.editora_id ? editorasPorId.get(String(item.editora_id)) ?? null : null,
+    editora_original: item.editora_original_id ? editorasPorId.get(String(item.editora_original_id)) ?? null : null,
+    editora_administradora: item.editora_administradora_id ? editorasPorId.get(String(item.editora_administradora_id)) ?? null : null,
+  }))
+}
+
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
   const sb = getAdminClient()
-  if (!sb) return NextResponse.json({ error: 'Config inválida' }, { status: 500 })
+  if (!sb) return NextResponse.json({ error: 'Config invÃ¡lida' }, { status: 500 })
 
   const usuario = await autenticar(sb, req)
-  if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  if (!usuario) return NextResponse.json({ error: 'NÃ£o autorizado' }, { status: 401 })
 
-  const body   = await req.json().catch(() => ({}))
+  const body = await req.json().catch(() => ({}))
   const {
     valor_pago,
     data_pagamento = new Date().toISOString().slice(0, 10),
@@ -64,34 +125,46 @@ export async function POST(
     observacoes,
   } = body
 
-  // ── Buscar autorização ────────────────────────────────────────────────────
-  const { data: aut, error: autErr } = await sb
+  let aut: Record<string, unknown> | null = null
+  let autErr: { message?: string } | null = null
+
+  const tentativaNova = await sb
     .from('autorizacoes')
     .select('id, tenant_id, obra_id, numero_autorizacao, licenciado_nome, valor_licenca, modelo_negocio, status_workflow, cc_movimento_id, editora_administrada_id, pago_a')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
 
-  if (autErr || !aut) return NextResponse.json({ error: 'Autorização não encontrada' }, { status: 404 })
-  if ((aut as any).cc_movimento_id) return NextResponse.json({ error: 'Pagamento já confirmado' }, { status: 409 })
+  if (!tentativaNova.error && tentativaNova.data) {
+    aut = tentativaNova.data as Record<string, unknown>
+  } else {
+    const tentativaLegada = await sb
+      .from('autorizacoes')
+      .select('id, tenant_id, obra_id, numero_autorizacao, licenciado_nome, valor_licenca, modelo_negocio, status_workflow, cc_movimento_id, editora_administrada_id')
+      .eq('id', id)
+      .eq('tenant_id', usuario.tenant_id)
+      .single()
 
-  const modelo      = (aut as any).modelo_negocio ?? 'pago_editora'
-  const valorFinal  = valor_pago ?? (aut as any).valor_licenca ?? 0
-  const obra_id     = (aut as any).obra_id
-  const numAut      = (aut as any).numero_autorizacao ?? id.slice(0, 8)
-  const licNome     = (aut as any).licenciado_nome ?? 'Licenciado'
+    autErr = tentativaLegada.error
+    if (tentativaLegada.data) aut = tentativaLegada.data as Record<string, unknown>
+  }
+
+  if (autErr || !aut) return NextResponse.json({ error: 'AutorizaÃ§Ã£o nÃ£o encontrada' }, { status: 404 })
+  if ((aut as any).cc_movimento_id) return NextResponse.json({ error: 'Pagamento jÃ¡ confirmado' }, { status: 409 })
+
+  const modelo = (aut as any).modelo_negocio ?? 'pago_editora'
+  const valorFinal = valor_pago ?? (aut as any).valor_licenca ?? 0
+  const obra_id = (aut as any).obra_id
+  const numAut = (aut as any).numero_autorizacao ?? id.slice(0, 8)
+  const licNome = (aut as any).licenciado_nome ?? 'Licenciado'
   let recebedorEditoraId = (aut as any).pago_a ?? (aut as any).editora_administrada_id ?? null
 
   if (modelo === 'pago_editora' && obra_id && !recebedorEditoraId) {
-    const { data: linksRecebedor } = await sb.from('obras_links_titulares')
-      .select('papel:funcao_no_link, controlado, status_controle, percentual_controle_brasil, percentual_controle_exterior, percentual:percentual_exec_publica, editora:editoras!obras_links_titulares_editora_original_id_fkey(id,nome), editora_original:editoras!obras_links_titulares_editora_original_id_fkey(id,nome), editora_administradora:editoras!obras_links_titulares_editora_administradora_id_fkey(id,nome)')
-      .eq('obra_id', obra_id)
-      .eq('tenant_id', usuario.tenant_id)
-
-    const recebedor = resolverRecebedorEditorial((linksRecebedor ?? []) as any)
+    const linksRecebedor = await fetchRecebedorLinksCompat(sb, obra_id, usuario.tenant_id)
+    const recebedor = resolverRecebedorEditorial(linksRecebedor as any)
     if (!recebedor.ok) {
       return NextResponse.json({
-        error: 'Pagamento não pode ser confirmado: falta recebedor válido (administradora ou editora original controlada).',
+        error: 'Pagamento nÃ£o pode ser confirmado: falta recebedor vÃ¡lido (administradora ou editora original controlada).',
       }, { status: 422 })
     }
     recebedorEditoraId = recebedor.editoraId
@@ -99,28 +172,24 @@ export async function POST(
 
   let recebedorNome = 'Recebedor Editorial'
   if (recebedorEditoraId) {
-    const { data: edAdm } = await sb.from('editoras').select('nome').eq('id', recebedorEditoraId).single()
-    if (edAdm) recebedorNome = (edAdm as any).nome
+    const { data: edAdm } = await sb.from('editoras').select('nome_fantasia, razao_social').eq('id', recebedorEditoraId).single()
+    if (edAdm) recebedorNome = (edAdm as any).nome_fantasia ?? (edAdm as any).razao_social ?? recebedorNome
   }
 
-  // ── Atualizar status da autorização ──────────────────────────────────────
   const patchAut: Record<string, unknown> = {
     data_pagamento_confirmado: new Date(data_pagamento).toISOString(),
     valor_pago: valorFinal,
-    validada_em: new Date().toISOString(),   // pago_editora/pago_autor validam aqui
+    validada_em: new Date().toISOString(),
   }
-  // Só muda status se ainda não estiver em estado final
   const statusAtual = (aut as any).status_workflow
   if (!['cancelada', 'expirada'].includes(statusAtual)) {
     patchAut.status_workflow = 'emitida'
-    patchAut.status          = 'vigente'
+    patchAut.status = 'vigente'
   }
 
-  // ── Lógica CC por modelo de negócio ──────────────────────────────────────
   let movimentoId: string | null = null
 
   if (modelo === 'pago_editora' && valorFinal > 0 && obra_id) {
-    // 1. Garantir que existe um cc_obras para esta obra
     const { data: ccExist } = await sb
       .from('cc_obras')
       .select('id, saldo_atual')
@@ -132,20 +201,20 @@ export async function POST(
     let saldoAnterior = 0
 
     if (ccExist) {
-      ccObraId     = (ccExist as any).id
+      ccObraId = (ccExist as any).id
       saldoAnterior = Number((ccExist as any).saldo_atual ?? 0)
     } else {
       const { data: ccNovo, error: ccErr } = await sb
         .from('cc_obras')
         .insert({
-          tenant_id:        usuario.tenant_id,
+          tenant_id: usuario.tenant_id,
           obra_id,
-          saldo_atual:      0,
-          saldo_bloqueado:  0,
+          saldo_atual: 0,
+          saldo_bloqueado: 0,
           saldo_distribuido: 0,
-          saldo_pendente:   0,
-          moeda:            'BRL',
-          status:           'ativo',
+          saldo_pendente: 0,
+          moeda: 'BRL',
+          status: 'ativo',
         })
         .select('id')
         .single()
@@ -156,40 +225,81 @@ export async function POST(
 
     const saldoPosterior = saldoAnterior + Number(valorFinal)
 
-    // 2. Inserir movimento de entrada
-    const { data: mov, error: movErr } = await sb
-      .from('cc_obras_movimentos')
-      .insert({
-        tenant_id:       usuario.tenant_id,
-        cc_obra_id:      ccObraId,
+    const payloadMovCandidates: Record<string, unknown>[] = [
+      {
+        tenant_id: usuario.tenant_id,
+        cc_obra_id: ccObraId,
         obra_id,
-        tipo:            'entrada',
-        valor:           valorFinal,
-        saldo_anterior:  saldoAnterior,
+        tipo: 'entrada',
+        valor: valorFinal,
+        saldo_anterior: saldoAnterior,
         saldo_posterior: saldoPosterior,
-        descricao:       `Autorização ${numAut} — ${licNome} → ${recebedorNome}`,
-        source:          'autorizacao',
-        source_id:       id,
-        editora_id:      recebedorEditoraId,
+        descricao: `AutorizaÃ§Ã£o ${numAut} â€” ${licNome} â†’ ${recebedorNome}`,
+        source: 'autorizacao',
+        source_id: id,
+        editora_id: recebedorEditoraId,
         forma_pagamento: forma_pagamento ?? null,
-        observacoes:     observacoes ?? null,
-        criado_em:       new Date(data_pagamento).toISOString(),
-      })
-      .select('id')
-      .single()
+        observacoes: observacoes ?? null,
+        criado_em: new Date(data_pagamento).toISOString(),
+      },
+      {
+        tenant_id: usuario.tenant_id,
+        cc_obra_id: ccObraId,
+        obra_id,
+        tipo: 'entrada',
+        valor: valorFinal,
+        saldo_anterior: saldoAnterior,
+        saldo_posterior: saldoPosterior,
+        descricao: `AutorizaÃ§Ã£o ${numAut} â€” ${licNome} â†’ ${recebedorNome}`,
+        source: 'autorizacao',
+        source_id: id,
+        editora_id: recebedorEditoraId,
+        criado_em: new Date(data_pagamento).toISOString(),
+      },
+      {
+        tenant_id: usuario.tenant_id,
+        cc_obra_id: ccObraId,
+        obra_id,
+        tipo: 'entrada',
+        valor: valorFinal,
+        saldo_anterior: saldoAnterior,
+        saldo_posterior: saldoPosterior,
+        descricao: `AutorizaÃ§Ã£o ${numAut} â€” ${licNome} â†’ ${recebedorNome}`,
+        source: 'autorizacao',
+        editora_id: recebedorEditoraId,
+      },
+      {
+        tenant_id: usuario.tenant_id,
+        cc_obra_id: ccObraId,
+        obra_id,
+        tipo: 'entrada',
+        valor: valorFinal,
+        saldo_anterior: saldoAnterior,
+        saldo_posterior: saldoPosterior,
+        descricao: `AutorizaÃ§Ã£o ${numAut} â€” ${licNome} â†’ ${recebedorNome}`,
+      },
+    ]
+
+    let movRes: { data?: unknown; error?: { message?: string } | null } = { data: null, error: null }
+    for (const payloadMov of payloadMovCandidates) {
+      movRes = await sb
+        .from('cc_obras_movimentos')
+        .insert(payloadMov as any)
+        .select('id')
+        .single()
+
+      if (!movRes.error) break
+    }
+
+    const { data: mov, error: movErr } = movRes
 
     if (movErr) return NextResponse.json({ error: `Erro ao criar movimento CC: ${movErr.message}` }, { status: 500 })
     movimentoId = (mov as any).id
 
-    // 3. Atualizar saldo em cc_obras
     await sb.from('cc_obras').update({ saldo_atual: saldoPosterior }).eq('id', ccObraId)
-
     patchAut.cc_movimento_id = movimentoId
   }
-  // pago_autor → pagamento direto ao autor, não alimenta cc_obras
-  // sem_onus   → sem valor, não alimenta cc_obras
 
-  // ── Salvar patch na autorização ──────────────────────────────────────────
   const { data: autAtualizada, error: patchErr } = await sb
     .from('autorizacoes')
     .update(patchAut)
@@ -201,25 +311,25 @@ export async function POST(
   if (patchErr) return NextResponse.json({ error: patchErr.message }, { status: 500 })
 
   await logAudit({
-    tenant_id:       usuario.tenant_id,
-    usuario_id:      usuario.id,
-    acao:            'confirmar_pagamento',
-    modulo:          'autorizacoes',
-    tabela_afetada:  'autorizacoes',
-    registro_id:     id,
-    dados_novos:     { modelo_negocio: modelo, valor_pago: valorFinal, movimentoId } as Record<string, unknown>,
+    tenant_id: usuario.tenant_id,
+    usuario_id: usuario.id,
+    acao: 'confirmar_pagamento',
+    modulo: 'autorizacoes',
+    tabela_afetada: 'autorizacoes',
+    registro_id: id,
+    dados_novos: { modelo_negocio: modelo, valor_pago: valorFinal, movimentoId } as Record<string, unknown>,
     origem_execucao: 'usuario',
   })
 
   return NextResponse.json({
-    autorizacao:   autAtualizada,
+    autorizacao: autAtualizada,
     modelo_negocio: modelo,
     cc_movimento_id: movimentoId,
-    cc_atualizado:  modelo === 'pago_editora' && movimentoId !== null,
+    cc_atualizado: modelo === 'pago_editora' && movimentoId !== null,
     mensagem: modelo === 'pago_editora'
       ? `Pagamento confirmado. Entrada de R$ ${Number(valorFinal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} registrada no conta corrente da obra.`
       : modelo === 'pago_autor'
-      ? 'Pagamento confirmado. Valor pago diretamente ao autor — conta corrente de obra não afetada.'
-      : 'Autorização sem ônus confirmada — nenhum valor a distribuir.',
+      ? 'Pagamento confirmado. Valor pago diretamente ao autor â€” conta corrente de obra nÃ£o afetada.'
+      : 'AutorizaÃ§Ã£o sem Ã´nus confirmada â€” nenhum valor a distribuir.',
   })
 }
