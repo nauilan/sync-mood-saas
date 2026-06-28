@@ -113,10 +113,16 @@ jobs:
             BYPASS_HEADER=(-H "x-vercel-protection-bypass: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}")
           fi
           for i in $(seq 1 24); do
-            BODY=$(curl -sS "${BYPASS_HEADER[@]}" "${{ needs.deploy-preview.outputs.preview_url }}/api/health" || true)
+            BODY=$(curl -sS -L --max-redirs 0 "${BYPASS_HEADER[@]}" "${{ needs.deploy-preview.outputs.preview_url }}/api/health" || true)
             if echo "$BODY" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
               echo "OK (health JSON, try $i)"
               exit 0
+            fi
+            HEADERS=$(curl -sSI --max-redirs 0 "${BYPASS_HEADER[@]}" "${{ needs.deploy-preview.outputs.preview_url }}/api/health" || true)
+            if echo "$HEADERS" | grep -qi '^[Ll]ocation: https://vercel.com/sso-api'; then
+              echo "Preview protegido pela Vercel Preview Protection."
+              echo "Configure o secret VERCEL_AUTOMATION_BYPASS_SECRET no GitHub Actions para liberar a automação."
+              exit 1
             fi
             if echo "$BODY" | grep -qi '<!DOCTYPE html>\|<html'; then
               echo "Preview não está expondo API JSON. Recebido HTML 200 em /api/health."

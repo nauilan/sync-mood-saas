@@ -19,6 +19,7 @@ if (typeof (globalThis as any).WebSocket === 'undefined') {
 }
 
 export const API_BASE = (process.env.ISOLATION_TEST_API_URL ?? '').replace(/\/$/, '')
+export const VERCEL_BYPASS_SECRET = (process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? '').trim()
 
 // ── Clientes Supabase ─────────────────────────────────────────────────────────
 
@@ -240,6 +241,7 @@ export async function apiFetch(
     headers: {
       'Content-Type':  'application/json',
       'Authorization': `Bearer ${token}`,
+      ...(VERCEL_BYPASS_SECRET ? { 'x-vercel-protection-bypass': VERCEL_BYPASS_SECRET } : {}),
     },
     body: payload !== undefined ? JSON.stringify(payload) : undefined,
   })
