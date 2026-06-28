@@ -21,7 +21,7 @@ const ROLE_HOME: Record<UserRole, string> = {
 }
 
 export async function proxy(request: NextRequest) {
-  if (request.nextUrl.pathname === '/api/health') {
+  if (request.nextUrl.pathname.startsWith('/api/')) {
     return NextResponse.next({ request })
   }
 
@@ -88,5 +88,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api/health|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: ['/((?!api/|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }
