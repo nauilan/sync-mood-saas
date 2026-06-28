@@ -116,9 +116,15 @@ jobs:
             BYPASS_ARGS+=(-c "$COOKIE_JAR" -b "$COOKIE_JAR")
           fi
           for i in $(seq 1 24); do
-            HEADERS=$(curl -sSI -L "${BYPASS_ARGS[@]}" "$HEALTH_URL" || true)
-            BODY=$(curl -sS -L "${BYPASS_ARGS[@]}" "$HEALTH_URL" || true)
-            if echo "$HEADERS" | grep -qi '^x-sync-mood-health:[[:space:]]*ok' && echo "$BODY" | grep -q '"ok"[[:space:]]*:[[:space:]]*true'; then
+            HEADERS_FILE="$(mktemp)"
+            BODY_FILE="$(mktemp)"
+            curl -sS -D "$HEADERS_FILE" -o "$BODY_FILE" -L "${BYPASS_ARGS[@]}" "$HEALTH_URL" >/dev/null || true
+            HEADERS="$(cat "$HEADERS_FILE" 2>/dev/null || true)"
+            BODY="$(cat "$BODY_FILE" 2>/dev/null || true)"
+            if echo "$HEADERS" | grep -qi '^x-sync-mood-health:[[:space:]]*ok' \
+              && echo "$BODY" | grep -q '"ok"[[:space:]]*:[[:space:]]*true' \
+              && echo "$BODY" | grep -q '"service"[[:space:]]*:[[:space:]]*"sync-mood"' \
+              && echo "$BODY" | grep -q '"runtime"[[:space:]]*:[[:space:]]*"next-api"'; then
               echo "Preview URL validada: $HEALTH_URL"
               echo "OK: sync-mood next-api (try $i)"
               exit 0
@@ -134,6 +140,10 @@ jobs:
               exit 1
             fi
             echo "Tentativa $i sem health válido ainda."
+            echo "Headers observados:"
+            echo "$HEADERS" | tr '\n' ' ' | cut -c1-400
+            echo "Body observado:"
+            echo "$BODY" | tr '\n' ' ' | cut -c1-400
             sleep 5
           done
           echo "Preview nao respondeu com JSON válido em /api/health."
