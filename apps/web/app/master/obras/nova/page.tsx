@@ -290,7 +290,6 @@ export default function NovaObraPage() {
   const [subtitulo, setSubtitulo] = useState('')
   const [idioma, setIdioma] = useState('Portugues')
   const [genero, setGenero] = useState('')
-  const [anoSriacao, setAno] = useState('')
   // Contrato de origem (selecionado no step 0 para importar dados)
   const [contratoOrigemId, setContratoOrigemId] = useState(() => searchParams?.get('contrato_id') ?? '')
   const [importado, setImportado] = useState(false)
@@ -572,7 +571,6 @@ export default function NovaObraPage() {
         subtitulo: subtitulo || null,
         idioma,
         genero: genero || null,
-        ano_criacao: anoSriacao || null,
         letra: letra || null,
         // Regra: com contrato de origem → pré-cadastro; sem contrato → catálogo ativo direto
         status_catalogo: contratoOrigemId ? 'pre_cadastro' : 'catalogo_ativo',
@@ -677,7 +675,6 @@ export default function NovaObraPage() {
             <div class="summary">
               <div class="summary-item"><strong>Idioma</strong>${escapeHtml(idioma || '—')}</div>
               <div class="summary-item"><strong>Gênero</strong>${escapeHtml(genero || '—')}</div>
-              <div class="summary-item"><strong>Ano de Criação</strong>${escapeHtml(anoSriacao || '—')}</div>
               <div class="summary-item"><strong>Fonogramas</strong>${fonogramas.length}</div>
               <div class="summary-item"><strong>Percentual Total</strong>${escapeHtml(formatarPercentual(somaPct))}</div>
               <div class="summary-item"><strong>Percentual Controlado</strong>${escapeHtml(formatarPercentual(pcControlado))}</div>
@@ -942,11 +939,6 @@ export default function NovaObraPage() {
                 <option value="">Selecione...</option>
                 {GENEROS_MUSICAIS.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/50">Ano de Criação</label>
-              <input type="number" value={anoSriacao} onChange={e => setAno(e.target.value)}
-                placeholder="Ex: 2024" min="1900" max="2099" className={inputCls} />
             </div>
           </div>
         </div>
@@ -1417,7 +1409,6 @@ export default function NovaObraPage() {
                 { label: 'Título Alternativo', value: tituloAlternativo || '—' },
                 { label: 'Idioma', value: idioma },
                 { label: 'Gênero', value: genero || '—' },
-                { label: 'Ano', value: anoSriacao || '—' },
                 { label: 'Links', value: links.length },
                 { label: 'Participantes', value: allTitulares.length },
                 { label: 'Fonogramas', value: fonogramas.length },
