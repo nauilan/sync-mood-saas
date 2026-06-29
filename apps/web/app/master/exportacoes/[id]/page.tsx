@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useParams } from 'next/navigation'
 import { PageHeader } from '@/components/ui/page-header'
 import {
   Download, Loader2, AlertTriangle, CheckCircle2, XCircle,
@@ -33,19 +34,29 @@ const DESTINO_LABELS: Record<string, string> = {
   backoffice: 'BackOffice',
 }
 
-export default function ExportacaoDetailPage({ params }: { params: { id: string } }) {
+export default function ExportacaoDetailPage() {
+  const params = useParams<{ id: string }>()
+  const exportacaoId = typeof params?.id === 'string' ? params.id : ''
   const [exp, setExp] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState('')
   const [gerando, setGerando] = useState(false)
   const [erroGerar, setErroGerar] = useState('')
 
-  useEffect(() => { loadExportacao() }, [params.id])
+  useEffect(() => {
+    if (!exportacaoId) return
+    loadExportacao()
+  }, [exportacaoId])
 
   async function loadExportacao() {
+    if (!exportacaoId) {
+      setErro('Exportação não encontrada.')
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
-      const res = await authFetch(`/api/exportacoes/${params.id}`)
+      const res = await authFetch(`/api/exportacoes/${exportacaoId}`)
       if (!res.ok) { setErro('Exportação não encontrada.'); return }
       const d = await res.json()
       // API retorna { exportacao, obras, logs, retorno } — achata para facilitar render
@@ -70,10 +81,14 @@ export default function ExportacaoDetailPage({ params }: { params: { id: string 
   }
 
   async function gerarArquivo() {
+    if (!exportacaoId) {
+      setErroGerar('Exportação não encontrada.')
+      return
+    }
     setErroGerar('')
     setGerando(true)
     try {
-      const res = await authFetch(`/api/exportacoes/${params.id}/gerar`, { method: 'POST' })
+      const res = await authFetch(`/api/exportacoes/${exportacaoId}/gerar`, { method: 'POST' })
       const d = await res.json()
       if (!res.ok) { setErroGerar(d.error ?? 'Erro ao gerar arquivo.'); return }
       await loadExportacao()

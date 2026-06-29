@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { calcularCompletude } from '@/lib/obra-completude'
 
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
@@ -26,221 +25,169 @@ function getToken(req: NextRequest): string {
   return ''
 }
 
-// ── GET /api/exportacoes ─────────────────────────────────────────────────────
-// Lista exportações do tenant. Aceita ?obra_id=[id] para filtrar por obra.
+async function getUsuario(sb: any, token: string) {
+  const { data: authData, error: authError } = await sb.auth.getUser(token)
+  if (authError || !authData?.user) return { error: 'Não autorizado', status: 401 as const }
+
+  const { data: usuario, error: usuarioError } = await sb
+    .from('usuarios')
+    .select('id, tenant_id, role')
+    .eq('auth_user_id', authData.user.id)
+    .single()
+
+  if (usuarioError || !usuario) return { error: 'Usuário não encontrado', status: 401 as const }
+  return { usuario }
+}
+
+function makeCodigo(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  const h = String(now.getHours()).padStart(2, '0')
+  const min = String(now.getMinutes()).padStart(2, '0')
+  const s = String(now.getSeconds()).padStart(2, '0')
+  return `EXP-${y}${m}${d}-${h}${min}${s}`
+}
+
 export async function GET(req: NextRequest) {
   const sb = getAdminClient()
-  if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
+  if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 500 })
 
   const token = getToken(req)
   if (!token) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { data: { user } } = await sb.auth.getUser(token)
-  if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-
-  const { data: usuario } = await sb
-    .from('usuarios')
-    .select('tenant_id')
-    .eq('auth_user_id', user.id)
-    .single()
-  if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  const auth = await getUsuario(sb, token)
+  if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const { usuario } = auth
 
   const { searchParams } = new URL(req.url)
   const obraId = searchParams.get('obra_id')
 
   if (obraId) {
-    // Filtrar exportações que incluem esta obra
-    const { data, error } = await sb
+    const { data: relacoes, error: relError } = await sb
       .from('exportacoes_obras')
-      .select(`
-        id,
-        exportacao_id,
-        status_obra,
-        codigo_externo_retornado,
-        exportacoes!inner (
-          id,
-          codigo,
-          destino,
-          formato,
-          status,
-          criado_em,
-          tenant_id
-        )
-      `)
+      .select('exportacao_id, obra_id, status_obra, codigo_externo_retornado')
       .eq('obra_id', obraId)
-      .eq('exportacoes.tenant_id', usuario.tenant_id)
-      .order('exportacoes.criado_em', { ascending: false })
       .limit(100)
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (relError) return NextResponse.json({ error: relError.message }, { status: 500 })
 
-    const result = (data ?? []).map((row: Record<string, unknown>) => {
-      const exp = row.exportacoes as Record<string, unknown> | null
-      return {
-        id:                       row.id,
-        exportacao_id:            row.exportacao_id,
-        status_obra:              row.status_obra,
-        codigo_externo_retornado: row.codigo_externo_retornado,
-        codigo:                   exp?.codigo,
-        destino:                  exp?.destino,
-        formato:                  exp?.formato,
-        status:                   exp?.status,
-        criado_em:                exp?.criado_em,
-      }
-    })
+    const exportacaoIds = Array.from(
+      new Set((relacoes ?? []).map((row: Record<string, unknown>) => String(row.exportacao_id ?? '')).filter(Boolean))
+    )
 
-    return NextResponse.json({ data: result })
+    if (exportacaoIds.length === 0) return NextResponse.json({ data: [] })
+
+    const { data: exportacoes, error: expError } = await sb
+      .from('exportacoes')
+      .select('id, codigo, destino, formato, status, criado_em, total_obras')
+      .in('id', exportacaoIds)
+      .eq('tenant_id', usuario.tenant_id)
+      .order('criado_em', { ascending: false })
+
+    if (expError) return NextResponse.json({ error: expError.message }, { status: 500 })
+
+    const exportacoesById = new Map((exportacoes ?? []).map((item: Record<string, unknown>) => [String(item.id), item]))
+
+    const data = (relacoes ?? [])
+      .map((row: Record<string, unknown>) => {
+        const exp = exportacoesById.get(String(row.exportacao_id ?? '')) ?? null
+        return {
+          id: `${row.exportacao_id}:${row.obra_id}`,
+          exportacao_id: row.exportacao_id,
+          obra_id: row.obra_id,
+          status_obra: row.status_obra,
+          codigo_externo_retornado: row.codigo_externo_retornado,
+          codigo: exp?.codigo,
+          destino: exp?.destino,
+          formato: exp?.formato,
+          status: exp?.status,
+          criado_em: exp?.criado_em,
+          total_obras: exp?.total_obras,
+        }
+      })
+      .filter((item) => !!item.codigo)
+
+    return NextResponse.json({ data })
   }
 
-  // Listar todas as exportações do tenant
   const { data, error } = await sb
     .from('exportacoes')
-    .select('id, codigo, destino, formato, total_obras, status, arquivo_url, criado_em, editora_id, tenant_id')
+    .select('id, codigo, destino, formato, status, total_obras, criado_em')
     .eq('tenant_id', usuario.tenant_id)
     .order('criado_em', { ascending: false })
-    .limit(100)
+    .limit(200)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
   return NextResponse.json({ data: data ?? [] })
 }
 
-// ── POST /api/exportacoes ────────────────────────────────────────────────────
-// Cria novo lote de exportação.
-// Valida que todas as obras estão catalogo_ativo e com score = 100.
 export async function POST(req: NextRequest) {
   const sb = getAdminClient()
-  if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
+  if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 500 })
 
   const token = getToken(req)
   if (!token) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { data: { user } } = await sb.auth.getUser(token)
-  if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  const auth = await getUsuario(sb, token)
+  if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  const { usuario } = auth
 
-  const { data: usuario } = await sb
-    .from('usuarios')
-    .select('id, tenant_id, role')
-    .eq('auth_user_id', user.id)
+  const body = await req.json().catch(() => ({}))
+  const destino = String(body?.destino ?? 'cwr').trim().toLowerCase()
+  const formato = String(body?.formato ?? 'txt').trim().toLowerCase()
+  const obraIds = Array.from(new Set(Array.isArray(body?.obra_ids) ? body.obra_ids.map((value: unknown) => String(value).trim()).filter(Boolean) : []))
+
+  const { data: exportacao, error: insertError } = await sb
+    .from('exportacoes')
+    .insert({
+      tenant_id: usuario.tenant_id,
+      codigo: makeCodigo(),
+      destino,
+      formato,
+      status: 'rascunho',
+      total_obras: obraIds.length,
+      criado_por: usuario.id,
+    })
+    .select('id, codigo, destino, formato, status, total_obras, criado_em')
     .single()
-  if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  if (!['master', 'admin'].includes(usuario.role ?? '')) {
-    return NextResponse.json({ error: 'Permissão insuficiente' }, { status: 403 })
+  if (insertError || !exportacao) {
+    return NextResponse.json({ error: insertError?.message ?? 'Erro ao criar exportação' }, { status: 500 })
   }
 
-  let body: Record<string, unknown>
-  try { body = await req.json() }
-  catch { return NextResponse.json({ error: 'JSON inválido' }, { status: 400 }) }
-
-  const { destino, formato, obra_ids, editora_id, periodo_inicio, periodo_fim } = body as {
-    destino?: string
-    formato?: string
-    obra_ids?: string[]
-    editora_id?: string
-    periodo_inicio?: string
-    periodo_fim?: string
-  }
-
-  if (!destino) return NextResponse.json({ error: 'Campo "destino" obrigatório' }, { status: 400 })
-  if (!formato) return NextResponse.json({ error: 'Campo "formato" obrigatório' }, { status: 400 })
-
-  // obra_ids é opcional na criação de rascunho
-  const obraIds: string[] = Array.isArray(obra_ids) ? obra_ids : []
-
-  // Se obra_ids fornecidos, validar cada uma
-  let obrasEncontradas: Record<string, unknown>[] = []
   if (obraIds.length > 0) {
-    const { data: obras } = await sb
+    const { data: obras, error: obrasError } = await sb
       .from('obras')
-      .select('*')
+      .select('id')
       .in('id', obraIds)
       .eq('tenant_id', usuario.tenant_id)
       .is('deleted_at', null)
 
-    obrasEncontradas = obras ?? []
-    if (obrasEncontradas.length !== obraIds.length) {
-      return NextResponse.json({ error: 'Uma ou mais obras não encontradas' }, { status: 404 })
-    }
+    if (obrasError) return NextResponse.json({ error: obrasError.message }, { status: 500 })
 
-    // Validar: todas devem ser catalogo_ativo
-    const naoAtivas = obrasEncontradas.filter((o) => o.status_catalogo !== 'catalogo_ativo')
-    if (naoAtivas.length > 0) {
-      return NextResponse.json({
-        error: `${naoAtivas.length} obra(s) não estão em "Catálogo Ativo": ${naoAtivas.map((o) => o.titulo).join(', ')}`,
-        obras_bloqueadas: naoAtivas.map((o) => ({ id: o.id, titulo: o.titulo, status_catalogo: o.status_catalogo })),
-      }, { status: 422 })
-    }
+    const validIds = new Set((obras ?? []).map((obra: Record<string, unknown>) => String(obra.id)))
+    const rows = obraIds
+      .filter((id) => validIds.has(String(id)))
+      .map((obraId) => ({
+        exportacao_id: exportacao.id,
+        obra_id: obraId,
+        status_obra: 'incluida',
+      }))
 
-    // Validar completude de cada obra
-    const errosCompletude: { id: unknown; titulo: unknown; score: number; pendencias: unknown[] }[] = []
-    for (const obra of obrasEncontradas) {
-      const [{ data: participantes }, { data: fonogramas }] = await Promise.all([
-        sb.from('obras_participantes').select('id, percentual').eq('obra_id', obra.id).eq('tenant_id', usuario.tenant_id),
-        sb.from('fonogramas').select('id, isrc').eq('obra_id', obra.id).eq('tenant_id', usuario.tenant_id),
-      ])
-      const resultado = calcularCompletude(
-        obra,
-        (participantes ?? []) as Record<string, unknown>[],
-        (fonogramas ?? []) as Record<string, unknown>[],
-      )
-      if (resultado.bloqueado) {
-        errosCompletude.push({ id: obra.id, titulo: obra.titulo, score: resultado.score, pendencias: resultado.pendencias })
-      }
-    }
-    if (errosCompletude.length > 0) {
-      return NextResponse.json({
-        error: `${errosCompletude.length} obra(s) com cadastro incompleto. Complete antes de exportar.`,
-        obras_incompletas: errosCompletude,
-      }, { status: 422 })
+    if (rows.length > 0) {
+      const { error: relError } = await sb.from('exportacoes_obras').insert(rows)
+      if (relError) return NextResponse.json({ error: relError.message }, { status: 500 })
     }
   }
 
-  // Gerar código sequencial: EXP-{YYYYMM}-{seq}
-  const mesAtual = new Date().toISOString().slice(0, 7).replace('-', '')
-  const { count } = await sb
-    .from('exportacoes')
-    .select('id', { count: 'exact', head: true })
-    .eq('tenant_id', usuario.tenant_id)
-  const seq = String((count ?? 0) + 1).padStart(3, '0')
-  const codigo = `EXP-${mesAtual}-${seq}`
-
-  // Criar exportação
-  const { data: exportacao, error: errExp } = await sb
-    .from('exportacoes')
-    .insert({
-      codigo,
-      destino,
-      formato,
-      total_obras:    obraIds.length,
-      status:         'rascunho',
-      editora_id:     editora_id ?? null,
-      tenant_id:      usuario.tenant_id,
-      periodo_inicio: periodo_inicio ?? null,
-      periodo_fim:    periodo_fim ?? null,
-    })
-    .select()
-    .single()
-
-  if (errExp) return NextResponse.json({ error: errExp.message }, { status: 500 })
-
-  // Inserir obras na fila se houver
-  if (obraIds.length > 0) {
-    const obrasExportacao = obraIds.map((obraId: string) => ({
-      exportacao_id: exportacao.id,
-      obra_id:       obraId,
-      status_obra:   'incluida',
-    }))
-    await sb.from('exportacoes_obras').insert(obrasExportacao)
-  }
-
-  // Log inicial
   await sb.from('exportacoes_logs').insert({
     exportacao_id: exportacao.id,
-    evento:        'criacao',
-    mensagem:      `Exportação criada. ${obraIds.length} obras na fila.`,
-    dados_json:    { destino, formato, total: obraIds.length },
-    timestamp:     new Date().toISOString(),
+    evento: 'exportacao_criada',
+    mensagem: `Lote criado com ${obraIds.length} obra(s).`,
+    dados_json: { destino, formato, obra_ids: obraIds },
+    timestamp: new Date().toISOString(),
   })
 
   return NextResponse.json({ data: exportacao }, { status: 201 })

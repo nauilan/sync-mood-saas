@@ -19,41 +19,40 @@ function getToken(req: NextRequest): string {
   }
   const joined = chunks.filter(Boolean).join('')
   if (joined) {
-    try { const p = JSON.parse(decodeURIComponent(joined)); if (p?.access_token) return p.access_token } catch { /* */ }
-    try { const p = JSON.parse(joined); if (p?.access_token) return p.access_token } catch { /* */ }
+    try { const p = JSON.parse(decodeURIComponent(joined)); if (p?.access_token) return p.access_token } catch {}
+    try { const p = JSON.parse(joined); if (p?.access_token) return p.access_token } catch {}
   }
   return ''
 }
 
-// ── GET /api/exportacoes/[id] ────────────────────────────────────────────────
-// Detalhe completo: exportação + obras + logs
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const sb = getAdminClient()
-  if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
+  if (!sb) return NextResponse.json({ error: 'Supabase nÃ£o configurado' }, { status: 503 })
 
   const token = getToken(req)
-  if (!token) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  if (!token) return NextResponse.json({ error: 'NÃ£o autorizado' }, { status: 401 })
 
   const { data: { user } } = await sb.auth.getUser(token)
-  if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'NÃ£o autorizado' }, { status: 401 })
 
   const { data: usuario } = await sb
     .from('usuarios')
-    .select('tenant_id')
+    .select('tenant_id, role')
     .eq('auth_user_id', user.id)
     .single()
-  if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  if (!usuario) return NextResponse.json({ error: 'NÃ£o autorizado' }, { status: 401 })
 
   const { id } = await params
 
   const [
-    { data: exportacao },
-    { data: obras },
-    { data: logs },
-    { data: retorno },
+    { data: exportacao, error: exportacaoError },
+    { data: obras, error: obrasError },
+    { data: logs, error: logsError },
+    { data: retorno, error: retornoError },
   ] = await Promise.all([
     sb.from('exportacoes')
       .select('*')
@@ -62,8 +61,8 @@ export async function GET(
       .single(),
     sb.from('exportacoes_obras')
       .select(`
-        id, obra_id, status_obra, codigo_externo_retornado, iswc_retornado,
-        obras!inner ( id, titulo, codigo_obra, iswc, status_catalogo, completude_score )
+        obra_id, status_obra, codigo_externo_retornado, iswc_retornado,
+        obras!inner ( id, titulo, codigo_obra, iswc, status_catalogo )
       `)
       .eq('exportacao_id', id),
     sb.from('exportacoes_logs')
@@ -76,57 +75,74 @@ export async function GET(
       .maybeSingle(),
   ])
 
-  if (!exportacao) return NextResponse.json({ error: 'Exportação não encontrada' }, { status: 404 })
+  if (exportacaoError) return NextResponse.json({ error: exportacaoError.message }, { status: 500 })
+  if (obrasError) return NextResponse.json({ error: obrasError.message }, { status: 500 })
+  if (logsError) return NextResponse.json({ error: logsError.message }, { status: 500 })
+  if (retornoError) return NextResponse.json({ error: retornoError.message }, { status: 500 })
+  if (!exportacao) return NextResponse.json({ error: 'ExportaÃ§Ã£o nÃ£o encontrada' }, { status: 404 })
+
+  const obrasFlat = (obras ?? []).map((item: any) => ({
+    id: `${id}:${item.obra_id}`,
+    obra_id: item.obra_id,
+    status_obra: item.status_obra,
+    codigo_externo: item.codigo_externo_retornado ?? null,
+    codigo_externo_retornado: item.codigo_externo_retornado ?? null,
+    iswc_retornado: item.iswc_retornado ?? null,
+    titulo: item.obras?.titulo ?? null,
+    codigo_obra: item.obras?.codigo_obra ?? null,
+    iswc: item.obras?.iswc ?? null,
+    status_catalogo: item.obras?.status_catalogo ?? null,
+    observacao: null,
+  }))
 
   return NextResponse.json({
     data: {
       exportacao,
-      obras:   obras   ?? [],
-      logs:    logs    ?? [],
+      obras: obrasFlat,
+      logs: logs ?? [],
       retorno: retorno ?? null,
     },
   })
 }
 
-// ── PATCH /api/exportacoes/[id] ──────────────────────────────────────────────
-// Permite atualizar status da exportação (ex: marcar como cancelada)
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const sb = getAdminClient()
-  if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
+  if (!sb) return NextResponse.json({ error: 'Supabase nÃ£o configurado' }, { status: 503 })
 
   const token = getToken(req)
-  if (!token) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  if (!token) return NextResponse.json({ error: 'NÃ£o autorizado' }, { status: 401 })
 
   const { data: { user } } = await sb.auth.getUser(token)
-  if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'NÃ£o autorizado' }, { status: 401 })
 
   const { data: usuario } = await sb
     .from('usuarios')
     .select('tenant_id, role')
     .eq('auth_user_id', user.id)
     .single()
-  if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
+  if (!usuario) return NextResponse.json({ error: 'NÃ£o autorizado' }, { status: 401 })
   if (!['master', 'admin'].includes(usuario.role ?? '')) {
-    return NextResponse.json({ error: 'Permissão insuficiente' }, { status: 403 })
+    return NextResponse.json({ error: 'PermissÃ£o insuficiente' }, { status: 403 })
   }
 
   const { id } = await params
-  let body: Record<string, unknown>
-  try { body = await req.json() }
-  catch { return NextResponse.json({ error: 'JSON inválido' }, { status: 400 }) }
+  const body = await req.json().catch(() => null)
+  if (!body || typeof body !== 'object') {
+    return NextResponse.json({ error: 'JSON invÃ¡lido' }, { status: 400 })
+  }
 
-  const ALLOWED_UPDATE = ['status', 'arquivo_url', 'hash']
+  const allowed = ['status', 'arquivo_url', 'hash'] as const
   const update: Record<string, unknown> = {}
-  for (const k of ALLOWED_UPDATE) {
-    if (k in body) update[k] = body[k]
+  for (const key of allowed) {
+    if (key in body) update[key] = (body as Record<string, unknown>)[key]
   }
 
   if (Object.keys(update).length === 0) {
-    return NextResponse.json({ error: 'Nenhum campo válido' }, { status: 400 })
+    return NextResponse.json({ error: 'Nenhum campo vÃ¡lido' }, { status: 400 })
   }
 
   const { data, error } = await sb

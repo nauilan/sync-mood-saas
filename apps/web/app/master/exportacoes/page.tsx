@@ -1,43 +1,43 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { PageHeader } from '@/components/ui/page-header'
-import {
-  Download, Plus, Loader2, AlertTriangle, CheckCircle2,
-  Clock, FileText, ChevronRight, RefreshCw,
-} from 'lucide-react'
+import { Plus, Loader2, AlertTriangle, FileText, ChevronRight, RefreshCw } from 'lucide-react'
 import { authFetch } from '@/lib/supabase/client'
 
 const STATUS_EXP_LABELS: Record<string, string> = {
-  rascunho:  'Rascunho',
-  gerando:   'Gerando',
-  gerado:    'Gerado',
-  enviado:   'Enviado',
-  confirmado:'Confirmado',
-  erro:      'Erro',
+  rascunho: 'Rascunho',
+  gerando: 'Gerando',
+  gerado: 'Gerado',
+  enviado: 'Enviado',
+  confirmado: 'Confirmado',
+  erro: 'Erro',
 }
 
 const STATUS_EXP_COLORS: Record<string, string> = {
-  rascunho:  'bg-slate-500/15 text-slate-400',
-  gerando:   'bg-amber-500/15 text-amber-400',
-  gerado:    'bg-sky-500/15 text-sky-400',
-  enviado:   'bg-violet-500/15 text-violet-400',
-  confirmado:'bg-emerald-500/15 text-emerald-400',
-  erro:      'bg-rose-500/15 text-rose-400',
+  rascunho: 'bg-slate-500/15 text-slate-400',
+  gerando: 'bg-amber-500/15 text-amber-400',
+  gerado: 'bg-sky-500/15 text-sky-400',
+  enviado: 'bg-violet-500/15 text-violet-400',
+  confirmado: 'bg-emerald-500/15 text-emerald-400',
+  erro: 'bg-rose-500/15 text-rose-400',
 }
 
 const DESTINO_LABELS: Record<string, string> = {
-  cwr:        'CWR v2.2',
-  socinpro:   'Socinpro',
+  cwr: 'CWR v2.2',
+  socinpro: 'Socinpro',
   backoffice: 'BackOffice',
 }
 
 export default function ExportacoesPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const obraIdParam = searchParams.get('obra_id')?.trim() ?? ''
+
   const [exportacoes, setExportacoes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState('')
-
-  // Modal nova exportação
   const [showModal, setShowModal] = useState(false)
   const [destino, setDestino] = useState('cwr')
   const [formato, setFormato] = useState('txt')
@@ -50,9 +50,12 @@ export default function ExportacoesPage() {
     setLoading(true)
     try {
       const res = await authFetch('/api/exportacoes')
-      if (!res.ok) { setErro('Erro ao carregar exportações.'); return }
-      const d = await res.json()
-      setExportacoes(d.data ?? [])
+      if (!res.ok) {
+        setErro('Erro ao carregar exportações.')
+        return
+      }
+      const data = await res.json()
+      setExportacoes(data.data ?? [])
     } catch {
       setErro('Falha na requisição.')
     } finally {
@@ -67,11 +70,18 @@ export default function ExportacoesPage() {
       const res = await authFetch('/api/exportacoes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ destino, formato, obra_ids: [] }),
+        body: JSON.stringify({ destino, formato, obra_ids: obraIdParam ? [obraIdParam] : [] }),
       })
-      const d = await res.json()
-      if (!res.ok) { setErroModal(d.error ?? 'Erro ao criar exportação.'); return }
+      const data = await res.json()
+      if (!res.ok) {
+        setErroModal(data.error ?? 'Erro ao criar exportação.')
+        return
+      }
       setShowModal(false)
+      if (data?.data?.id) {
+        router.push(`/master/exportacoes/${data.data.id}`)
+        return
+      }
       loadExportacoes()
     } catch {
       setErroModal('Falha na requisição.')
@@ -174,7 +184,6 @@ export default function ExportacoesPage() {
         )}
       </div>
 
-      {/* Modal Nova Exportação */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70" onClick={() => setShowModal(false)} />
@@ -186,9 +195,9 @@ export default function ExportacoesPage() {
                 <label className="text-xs text-white/50 block mb-1.5">Destino</label>
                 <select
                   value={destino}
-                  onChange={e => {
-                    setDestino(e.target.value)
-                    setFormato(e.target.value === 'cwr' ? 'txt' : e.target.value === 'socinpro' ? 'csv' : 'json')
+                  onChange={(event) => {
+                    setDestino(event.target.value)
+                    setFormato(event.target.value === 'cwr' ? 'txt' : event.target.value === 'socinpro' ? 'csv' : 'json')
                   }}
                   className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-violet-500/50"
                 >
@@ -208,7 +217,9 @@ export default function ExportacoesPage() {
               </div>
 
               <div className="bg-amber-500/[0.07] border border-amber-500/20 rounded-lg px-4 py-3 text-xs text-amber-300/70">
-                O lote será criado em rascunho. Adicione obras e clique em <b>Gerar</b> para produzir o arquivo.
+                {obraIdParam
+                  ? 'O lote será criado já com a obra atual. Depois clique em Gerar para produzir o arquivo.'
+                  : 'O lote será criado em rascunho. Adicione obras e clique em Gerar para produzir o arquivo.'}
               </div>
 
               {erroModal && (

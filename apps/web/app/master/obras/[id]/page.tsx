@@ -2161,9 +2161,17 @@ export default function ObraDetailPage() {
           <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">
             <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
               <h3 className="text-sm font-semibold text-white">Histórico de Exportações</h3>
-              <a href="/master/exportacoes" className="text-xs text-violet-400 hover:text-violet-300 transition-colors">
-                Ver todas <ChevronRight className="inline w-3 h-3" />
-              </a>
+              <div className="flex items-center gap-3">
+                <a
+                  href={`/master/exportacoes?obra_id=${obraId}`}
+                  className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                >
+                  Exportar esta obra
+                </a>
+                <a href="/master/exportacoes" className="text-xs text-violet-400 hover:text-violet-300 transition-colors">
+                  Ver todas <ChevronRight className="inline w-3 h-3" />
+                </a>
+              </div>
             </div>
             {exportacoesLdg ? (
               <div className="flex items-center justify-center py-8 gap-2 text-white/30 text-xs">
