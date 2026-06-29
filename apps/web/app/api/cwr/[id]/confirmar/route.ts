@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { deveZerarMR, calcularMrAM } from '@/lib/backoffice-rules'
 
 const sanitize = (v: string | undefined) =>
   (v ?? '').replace(/[\uFEFF\u200B\u200C\u200D]/g, '').trim()
@@ -24,7 +23,7 @@ async function getUser(req: NextRequest) {
   return data ? { userId: data.id as string, tenantId: data.tenant_id as string, role: data.role as string } : null
 }
 
-// ── POST /api/cwr/[id]/confirmar ──────────────────────────────────────────────
+// —— POST /api/cwr/[id]/confirmar ——————————————————————————————————————
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const usuario = await getUser(req)
@@ -33,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params
   const client = sb()
 
-  // ── 1. Verificar importação ──────────────────────────────────────────────────
+  // —— 1. Verificar importação ————————————————————————————————————————
   const { data: imp } = await client
     .from('cwr_importacoes')
     .select('id,status,tenant_id')
@@ -44,7 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!imp) return NextResponse.json({ error: 'Importação não encontrada' }, { status: 404 })
   if (imp.status === 'confirmado') return NextResponse.json({ error: 'Importação já confirmada' }, { status: 400 })
 
-  // ── 2. Carregar staging ──────────────────────────────────────────────────────
+  // —— 2. Carregar staging ————————————————————————————————————————————
   const { data: obrasImp, error: errStaging } = await client
     .from('cwr_importacoes_obras')
     .select('*')
@@ -56,13 +55,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const rows = obrasImp ?? []
 
-  // ── 3. Separar por tipo ──────────────────────────────────────────────────────
+  // —— 3. Separar por tipo ————————————————————————————————————————————
   const novasRows  = rows.filter(r => r.match_tipo === 'nova')
   const conflitos  = rows.filter(r => r.match_tipo === 'conflito')
   const vinculadas = rows.filter(r => r.match_tipo === 'vinculada')
 
-  // ── 4. Construir payload de obras com codigo_obra único ──────────────────────
-  // Evitar duplicatas dentro do próprio lote
+  // —— 4. Construir payload de obras com codigo_obra único ————————————
   const codigosUsados = new Set<string>()
   const obraPayloads = novasRows.map((row, idx) => {
     const snap = row.snapshot_cwr as Record<string, unknown>
@@ -73,7 +71,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     codigosUsados.add(codigo)
     return {
-      _stagingId: row.id as string,           // não vai para o banco — apenas para mapeamento
+      _stagingId: row.id as string,
       tenant_id:       usuario.tenantId,
       titulo,
       iswc:            (snap.iswc as string | null) ?? null,
@@ -83,7 +81,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   })
 
-  // ── 5. Insert em lote — ATÔMICO: se falhar, nenhuma obra é criada ────────────
+  // —— 5. Insert em lote ——————————————————————————————————————————————
   const dbPayloads = obraPayloads.map(({ _stagingId: _s, ...rest }) => rest)
   const { data: obrasInseridas, error: errInsert } = await client
     .from('obras')
@@ -91,7 +89,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .select('id, codigo_obra')
 
   if (errInsert) {
-    // Não marca como confirmado — retorna o erro para o frontend
     console.error('[CWR confirmar] Falha no insert em lote:', errInsert)
     return NextResponse.json({
       error:  'Falha ao criar obras no banco de dados.',
@@ -108,23 +105,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }, { status: 500 })
   }
 
-  // ── 6. Mapear IDs retornados → staging rows ──────────────────────────────────
+  // —— 6. Mapear IDs retornados ———————————————————————————————————————
   const codigoToId: Record<string, string> = {}
   for (const o of obrasInseridas) {
     codigoToId[o.codigo_obra] = o.id
   }
 
-  // ── 7. Fonogramas + atualizar staging (erros aqui não revertem obras) ─────────
+  // —— 7. Fonogramas + atualizar staging (sem materialização editorial) ——
   let fonogramas_criados = 0
   for (const payload of obraPayloads) {
     const obraId  = codigoToId[payload.codigo_obra]
     const row     = novasRows[obraPayloads.indexOf(payload)]
     const snap    = row.snapshot_cwr as Record<string, unknown>
 
-    // Atualizar staging com obra_id real
     await client.from('cwr_importacoes_obras').update({ obra_id: obraId }).eq('id', row.id)
 
-    // Fonogramas
     const fono = (snap.fonogramas as unknown[]) ?? []
     if (fono.length > 0) {
       const fonoRows = fono.map((f: unknown) => {
@@ -144,95 +139,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
-  // ── 8. Criar obras_links + obras_links_titulares a partir do snapshot ────────
-  const FUNCAO_OK = new Set<string>(['CA','V','SA','E','AM','SE','C','CE','A','I','M','T','AD','H'])
-  function sanitizeFuncaoAutor(p: string): string {
-    const r = (p ?? '').toUpperCase().trim()
-    if (FUNCAO_OK.has(r)) return r
-    if (r === 'AR' || r === 'AE') return 'AD'
-    if (r === 'ES')               return 'CA'
-    if (r === 'PA')               return 'A'
-    if (r === 'TR')               return 'T'
-    return 'CA'
-  }
-  function sanitizeFuncaoEditora(tipo: string, papel: string): string {
-    const t = (tipo ?? papel ?? '').toUpperCase().trim()
-    if (FUNCAO_OK.has(t)) return t
-    if (t === 'AQ')       return 'AM'
-    if (t === 'ES')       return 'SE'
-    return 'E'
-  }
+  // —— 8. Confirmar obra sem materializar cadeia editorial definitiva ——
 
-  const linksPayload = obraPayloads.map(p => ({
-    obra_id:         codigoToId[p.codigo_obra],
-    tenant_id:       usuario.tenantId,
-    numero_link:     1,
-    percentual_link: 100,
-    tipo_link:       'controlado',
-    controlado:      true,
-    status:          'ativo',
-  }))
-
-  const { data: linksCreated } = await client
-    .from('obras_links')
-    .insert(linksPayload)
-    .select('id, obra_id')
-
-  if (linksCreated?.length) {
-    const obraToLink: Record<string, string> = {}
-    for (const l of linksCreated) obraToLink[l.obra_id as string] = l.id as string
-
-    const allTitulares: Record<string, unknown>[] = []
-    for (const payload of obraPayloads) {
-      const obraId = codigoToId[payload.codigo_obra]
-      const linkId = obraToLink[obraId]
-      if (!linkId) continue
-      const row  = novasRows[obraPayloads.indexOf(payload)]
-      const snap = row.snapshot_cwr as Record<string, unknown>
-      for (const a of ((snap.autores as any[]) ?? [])) {
-        if (!(a.nome as string)?.trim()) continue
-        allTitulares.push({
-          obra_link_id: linkId, obra_id: obraId, tenant_id: usuario.tenantId,
-          titular_id: null,
-          nome: (a.nome as string)?.trim() ?? '',
-          funcao_no_link: sanitizeFuncaoAutor(a.papel ?? ''),
-          percentual_exec_publica: a.pr_pct ?? 0,
-          // GUARDA DEFENSIVA: autores nunca coletam MR diretamente (SWR/OWR/CA/C/A/V/AD)
-          // AM coleta em nome deles — gravar aqui duplicaria o valor no BackOffice.
-          percentual_fonomecanico: 0,
-          percentual_sincronizacao: a.sr_pct ?? 0,
-          ipi: a.ipi ?? null,
-          status_controle: a.controlled ? 'controlado' : 'nao_controlado',
-        })
-      }
-      // AM MR = soma dos PR controlados do link (NUNCA o valor bruto SPT do CWR)
-      const autoresSnap = (snap.autores as any[]) ?? []
-      const mrAmCorreto = calcularMrAM(
-        autoresSnap.map((a: any) => ({ pr_pct: a.pr_pct ?? 0, controlled: a.controlled ?? false }))
-      )
-      for (const e of ((snap.editoras as any[]) ?? [])) {
-        if (!(e.nome as string)?.trim()) continue
-        const funcaoEd = sanitizeFuncaoEditora(e.tipo ?? '', e.papel ?? '')
-        // Regra BackOffice: E/SE/SA → MR=0; AM → soma PR controlados (não valor bruto CWR)
-        const mrEd = deveZerarMR(funcaoEd) ? 0 : mrAmCorreto
-        allTitulares.push({
-          obra_link_id: linkId, obra_id: obraId, tenant_id: usuario.tenantId,
-          titular_id: null,
-          nome: (e.nome as string)?.trim() ?? '',
-          funcao_no_link: funcaoEd,
-          percentual_exec_publica: e.pr_pct ?? 0, percentual_fonomecanico: mrEd,
-          percentual_sincronizacao: e.sr_pct ?? 0,
-          ipi: e.ipi ?? null,
-          status_controle: e.controlled ? 'controlado' : 'nao_controlado',
-        })
-      }
-    }
-    for (let i = 0; i < allTitulares.length; i += 500) {
-      await client.from('obras_links_titulares').insert(allTitulares.slice(i, i + 500))
-    }
-  }
-
-  // ── 9. Registrar conflitos ───────────────────────────────────────────────────
+  // —— 9. Registrar conflitos ————————————————————————————————————————
   for (const row of conflitos) {
     const snap = row.snapshot_cwr as Record<string, unknown>
     await client.from('cwr_conflitos').insert({
@@ -245,7 +154,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
   }
 
-  // ── 9. Contadores editoriais ─────────────────────────────────────────────────
+  // —— 9. Contadores editoriais ————————————————————————————————————————
   let participantes_controlados = 0, participantes_nao_controlados = 0, participantes_adm_ext = 0
   for (const row of rows) {
     const status = row.status_editorial as string
@@ -254,7 +163,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     else participantes_nao_controlados++
   }
 
-  // ── 10. Relatório final ───────────────────────────────────────────────────────
+  // —— 10. Relatório final ————————————————————————————————————————————
   const relatorio = {
     obras_lidas:                  rows.length,
     obras_novas:                  obrasInseridas.length,
@@ -274,14 +183,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     conflitos_editoriais:         conflitos.length,
   }
 
-  // ── 11. Marcar como confirmado — só aqui, depois de tudo ok ──────────────────
+  // —— 11. Marcar como confirmado ——————————————————————————————————————
   const { error: errConfirm } = await client
     .from('cwr_importacoes')
     .update({ status: 'confirmado', relatorio, updated_at: new Date().toISOString() })
     .eq('id', id)
 
   if (errConfirm) {
-    // Obras já foram criadas mas o status não atualizou — log crítico
     console.error('[CWR confirmar] CRÍTICO: obras inseridas mas status não atualizou:', errConfirm)
     return NextResponse.json({
       error:       'Obras criadas mas falha ao finalizar importação.',
