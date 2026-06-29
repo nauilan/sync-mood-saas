@@ -90,10 +90,12 @@ export default function ExportacoesPage() {
         return
       }
       setShowModal(false)
-      if (data?.data?.id) {
-        router.push(`/master/exportacoes/${data.data.id}`)
+      const exportacaoId = typeof data?.data?.id === 'string' ? data.data.id.trim() : ''
+      if (exportacaoId && exportacaoId !== 'undefined') {
+        router.push(`/master/exportacoes/${exportacaoId}`)
         return
       }
+      console.warn('Lote criado sem ID válido para redirecionamento.', data)
       loadExportacoes()
     } catch {
       setErroModal('Falha na requisição.')
