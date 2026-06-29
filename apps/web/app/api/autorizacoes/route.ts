@@ -261,12 +261,12 @@ export async function POST(req: NextRequest) {
   if (modeloNegocioResolvido === 'pago_editora') {
     const linksRecebedor = await fetchRecebedorLinksCompat(sb, obra_id, usuario.tenant_id)
     const recebedor = resolverRecebedorEditorial(linksRecebedor as any)
-    if (!recebedor.ok) {
+    if (!recebedor.ok && status_workflow === 'emitida') {
       return NextResponse.json({
         error: 'Autorização paga à editora exige recebedor válido (administradora ou editora original controlada).',
       }, { status: 422 })
     }
-    recebedorPagoA = recebedor.editoraId
+    if (recebedor.ok) recebedorPagoA = recebedor.editoraId
   }
 
   const emitida_em = status_workflow === 'emitida' ? new Date().toISOString() : null

@@ -91,7 +91,14 @@ async function fetchTitularesCompat(sb: any, obraId: string, tenantId: string) {
     .eq('obra_id', obraId)
     .eq('tenant_id', tenantId)
 
-  if (!tentativaNova.error && (tentativaNova.data?.length ?? 0) > 0) return tentativaNova.data ?? []
+  if (!tentativaNova.error && (tentativaNova.data?.length ?? 0) > 0) {
+    return (tentativaNova.data ?? []).map((item: Record<string, unknown>) => ({
+      ...item,
+      link_id: item.link_id ?? item.obra_link_id ?? null,
+      percentual: item.percentual ?? item.percentual_exec_publica ?? null,
+      percentual_exec_publica: item.percentual_exec_publica ?? item.percentual ?? null,
+    }))
+  }
 
   const tentativaLegada = await sb.from('obras_links_titulares')
     .select('id, obra_link_id, titular_id, controlado, contrato_id, editora_id, editora_original_id, editora_administradora_id, status_controle, percentual_exec_publica')
@@ -169,7 +176,12 @@ export async function POST(
   // 3. Buscar titulares da obra
   const titulares = await fetchTitularesCompat(sb, obraId, usuario.tenant_id)
 
-  if (!titulares || titulares.length === 0) {
+  const titularesValidos = (titulares ?? []).filter((item: Record<string, unknown>) =>
+    Boolean(item.link_id ?? item.obra_link_id) &&
+    (Boolean(item.titular_id) || String(item.nome ?? '').trim().length > 0),
+  )
+
+  if (titularesValidos.length === 0) {
     return NextResponse.json({
       error: 'Obra sem titulares cadastrados nos links. Cadastre as formações primeiro.',
     }, { status: 422 })
@@ -180,7 +192,7 @@ export async function POST(
   let amarrados = 0
   const atualizacoes: Array<{ id: string; patch: Record<string, unknown> }> = []
 
-  for (const t of titulares as Array<Record<string, unknown>>) {
+  for (const t of titularesValidos as Array<Record<string, unknown>>) {
     const corresponde = !titularIdContrato || t.titular_id === titularIdContrato
 
     if (corresponde) {
