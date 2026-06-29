@@ -26,6 +26,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { deveZerarMR, calcularMrAM } from '@/lib/backoffice-rules'
+import { previewLinksFromSnapshot } from '@/lib/cwr-materialization'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -478,12 +479,29 @@ export async function POST(
     .eq('tenant_id', usuario.tenantId)
     .is('deleted_at', null)
 
+  const { data: editorasExistentes } = await client
+    .from('editoras')
+    .select('id, codigo_ipi, nome_fantasia, razao_social')
+    .eq('tenant_id', usuario.tenantId)
+    .is('deleted_at', null)
+
   const ipiToId:      Record<string, string> = {}
   const nomeNormToId: Record<string, string> = {}
   for (const t of (todosExistentes ?? [])) {
     if (t.ipi) ipiToId[t.ipi as string] = t.id as string
     const n = normNome(t.nome_completo as string)
     if (!nomeNormToId[n]) nomeNormToId[n] = t.id as string
+  }
+
+  const editoraIpiToId: Record<string, string> = {}
+  const editoraNomeToId: Record<string, string> = {}
+  for (const e of (editorasExistentes ?? [])) {
+    const ipi = ((e.codigo_ipi as string | null) ?? '').replace(/\s/g, '').trim()
+    if (ipi && !editoraIpiToId[ipi]) editoraIpiToId[ipi] = e.id as string
+    const nomeFantasia = normNome((e.nome_fantasia as string | null) ?? '')
+    const razaoSocial  = normNome((e.razao_social as string | null) ?? '')
+    if (nomeFantasia && !editoraNomeToId[nomeFantasia]) editoraNomeToId[nomeFantasia] = e.id as string
+    if (razaoSocial && !editoraNomeToId[razaoSocial]) editoraNomeToId[razaoSocial] = e.id as string
   }
 
   // ── 5. Resolver chaves → IDs existentes ou marcar para criar ─────────────
@@ -705,13 +723,32 @@ export async function POST(
   // ── Fix 1: Upsert obras_links por link distinto (pwr_links) ──────────────
   // Coletar todos os pares (obraId, link_number) distintos das participações.
   const CHUNK = 500
-  const obraLinkCombos: { obraId: string; linkNum: number }[] = []
+  const obraLinkCombos: { obraId: string; linkNum: number; percentualLink: number; tipoLink: 'controlado' | 'direto_sem_editora'; controlado: boolean }[] = []
   const seenObraLinks = new Set<string>()
+  const obraLinkMeta = new Map<string, { percentualLink: number; tipoLink: 'controlado' | 'direto_sem_editora'; controlado: boolean }>()
+  for (const row of impObras) {
+    const obraId = row.obra_id as string
+    const previewLinks = previewLinksFromSnapshot((row.snapshot_cwr ?? {}) as any)
+    for (const previewLink of previewLinks) {
+      obraLinkMeta.set(`${obraId}:${previewLink.numero_link}`, {
+        percentualLink: previewLink.percentual_link,
+        tipoLink: previewLink.tipo_link,
+        controlado: previewLink.controlado,
+      })
+    }
+  }
   for (const p of obraParticipacoes) {
     const k = `${p.obraId}:${p.link_number}`
     if (!seenObraLinks.has(k)) {
       seenObraLinks.add(k)
-      obraLinkCombos.push({ obraId: p.obraId, linkNum: p.link_number })
+      const meta = obraLinkMeta.get(k)
+      obraLinkCombos.push({
+        obraId: p.obraId,
+        linkNum: p.link_number,
+        percentualLink: meta?.percentualLink ?? 0,
+        tipoLink: meta?.tipoLink ?? (p.controlled ? 'controlado' : 'direto_sem_editora'),
+        controlado: meta?.controlado ?? p.controlled,
+      })
     }
   }
   // Garantir pelo menos LINK 1 para obras sem pwr_links
@@ -719,7 +756,14 @@ export async function POST(
     const k = `${obraId}:1`
     if (!seenObraLinks.has(k)) {
       seenObraLinks.add(k)
-      obraLinkCombos.push({ obraId, linkNum: 1 })
+      const meta = obraLinkMeta.get(k)
+      obraLinkCombos.push({
+        obraId,
+        linkNum: 1,
+        percentualLink: meta?.percentualLink ?? 0,
+        tipoLink: meta?.tipoLink ?? 'controlado',
+        controlado: meta?.controlado ?? true,
+      })
     }
   }
 
@@ -727,12 +771,13 @@ export async function POST(
     const { error: linkErr } = await client
       .from('obras_links')
       .upsert(
-        obraLinkCombos.slice(i, i + CHUNK).map(({ obraId, linkNum }) => ({
+        obraLinkCombos.slice(i, i + CHUNK).map(({ obraId, linkNum, percentualLink, tipoLink, controlado }) => ({
           obra_id:         obraId,
           tenant_id:       usuario.tenantId,
           numero_link:     linkNum,
-          percentual_link: 100,
-          tipo_link:       'controlado',
+          percentual_link: percentualLink,
+          tipo_link:       tipoLink,
+          controlado,
           status:          'ativo',
         })),
         { onConflict: 'obra_id,numero_link', ignoreDuplicates: true }
@@ -803,6 +848,17 @@ export async function POST(
       if (!linkId) continue
 
       const info = autoresUnicos.get(p.chave) ?? editorasUnicas.get(p.chave)
+      const editoraFkId =
+        p.papel === 'E' || p.papel === 'AM'
+          ? (() => {
+              const infoEditora = editorasUnicas.get(p.chave)
+              const ipi = ((infoEditora?.ipi ?? '') as string).replace(/\s/g, '').trim()
+              if (ipi && editoraIpiToId[ipi]) return editoraIpiToId[ipi]
+              const nome = normNome(infoEditora?.nome ?? info?.nome ?? '')
+              if (nome && editoraNomeToId[nome]) return editoraNomeToId[nome]
+              return null
+            })()
+          : null
 
       // Regra BackOffice: AM recebe MR do SEU link; todos os demais recebem 0.
       const totalControlledPr = mrAmPorLink.get(p.link_number ?? 1) ?? 0
@@ -814,6 +870,9 @@ export async function POST(
         obra_id:                  obraId,
         tenant_id:                usuario.tenantId,
         titular_id:               chaveToId[p.chave] ?? null,
+        editora_id:               editoraFkId,
+        editora_original_id:      p.papel === 'E' ? editoraFkId : null,
+        editora_administradora_id:p.papel === 'AM' ? editoraFkId : null,
         nome:                     info?.nome ?? '',
         funcao_no_link:           p.papel,
         papel: ({
@@ -845,6 +904,17 @@ export async function POST(
       partByObra_len: partByObra.size,
       obraIdToLinkId_len: Object.keys(obraLinkNumToId).length,
       titPayloads_len: 0,
+    }, { status: 422 })
+  }
+
+  const emptyLinks = obraLinkCombos.filter(({ obraId, linkNum }) =>
+    !titPayloads.some((payload) => payload.obra_id === obraId && payload.obra_link_id === obraLinkNumToId[`${obraId}:${linkNum}`])
+  )
+  if (emptyLinks.length > 0) {
+    return NextResponse.json({
+      ok: false,
+      debug: 'link_sem_participantes_detectado',
+      links_vazios: emptyLinks.slice(0, 20),
     }, { status: 422 })
   }
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { hasCompleteEditorialChain } from '@/lib/cwr-materialization'
 
 const sanitize = (v: string | undefined) =>
   (v ?? '').replace(/[\uFEFF\u200B\u200C\u200D]/g, '').trim()
@@ -212,6 +213,10 @@ export async function POST(
     const snap     = (row.snapshot_cwr ?? {}) as Record<string, unknown>
     const autores  = (snap.autores  as Participante[]) ?? []
     const editoras = (snap.editoras as Participante[]) ?? []
+    if (hasCompleteEditorialChain(snap as any)) {
+      continue
+    }
+
 
     const obraId   = row.obra_id as string
     const tenantId = usuario.tenantId
