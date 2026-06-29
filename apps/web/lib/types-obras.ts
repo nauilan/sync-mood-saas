@@ -430,6 +430,8 @@ type PapelAdmin  = typeof PAPEIS_ADMIN[number]
 export function normalizarLinksObra(links: ObraLink[]): ObraLink[] {
   if (!links || links.length === 0) return links
 
+  if (links.length > 1) return links
+
   // Já normalizado se qualquer link tem >1 titular
   if (links.some(l => (l.titulares?.length ?? 0) > 1)) return links
 
