@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { DEFAULT_CWR_VERSION } from '@/lib/cwr-versions'
 
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
@@ -101,6 +102,7 @@ export async function GET(
       obras: obrasFlat,
       logs: logs ?? [],
       retorno: retorno ?? null,
+      cwr_version: exportacao.cwr_version ?? DEFAULT_CWR_VERSION,
     },
   })
 }

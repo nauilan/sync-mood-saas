@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { DEFAULT_CWR_VERSION, isCWRVersion, normalizeCWRVersion } from '@/lib/cwr-versions'
 
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
@@ -137,6 +138,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const destino = String(body?.destino ?? 'cwr').trim().toLowerCase()
   const formato = String(body?.formato ?? 'txt').trim().toLowerCase()
+  const requestedVersion = body?.cwr_version
+  if (requestedVersion != null && !isCWRVersion(requestedVersion)) {
+    return NextResponse.json({ error: 'Versão CWR inválida. Use 2.1 ou 2.2.' }, { status: 400 })
+  }
+  const cwrVersion = normalizeCWRVersion(requestedVersion)
   const obraIds = Array.from(new Set(Array.isArray(body?.obra_ids) ? body.obra_ids.map((value: unknown) => String(value).trim()).filter(Boolean) : []))
 
   const { data: exportacao, error: insertError } = await sb
@@ -146,11 +152,12 @@ export async function POST(req: NextRequest) {
       codigo: makeCodigo(),
       destino,
       formato,
+      cwr_version: cwrVersion ?? DEFAULT_CWR_VERSION,
       status: 'rascunho',
       total_obras: obraIds.length,
       criado_por: usuario.id,
     })
-    .select('id, codigo, destino, formato, status, total_obras, criado_em')
+    .select('id, codigo, destino, formato, cwr_version, status, total_obras, criado_em')
     .single()
 
   if (insertError || !exportacao) {
@@ -186,7 +193,7 @@ export async function POST(req: NextRequest) {
     exportacao_id: exportacao.id,
     evento: 'exportacao_criada',
     mensagem: `Lote criado com ${obraIds.length} obra(s).`,
-    dados_json: { destino, formato, obra_ids: obraIds },
+    dados_json: { destino, formato, cwr_version: cwrVersion, obra_ids: obraIds },
     timestamp: new Date().toISOString(),
   })
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { generateCWR } from '@/lib/cwr-generator'
 import type { Obra, ObraLink, ObraLinkTitular } from '@/lib/types-obras'
+import { DEFAULT_CWR_VERSION, normalizeCWRVersion } from '@/lib/cwr-versions'
 
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
@@ -58,7 +59,7 @@ export async function POST(
 
   const { data: exportacao, error: exportacaoError } = await sb
     .from('exportacoes')
-    .select('id, tenant_id, destino, formato, status, codigo')
+    .select('id, tenant_id, destino, formato, cwr_version, status, codigo')
     .eq('id', id)
     .eq('tenant_id', usuario.tenant_id)
     .single()
@@ -215,6 +216,7 @@ export async function POST(
   const generated = generateCWR({
     format: 'CWR',
     senderName: 'SYNC MOOD',
+    version: normalizeCWRVersion(exportacao.cwr_version ?? DEFAULT_CWR_VERSION),
     obras: obrasParaCwr,
   })
 

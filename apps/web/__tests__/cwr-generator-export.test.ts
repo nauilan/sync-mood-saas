@@ -36,6 +36,11 @@ function makeLink(
   }
 }
 
+function expectVersion(content: string, version: '2.1' | '2.2') {
+  const expected = version === '2.1' ? '02.10' : '02.20'
+  expect(content.includes(expected)).toBe(true)
+}
+
 describe('cwr generator export roundtrip', () => {
   it('exporta ELA NAO PARA preservando cadeia editorial correta', () => {
     const obra = makeObra('obra-ela', 'CWR-ELA', 'ELA NAO PARA', 'T-932925165-2')
@@ -293,5 +298,42 @@ describe('cwr generator export roundtrip', () => {
       { writer_ip: '5', publisher_ip: 'ED01', publisher_nome: 'EDI MUSIC EDITORA LTDA' },
       { writer_ip: '26', publisher_ip: 'ED01', publisher_nome: 'EDI MUSIC EDITORA LTDA' },
     ])
+  })
+
+  it('mantém 2.1 como padrão e aceita 2.2 como suporte inicial de versionamento', () => {
+    const obra = makeObra('obra-versao', 'CWR-VER', 'TESTE DE VERSAO', 'T-123456789-0')
+    const links: ObraLink[] = [
+      makeLink('link-versao', obra.id, 1, true, 100, [
+        {
+          id: 'tit-versao',
+          link_id: 'link-versao',
+          titular_id: 'tit-versao',
+          nome: 'AUTOR TESTE',
+          papel: 'compositor',
+          percentual: 100,
+          percentual_exec_publica: 100,
+          percentual_fonomecanico: 0,
+          percentual_sincronizacao: 100,
+          ipi: '1234567',
+          controlado: true,
+        },
+      ]),
+    ]
+
+    const generatedDefault = generateCWR({
+      format: 'CWR',
+      senderName: 'SYNC MOOD',
+      obras: [{ obra, links }],
+    })
+
+    const generated22 = generateCWR({
+      format: 'CWR',
+      senderName: 'SYNC MOOD',
+      version: '2.2',
+      obras: [{ obra, links }],
+    })
+
+    expectVersion(generatedDefault.content, '2.1')
+    expectVersion(generated22.content, '2.2')
   })
 })

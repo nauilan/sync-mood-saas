@@ -1,8 +1,119 @@
-import { describe, expect, it } from 'vitest'
+import { NextRequest } from 'next/server'
+import { describe, expect, it, beforeEach, vi } from 'vitest'
 
 import { generateCWR } from '@/lib/cwr-generator'
 import { parseCwr } from '@/lib/cwr-parser'
 import type { Obra, ObraLink } from '@/lib/types-obras'
+import { DEFAULT_CWR_VERSION } from '@/lib/cwr-versions'
+import { POST as createExportacao } from '@/app/api/exportacoes/route'
+
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(),
+}))
+
+type MockInsertRecord = Record<string, unknown>
+
+function makeRequest(body: Record<string, unknown>) {
+  return new NextRequest('http://localhost/api/exportacoes', {
+    method: 'POST',
+    headers: {
+      authorization: 'Bearer token-teste',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+}
+
+function makeSupabaseMock() {
+  const exportacaoInserts: MockInsertRecord[] = []
+  const exportacaoLogs: MockInsertRecord[] = []
+
+  const client = {
+    auth: {
+      getUser: vi.fn().mockResolvedValue({
+        data: { user: { id: 'auth-user-1' } },
+        error: null,
+      }),
+    },
+    from: vi.fn((table: string) => {
+      if (table === 'usuarios') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              single: vi.fn().mockResolvedValue({
+                data: { id: 'user-1', tenant_id: 'tenant-1', role: 'admin' },
+                error: null,
+              }),
+            })),
+          })),
+        }
+      }
+
+      if (table === 'exportacoes') {
+        return {
+          insert: vi.fn((payload: MockInsertRecord) => {
+            exportacaoInserts.push(payload)
+            return {
+              select: vi.fn(() => ({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id: 'exp-1',
+                    codigo: 'EXP-20260629-120000',
+                    destino: payload.destino,
+                    formato: payload.formato,
+                    cwr_version: payload.cwr_version,
+                    status: 'rascunho',
+                    total_obras: payload.total_obras,
+                    criado_em: '2026-06-29T12:00:00.000Z',
+                  },
+                  error: null,
+                }),
+              })),
+            }
+          }),
+        }
+      }
+
+      if (table === 'exportacoes_logs') {
+        return {
+          insert: vi.fn(async (payload: MockInsertRecord) => {
+            exportacaoLogs.push(payload)
+            return { error: null }
+          }),
+        }
+      }
+
+      if (table === 'obras') {
+        return {
+          select: vi.fn(() => ({
+            in: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                is: vi.fn().mockResolvedValue({
+                  data: [],
+                  error: null,
+                }),
+              })),
+            })),
+          })),
+        }
+      }
+
+      if (table === 'exportacoes_obras') {
+        return {
+          insert: vi.fn(async () => ({ error: null })),
+        }
+      }
+
+      throw new Error(`Tabela mock não tratada: ${table}`)
+    }),
+  }
+
+  return { client, exportacaoInserts, exportacaoLogs }
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
 function makeObra(id: string, codigo: string, titulo: string, iswc: string): Obra {
   const now = new Date().toISOString()
@@ -286,5 +397,66 @@ describe('exportações CWR — fluxo real mínimo', () => {
       { writer_ip: '5', publisher_ip: 'ED01', publisher_nome: 'EDI MUSIC EDITORA LTDA' },
       { writer_ip: '26', publisher_ip: 'ED01', publisher_nome: 'EDI MUSIC EDITORA LTDA' },
     ])
+  })
+
+  it('usa CWR 2.1 por padrão quando o lote é criado sem versão explícita', async () => {
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabase = makeSupabaseMock()
+    vi.mocked(createClient).mockReturnValue(supabase.client as never)
+
+    const response = await createExportacao(makeRequest({
+      destino: 'cwr',
+      formato: 'txt',
+      obra_ids: [],
+    }))
+
+    expect(response.status).toBe(201)
+
+    const payload = await response.json()
+    expect(payload.data.cwr_version).toBe(DEFAULT_CWR_VERSION)
+    expect(supabase.exportacaoInserts.at(-1)?.cwr_version).toBe(DEFAULT_CWR_VERSION)
+    expect(supabase.exportacaoLogs.at(-1)?.dados_json).toEqual({
+      destino: 'cwr',
+      formato: 'txt',
+      cwr_version: DEFAULT_CWR_VERSION,
+      obra_ids: [],
+    })
+  })
+
+  it('persiste CWR 2.2 quando a versão é informada na criação do lote', async () => {
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabase = makeSupabaseMock()
+    vi.mocked(createClient).mockReturnValue(supabase.client as never)
+
+    const response = await createExportacao(makeRequest({
+      destino: 'cwr',
+      formato: 'txt',
+      cwr_version: '2.2',
+      obra_ids: [],
+    }))
+
+    expect(response.status).toBe(201)
+
+    const payload = await response.json()
+    expect(payload.data.cwr_version).toBe('2.2')
+    expect(supabase.exportacaoInserts.at(-1)?.cwr_version).toBe('2.2')
+  })
+
+  it('rejeita versão CWR inválida na criação do lote', async () => {
+    const { createClient } = await import('@supabase/supabase-js')
+    const supabase = makeSupabaseMock()
+    vi.mocked(createClient).mockReturnValue(supabase.client as never)
+
+    const response = await createExportacao(makeRequest({
+      destino: 'cwr',
+      formato: 'txt',
+      cwr_version: '3.0',
+      obra_ids: [],
+    }))
+
+    expect(response.status).toBe(400)
+
+    const payload = await response.json()
+    expect(payload.error).toContain('Vers')
   })
 })

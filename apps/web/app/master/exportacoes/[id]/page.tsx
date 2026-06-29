@@ -9,6 +9,7 @@ import {
   RefreshCw, Play, ChevronLeft, FileText, Music, Clock,
 } from 'lucide-react'
 import { authFetch } from '@/lib/supabase/client'
+import { DEFAULT_CWR_VERSION } from '@/lib/cwr-versions'
 
 const STATUS_EXP_LABELS: Record<string, string> = {
   rascunho:   'Rascunho',
@@ -29,7 +30,7 @@ const STATUS_EXP_COLORS: Record<string, string> = {
 }
 
 const DESTINO_LABELS: Record<string, string> = {
-  cwr:        'CWR v2.2',
+  cwr:        'CWR',
   socinpro:   'Socinpro',
   backoffice: 'BackOffice',
 }
@@ -64,6 +65,7 @@ export default function ExportacaoDetailPage() {
       const exp = raw.exportacao ?? raw
       setExp({
         ...exp,
+        cwr_version: raw.cwr_version ?? exp.cwr_version ?? DEFAULT_CWR_VERSION,
         obras:   raw.obras   ?? [],
         logs:    (raw.logs ?? []).map((l: any) => ({
           ...l,
@@ -191,6 +193,10 @@ export default function ExportacaoDetailPage() {
           <div>
             <p className="text-[11px] text-white/30 mb-1">Formato</p>
             <p className="text-sm font-mono text-white/70 uppercase">{exp.formato ?? '—'}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-white/30 mb-1">Versão CWR</p>
+            <p className="text-sm font-mono text-white/70">{exp.cwr_version ?? DEFAULT_CWR_VERSION}</p>
           </div>
           <div>
             <p className="text-[11px] text-white/30 mb-1">Criado em</p>

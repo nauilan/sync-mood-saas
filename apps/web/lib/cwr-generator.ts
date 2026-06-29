@@ -55,18 +55,21 @@ function toIpiBaseNo(value: string | null | undefined): string {
   return String(value ?? '').replace(/\D/g, '').slice(-13)
 }
 
-const CWR_VERSION = '02.10'
+const CWR_VERSION_MAP = {
+  '2.1': '02.10',
+  '2.2': '02.20',
+} as const
 const SENDER_ID = 'SYNCMD'
 const SENDER_TYPE = 'PB'
 const SOCIETY_CODE = 'BRA'
 const TERRITORY_CODE = '0076'
 
-function buildHDR(senderName: string): string {
+function buildHDR(senderName: string, version: keyof typeof CWR_VERSION_MAP): string {
   const record_type = 'HDR'
   const sender_type = pad(SENDER_TYPE, 3)
   const sender_id = pad(SENDER_ID, 9)
   const sender_name = pad(senderName, 45)
-  const edi_version = pad(CWR_VERSION, 5)
+  const edi_version = pad(CWR_VERSION_MAP[version], 5)
   const creation_dt = today()
   const creation_tm = '000000'
   const tx_ref = padLeft(_seqNo + 1, 14)
@@ -75,13 +78,13 @@ function buildHDR(senderName: string): string {
   return `${record_type}${sender_type}${sender_id}${sender_name}${edi_version}${creation_dt}${creation_tm}${tx_ref}${char_set}`
 }
 
-function buildGRH(groupId: number, transactionType: 'NWR' | 'REV'): string {
+function buildGRH(groupId: number, transactionType: 'NWR' | 'REV', version: keyof typeof CWR_VERSION_MAP): string {
   const record_type = 'GRH'
   const tx_type = pad(transactionType, 3)
   const grp_id = padLeft(groupId, 5)
-  const version = pad(CWR_VERSION, 5)
+  const ediVersion = pad(CWR_VERSION_MAP[version], 5)
   const batch_req = padLeft(0, 10)
-  return `${record_type}${tx_type}${grp_id}${version}${batch_req}`
+  return `${record_type}${tx_type}${grp_id}${ediVersion}${batch_req}`
 }
 
 function buildNWR(obra: Obra): string {
@@ -320,6 +323,7 @@ function buildTRL(groupCount: number, txCount: number, recordCount: number): str
 export interface CWRGeneratorOptions {
   format: 'CWR' | 'SWI'
   senderName: string
+  version?: '2.1' | '2.2'
   obras: Array<{
     obra: Obra
     links: ObraLink[]
@@ -342,7 +346,7 @@ export interface CWRGeneratorResult {
 export function generateCWR(opts: CWRGeneratorOptions): CWRGeneratorResult {
   resetSeq()
   const lines: string[] = []
-  const now = new Date()
+  const version = opts.version ?? '2.1'
 
   const obrasFiltradas = opts.obras.filter(item =>
     item.links.some(l => (l.titulares?.length ?? 0) > 0)
@@ -352,8 +356,8 @@ export function generateCWR(opts: CWRGeneratorOptions): CWRGeneratorResult {
     return generateSWI(opts, obrasFiltradas)
   }
 
-  lines.push(buildHDR(opts.senderName))
-  lines.push(buildGRH(1, 'NWR'))
+  lines.push(buildHDR(opts.senderName, version))
+  lines.push(buildGRH(1, 'NWR', version))
 
   let txCount = 0
   let recordCount = 2
