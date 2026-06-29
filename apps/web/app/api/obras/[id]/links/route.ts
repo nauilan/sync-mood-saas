@@ -89,7 +89,11 @@ export async function GET(
     titulares: (l.obras_links_titulares ?? []).map((t: any) => {
       const fn = (t.funcao_no_link ?? '').toUpperCase()
       const papel = fn ? (CWR_ROLE_MAP[fn] ?? t.papel ?? 'autor') : (t.papel ?? 'autor')
-      return { ...t, papel }
+      return {
+        ...t,
+        link_id: t.obra_link_id ?? l.id,
+        papel,
+      }
     }),
     obras_links_titulares: undefined,
   }))

@@ -2,6 +2,35 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { logAudit } from '@/lib/audit'
 
+function mapPapelToFuncaoLink(papel: unknown): string {
+  const normalized = String(papel ?? '').trim().toLowerCase()
+  if (!normalized) return 'CA'
+
+  const map: Record<string, string> = {
+    autor: 'A',
+    autores: 'A',
+    compositor: 'CA',
+    compositores: 'CA',
+    compositor_letrista: 'CA',
+    'compositor-letrista': 'CA',
+    coautor: 'CA',
+    versionista: 'V',
+    adaptador: 'AD',
+    editora_original: 'E',
+    editora: 'E',
+    subeditora: 'SE',
+    administradora: 'AM',
+    interprete_referencia: 'I',
+    interprete: 'I',
+  }
+
+  const upper = normalized.toUpperCase()
+  const enumValues = new Set(['CA', 'V', 'SA', 'E', 'AM', 'SE', 'C', 'CE', 'A', 'I', 'M', 'T', 'AD', 'H', 'OWR'])
+  if (enumValues.has(upper)) return upper
+
+  return map[normalized] ?? 'CA'
+}
+
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
   const key = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim()
@@ -222,7 +251,9 @@ export async function POST(req: NextRequest) {
         .select('id')
         .single()
 
-      if (linkErr || !linkRow) continue
+      if (linkErr || !linkRow) {
+        return NextResponse.json({ error: linkErr?.message ?? 'Falha ao criar link da obra' }, { status: 500 })
+      }
 
       const titulares = Array.isArray(link.titulares) ? link.titulares : []
       if (titulares.length > 0) {
@@ -233,15 +264,22 @@ export async function POST(req: NextRequest) {
           titular_id: t.titular_id ?? null,
           nome: t.nome ?? '',
           papel: t.papel ?? 'compositor',
-          funcao_no_link: t.papel ?? 'compositor',
-          percentual_exec_publica: t.percentual ?? 0,
-          percentual_fonomecanico: t.percentual ?? 0,
-          percentual_sincronizacao: t.percentual ?? 0,
+          funcao_no_link: mapPapelToFuncaoLink(t.papel),
+          percentual_exec_publica: t.percentual_exec_publica ?? t.percentual ?? 0,
+          percentual_fonomecanico: t.percentual_fonomecanico ?? t.percentual ?? 0,
+          percentual_sincronizacao: t.percentual_sincronizacao ?? t.percentual ?? 0,
           controlado: t.controlado ?? false,
           ipi: t.ipi || null,
           cae: t.ipi || null,
+          editora_id: t.editora_id ?? null,
+          editora_original_id: t.editora_original_id ?? t.editora_id ?? null,
+          editora_administradora_id: t.editora_administradora_id ?? null,
+          status_controle: t.controlado ? 'controlado' : 'nao_controlado',
         }))
-        await sb.from('obras_links_titulares').insert(titRows)
+        const { error: titularesErr } = await sb.from('obras_links_titulares').insert(titRows)
+        if (titularesErr) {
+          return NextResponse.json({ error: titularesErr.message }, { status: 500 })
+        }
       }
     }
   }
