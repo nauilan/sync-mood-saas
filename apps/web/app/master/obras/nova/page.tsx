@@ -22,7 +22,7 @@ const STEPS = [
   { label: 'Titulo & Genero', icon: Music2 },
   { label: 'Links & Participacao', icon: Link2 },
   { label: 'Fonogramas', icon: Mic2 },
-  { label: 'Letra', icon: AlignLeft },
+  { label: 'Texto Poético', icon: AlignLeft },
   { label: 'Contrato Assinado', icon: FileCheck2 },
   { label: 'Revisao', icon: CheckCircle2 },
 ]
@@ -291,8 +291,6 @@ export default function NovaObraPage() {
   const [idioma, setIdioma] = useState('Portugues')
   const [genero, setGenero] = useState('')
   const [anoSriacao, setAno] = useState('')
-  const [duracao, setDuracao] = useState('')
-
   // Contrato de origem (selecionado no step 0 para importar dados)
   const [contratoOrigemId, setContratoOrigemId] = useState(() => searchParams?.get('contrato_id') ?? '')
   const [importado, setImportado] = useState(false)
@@ -575,7 +573,6 @@ export default function NovaObraPage() {
         idioma,
         genero: genero || null,
         ano_criacao: anoSriacao || null,
-        duracao_segundos: duracao ? parseInt(duracao) : null,
         letra: letra || null,
         // Regra: com contrato de origem → pré-cadastro; sem contrato → catálogo ativo direto
         status_catalogo: contratoOrigemId ? 'pre_cadastro' : 'catalogo_ativo',
@@ -598,6 +595,107 @@ export default function NovaObraPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  function exportarPDF() {
+    const popup = window.open('', '_blank', 'width=960,height=720')
+    if (!popup) return
+
+    const escapeHtml = (value: string) =>
+      value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+
+    const linksHtml = links.map((link) => {
+      const titularesHtml = link.titulares.map((titular) => `
+        <tr>
+          <td>${escapeHtml(titular.nome || '—')}</td>
+          <td>${escapeHtml(PAPEL_TITULAR_LABELS[titular.papel] ?? titular.papel)}</td>
+          <td class="num">${escapeHtml(formatarPercentual(titular.percentual || 0))}</td>
+          <td>${titular.controlado ? 'Controlado' : 'Não controlado'}</td>
+        </tr>
+      `).join('')
+
+      const descricao = link.descricao?.trim() ? ` — ${escapeHtml(link.descricao)}` : ''
+      return `
+        <section class="link">
+          <h3>Link ${link.ordem}${descricao}</h3>
+          <p class="meta">Categoria: ${link.controlado ? 'Controlado' : 'Não controlado'} · Total do link: ${escapeHtml(formatarPercentual(link.titulares.reduce((sum, titular) => sum + (titular.percentual || 0), 0)))}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Titular</th>
+                <th>Categoria</th>
+                <th>Percentual</th>
+                <th>Controle</th>
+              </tr>
+            </thead>
+            <tbody>${titularesHtml}</tbody>
+          </table>
+        </section>
+      `
+    }).join('')
+
+    popup.document.open()
+    popup.document.write(`
+      <html>
+        <head>
+          <title>Prévia da Obra — ${escapeHtml(titulo || 'Sem título')}</title>
+          <style>
+            @page { margin: 18mm; }
+            body { font-family: Arial, sans-serif; color: #111827; background: #ffffff; margin: 0; }
+            .page { padding: 24px; }
+            h1 { margin: 0 0 8px; font-size: 24px; }
+            h2 { margin: 24px 0 10px; font-size: 16px; }
+            h3 { margin: 0 0 8px; font-size: 14px; }
+            p { margin: 0 0 8px; line-height: 1.5; }
+            .muted { color: #6b7280; }
+            .summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; margin: 18px 0 24px; }
+            .summary-item { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 12px; }
+            .summary-item strong { display: block; font-size: 11px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px; }
+            .link { margin: 18px 0; padding: 14px; border: 1px solid #e5e7eb; border-radius: 10px; }
+            .meta { color: #4b5563; font-size: 12px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th, td { border-bottom: 1px solid #e5e7eb; padding: 8px 6px; text-align: left; font-size: 12px; }
+            th { color: #374151; font-size: 11px; text-transform: uppercase; }
+            td.num { font-variant-numeric: tabular-nums; }
+            .footer { margin-top: 28px; border-top: 1px solid #e5e7eb; padding-top: 12px; color: #6b7280; font-size: 11px; }
+            @media print {
+              .page { padding: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="page">
+            <h1>${escapeHtml(titulo || 'Sem título')}</h1>
+            <p class="muted">${escapeHtml(subtitulo || 'Sem subtítulo')}</p>
+            <p class="muted">Título alternativo: ${escapeHtml(tituloAlternativo || '—')}</p>
+
+            <div class="summary">
+              <div class="summary-item"><strong>Idioma</strong>${escapeHtml(idioma || '—')}</div>
+              <div class="summary-item"><strong>Gênero</strong>${escapeHtml(genero || '—')}</div>
+              <div class="summary-item"><strong>Ano de Criação</strong>${escapeHtml(anoSriacao || '—')}</div>
+              <div class="summary-item"><strong>Fonogramas</strong>${fonogramas.length}</div>
+              <div class="summary-item"><strong>Percentual Total</strong>${escapeHtml(formatarPercentual(somaPct))}</div>
+              <div class="summary-item"><strong>Percentual Controlado</strong>${escapeHtml(formatarPercentual(pcControlado))}</div>
+            </div>
+
+            <h2>Links e Participações</h2>
+            ${linksHtml}
+
+            <div class="footer">
+              Prévia gerada pelo Sync Mood para revisão editorial. Percentuais, categorias e vínculos devem ser conferidos antes do salvamento definitivo.
+            </div>
+          </div>
+        </body>
+      </html>
+    `)
+    popup.document.close()
+    popup.focus()
+    popup.print()
   }
 
   // ── Tela de sucesso ─────────────────────────────────────────────────────────
@@ -849,11 +947,6 @@ export default function NovaObraPage() {
               <label className="text-xs font-medium text-white/50">Ano de Criação</label>
               <input type="number" value={anoSriacao} onChange={e => setAno(e.target.value)}
                 placeholder="Ex: 2024" min="1900" max="2099" className={inputCls} />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-white/50">Duração (segundos)</label>
-              <input type="number" value={duracao} onChange={e => setDuracao(e.target.value)}
-                placeholder="Ex: 214" className={inputCls} />
             </div>
           </div>
         </div>
@@ -1113,7 +1206,7 @@ export default function NovaObraPage() {
         <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6 space-y-4">
           <div className="flex items-center gap-2 mb-1">
             <AlignLeft className="w-4 h-4 text-amber-400" />
-            <h2 className="text-sm font-semibold text-white">Texto Poético (Letra)</h2>
+            <h2 className="text-sm font-semibold text-white">Texto Poético</h2>
             <span className="text-xs text-white/30 ml-auto">Opcional</span>
           </div>
 
@@ -1123,7 +1216,7 @@ export default function NovaObraPage() {
               <Sparkles className="w-5 h-5 text-violet-400 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-white mb-0.5">
-                  {extracting ? 'IA extraindo letra do contrato...' : extractDone ? 'Letra extraída pelo contrato' : 'Extrair letra do contrato via IA'}
+                  {extracting ? 'IA extraindo texto poético do contrato...' : extractDone ? 'Texto poético extraído pelo contrato' : 'Extrair texto poético do contrato via IA'}
                 </p>
                 <p className="text-xs text-white/50">
                   Contrato anexado: <span className="text-emerald-400 font-medium">{contratoFile.name}</span>
@@ -1148,7 +1241,7 @@ export default function NovaObraPage() {
               <div>
                 <p className="text-sm font-semibold text-amber-400 mb-0.5">Contrato ainda não anexado</p>
                 <p className="text-xs text-white/50">
-                  A letra será extraída automaticamente pela IA ao fazer o upload do contrato PDF no próximo passo. Você também pode inserir manualmente abaixo.
+                  O texto poético será extraído automaticamente pela IA ao fazer o upload do contrato PDF no próximo passo. Você também pode inserir manualmente abaixo.
                 </p>
               </div>
             </div>
@@ -1165,7 +1258,7 @@ export default function NovaObraPage() {
             value={letra}
             onChange={e => { setLetra(e.target.value); setExtractDone(false) }}
             rows={14}
-            placeholder="A IA preencherá este campo ao ler o contrato. Você também pode digitar ou colar a letra manualmente..."
+            placeholder="A IA preencherá este campo ao ler o contrato. Você também pode digitar ou colar o texto poético manualmente..."
             className={inputCls + ' h-auto py-3 font-mono text-sm resize-y'}
           />
           {letra.length > 0 && (
@@ -1308,7 +1401,16 @@ export default function NovaObraPage() {
           </div>
 
           <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-white">Resumo da Obra</h3>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-white">Resumo da Obra</h3>
+              <button
+                type="button"
+                onClick={exportarPDF}
+                className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/5 border border-white/[0.08] text-xs text-white/70 hover:text-white hover:border-white/20 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" /> Exportar PDF
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-y-3 gap-x-6">
               {[
                 { label: 'Título', value: titulo || '—' },
