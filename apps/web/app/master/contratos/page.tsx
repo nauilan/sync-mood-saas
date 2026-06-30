@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   FileText, Plus, Search, Filter, CheckCircle2, Clock,
   AlertTriangle, ChevronRight, Building2, User,
-  Bell, ShieldAlert, DollarSign, Calendar, Download, Trash2, Loader2,
+  Bell, ShieldAlert, DollarSign, Calendar, Download, Trash2, Loader2, XCircle, Check,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import { KpiCard } from '@/components/ui/kpi-card'
@@ -66,6 +66,10 @@ export default function ContratosPage() {
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteErro, setDeleteErro] = useState('')
+  const [showPendencias, setShowPendencias] = useState(false)
+  const [rejectId, setRejectId] = useState<string | null>(null)
+  const [rejectMotivo, setRejectMotivo] = useState('')
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   useEffect(() => {
     authFetch('/api/contratos?per_page=100')
@@ -150,6 +154,45 @@ export default function ContratosPage() {
     }
   }
 
+  const pendencias = useMemo(() => contratosApi.filter((c: any) => c.status === 'aguardando_validacao_admin'), [contratosApi])
+
+  async function recarregarContratos() {
+    const r = await authFetch('/api/contratos?per_page=100')
+    const json = await r.json()
+    if (json.data) { setContratosApi(json.data); if (json.kpis) setApiKpis(json.kpis) }
+  }
+
+  async function handleAprovar(id: string) {
+    setActionLoading(id)
+    try {
+      await authFetch(`/api/contratos/${id}/aprovar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'aprovar_admin' }),
+      })
+      await recarregarContratos()
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  async function handleRejeitar() {
+    if (!rejectId || !rejectMotivo.trim()) return
+    setActionLoading(rejectId)
+    try {
+      await authFetch(`/api/contratos/${rejectId}/aprovar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rejeitar_admin', motivo: rejectMotivo.trim() }),
+      })
+      setRejectId(null)
+      setRejectMotivo('')
+      await recarregarContratos()
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   const editoras = useMemo(() => {
     const nomes = [...new Set(contratosApi.map((c: any) => c.editora_nome).filter(Boolean))]
     return ['todos', ...nomes]
@@ -169,6 +212,7 @@ export default function ContratosPage() {
   const fonteContratos = contratosApi
 
   const contratos = useMemo(() => {
+    if (showPendencias) return pendencias
     return fonteContratos.filter((c: any) => {
       if (filterTipo !== 'todos' && c.tipo !== filterTipo) return false
       if (filterStatus !== 'todos' && c.status !== filterStatus) return false
@@ -183,7 +227,7 @@ export default function ContratosPage() {
       }
       return true
     })
-  }, [search, filterTipo, filterStatus, filterEditora, fonteContratos])
+  }, [search, filterTipo, filterStatus, filterEditora, fonteContratos, showPendencias, pendencias])
 
   const confirmItem = contratosApi.find(c => c.id === confirmId)
 
@@ -236,6 +280,48 @@ export default function ContratosPage() {
                 {deleting
                   ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Apagando...</>
                   : <><Trash2 className="w-3.5 h-3.5" /> Apagar tudo</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de rejeição */}
+      {rejectId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#0d1526] border border-rose-500/30 rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-9 h-9 rounded-lg bg-rose-500/15 flex items-center justify-center shrink-0">
+                <XCircle className="w-4 h-4 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white mb-1">Rejeitar contrato</h3>
+                <p className="text-xs text-white/50">{contratosApi.find(c => c.id === rejectId)?.numero ?? ''}</p>
+              </div>
+            </div>
+            <p className="text-xs text-white/60 mb-2">Informe o motivo da rejeição:</p>
+            <textarea
+              value={rejectMotivo}
+              onChange={e => setRejectMotivo(e.target.value)}
+              rows={3}
+              placeholder="Descreva o motivo da rejeição..."
+              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-xs text-white placeholder:text-white/30 outline-none focus:border-rose-500/40 resize-none mb-4"
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setRejectId(null); setRejectMotivo('') }}
+                disabled={!!actionLoading}
+                className="px-4 py-2 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRejeitar}
+                disabled={!rejectMotivo.trim() || !!actionLoading}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+              >
+                {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                Confirmar Rejeição
               </button>
             </div>
           </div>
@@ -310,6 +396,30 @@ export default function ContratosPage() {
           icon={<Calendar className="w-4 h-4 text-violet-400" />}
         />
       </div>
+
+      {/* Banner pendências de validação */}
+      {pendencias.length > 0 && (
+        <button
+          onClick={() => setShowPendencias(v => !v)}
+          className={`w-full flex items-start gap-3 rounded-xl p-4 border transition-colors text-left ${showPendencias ? 'bg-amber-500/20 border-amber-500/40' : 'bg-amber-500/10 border-amber-500/20 hover:bg-amber-500/15'}`}
+        >
+          <ShieldAlert className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-300 mb-0.5">
+              Pendências de Validação
+              <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                {pendencias.length}
+              </span>
+            </p>
+            <p className="text-xs text-amber-400/80">
+              {showPendencias ? 'Clique para voltar à lista completa.' : `${pendencias.length} contrato(s) aguardando sua aprovação como administrador.`}
+            </p>
+          </div>
+          {showPendencias && (
+            <span className="text-xs text-amber-400 font-semibold self-center">Ativo</span>
+          )}
+        </button>
+      )}
 
       {/* Filtros */}
       <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4">
@@ -438,13 +548,32 @@ export default function ContratosPage() {
                   </div>
 
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={e => { e.preventDefault(); setConfirmId(c.id); setDeleteErro('') }}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 hover:bg-rose-500/15 text-white/20 hover:text-rose-400 transition-all"
-                      title="Apagar contrato e todas as obras"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {showPendencias ? (
+                      <>
+                        <button
+                          onClick={e => { e.preventDefault(); setRejectId(c.id); setRejectMotivo('') }}
+                          disabled={actionLoading === c.id}
+                          className="flex items-center gap-1 h-7 px-2.5 rounded-lg border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 text-xs font-semibold transition-colors disabled:opacity-50"
+                        >
+                          <XCircle className="w-3.5 h-3.5" /> Rejeitar
+                        </button>
+                        <button
+                          onClick={e => { e.preventDefault(); handleAprovar(c.id) }}
+                          disabled={actionLoading === c.id}
+                          className="flex items-center gap-1 h-7 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors disabled:opacity-50"
+                        >
+                          {actionLoading === c.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Aprovar
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={e => { e.preventDefault(); setConfirmId(c.id); setDeleteErro('') }}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 hover:bg-rose-500/15 text-white/20 hover:text-rose-400 transition-all"
+                        title="Apagar contrato e todas as obras"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <ChevronRight className="w-4 h-4 text-white/20 group-hover:text-violet-400 transition-colors flex-shrink-0" />
                   </div>
                 </div>
