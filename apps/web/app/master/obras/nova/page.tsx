@@ -515,6 +515,37 @@ export default function NovaObraPage() {
     }
   }
 
+  async function processarContratoUpload(file: File) {
+    setContratoFile(file)
+    setExtracting(true)
+    setExtractDone(false)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await authFetch('/api/contratos/extrair', { method: 'POST', body: formData })
+      const json = await res.json()
+      if (!res.ok) {
+        setExtracting(false)
+        console.error('Erro ao extrair contrato:', json.error)
+        return
+      }
+      const dados = json.data
+      // Preencher campos com dados extraídos
+      if (dados.obras && dados.obras.length > 0) {
+        const primeira = dados.obras[0]
+        setTitulo(primeira.titulo || '')
+        setSubtitulo(primeira.subtitulo || '')
+        setTituloAlternativo(primeira.titulo_alternativo || '')
+        setLetra(primeira.texto_poetico || '')
+      }
+      setExtractDone(true)
+    } catch (err) {
+      console.error('Erro ao processar contrato:', err)
+    } finally {
+      setExtracting(false)
+    }
+  }
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
@@ -804,12 +835,27 @@ export default function NovaObraPage() {
             </div>
             {modoContrato === 'upload' && (
               <div
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => !extracting && fileInputRef.current?.click()}
                 className="border-2 border-dashed border-white/10 rounded-xl p-6 text-center cursor-pointer hover:border-violet-500/40 transition-colors"
               >
                 <Upload className="w-6 h-6 text-white/30 mx-auto mb-2" />
                 <p className="text-xs text-white/50">{contratoFile ? contratoFile.name : 'Clique para selecionar o PDF do contrato assinado'}</p>
-                <input ref={fileInputRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setContratoFile(f) }} />
+                <input ref={fileInputRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) processarContratoUpload(f) }} />
+              </div>
+            )}
+            {modoContrato === 'upload' && extracting && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-500/10 border border-violet-500/20">
+                <svg className="w-4 h-4 text-violet-400 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                <p className="text-xs text-violet-300">Extraindo dados do contrato via IA...</p>
+              </div>
+            )}
+            {modoContrato === 'upload' && extractDone && !extracting && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <p className="text-xs text-emerald-400">Dados extraídos com sucesso</p>
               </div>
             )}
             {modoContrato === 'existente' && (
