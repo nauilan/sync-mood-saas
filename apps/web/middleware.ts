@@ -5,7 +5,12 @@ import { NextResponse, type NextRequest } from 'next/server'
 const PROTECTED = ['/master', '/portal', '/editora', '/titular', '/backoffice', '/admin']
 
 // Rotas de API protegidas — exigem sessão (exceto as listadas em API_PUBLIC)
-const API_PUBLIC = ['/api/auth/login']
+const API_PUBLIC = [
+  '/api/auth/login',       // login — sem sessão por definição
+  '/api/d4sign/webhook',   // webhook D4Sign — servidor externo, sem cookie
+  '/api/health',           // health check — Vercel/monitoramento
+  '/api/bootstrap-tenant', // onboarding — primeiro acesso
+]
 
 // Rotas de auth — redireciona para dashboard se já logado
 const AUTH_ROUTES = ['/auth/login']
