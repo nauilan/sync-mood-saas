@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   FileText, Plus, Search, Filter, CheckCircle2, Clock,
   AlertTriangle, ChevronRight, Building2, User,
-  Bell, ShieldAlert, DollarSign, Calendar, Download, Trash2, Loader2, XCircle, Check,
+  Bell, ShieldAlert, DollarSign, Calendar, Download, Trash2, Loader2, XCircle, Check, Upload,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import { KpiCard } from '@/components/ui/kpi-card'
@@ -70,6 +70,10 @@ export default function ContratosPage() {
   const [rejectId, setRejectId] = useState<string | null>(null)
   const [rejectMotivo, setRejectMotivo] = useState('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [uploadManualId, setUploadManualId] = useState<string | null>(null)
+  const [uploadManualFile, setUploadManualFile] = useState<File | null>(null)
+  const [uploadManualLoading, setUploadManualLoading] = useState(false)
+  const [uploadManualErro, setUploadManualErro] = useState('')
 
   useEffect(() => {
     authFetch('/api/contratos?per_page=100')
@@ -124,6 +128,29 @@ export default function ContratosPage() {
     a.download = `${c.numero}_${modo}.txt`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  async function handleAssinaturaManual() {
+    if (!uploadManualId || !uploadManualFile) return
+    setUploadManualLoading(true)
+    setUploadManualErro('')
+    try {
+      const formData = new FormData()
+      formData.append('file', uploadManualFile)
+      const res = await authFetch(`/api/contratos/${uploadManualId}/assinatura-manual`, {
+        method: 'POST',
+        body: formData,
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setUploadManualErro(json.error ?? `Erro ${res.status}`); return }
+      setUploadManualId(null)
+      setUploadManualFile(null)
+      await recarregarContratos()
+    } catch (e: unknown) {
+      setUploadManualErro(e instanceof Error ? e.message : 'Falha ao enviar arquivo.')
+    } finally {
+      setUploadManualLoading(false)
+    }
   }
 
   async function marcarAssinado(id: string) {
@@ -322,6 +349,60 @@ export default function ContratosPage() {
               >
                 {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
                 Confirmar Rejeição
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de upload de assinatura manual */}
+      {uploadManualId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#0d1526] border border-blue-500/30 rounded-xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-9 h-9 rounded-lg bg-blue-500/15 flex items-center justify-center shrink-0">
+                <Upload className="w-4 h-4 text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white mb-1">Assinatura manual</h3>
+                <p className="text-xs text-white/50">{contratosApi.find(c => c.id === uploadManualId)?.numero ?? ''}</p>
+              </div>
+            </div>
+            <p className="text-xs text-white/60 mb-3">Selecione o PDF assinado pelas partes:</p>
+            <label className="flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-xl p-6 cursor-pointer hover:border-blue-500/40 transition-colors mb-4">
+              <Upload className="w-6 h-6 text-white/30 mb-2" />
+              <span className="text-xs text-white/50">
+                {uploadManualFile ? uploadManualFile.name : 'Clique para selecionar o PDF'}
+              </span>
+              <input
+                type="file"
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) setUploadManualFile(f) }}
+              />
+            </label>
+            {uploadManualErro && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-300 text-xs mb-4">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                {uploadManualErro}
+              </div>
+            )}
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setUploadManualId(null); setUploadManualFile(null); setUploadManualErro('') }}
+                disabled={uploadManualLoading}
+                className="px-4 py-2 rounded-lg text-xs text-white/50 hover:text-white/80 hover:bg-white/5 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAssinaturaManual}
+                disabled={!uploadManualFile || uploadManualLoading}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold transition-colors"
+              >
+                {uploadManualLoading
+                  ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Enviando...</>
+                  : <><Upload className="w-3.5 h-3.5" /> Confirmar Upload</>}
               </button>
             </div>
           </div>
@@ -566,13 +647,24 @@ export default function ContratosPage() {
                         </button>
                       </>
                     ) : (
-                      <button
-                        onClick={e => { e.preventDefault(); setConfirmId(c.id); setDeleteErro('') }}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 hover:bg-rose-500/15 text-white/20 hover:text-rose-400 transition-all"
-                        title="Apagar contrato e todas as obras"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <>
+                        {(c.status === 'rascunho' || c.status === 'aguardando_assinatura') && (
+                          <button
+                            onClick={e => { e.preventDefault(); setUploadManualId(c.id); setUploadManualFile(null); setUploadManualErro('') }}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 hover:bg-blue-500/15 text-white/20 hover:text-blue-400 transition-all"
+                            title="Upload assinatura manual"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={e => { e.preventDefault(); setConfirmId(c.id); setDeleteErro('') }}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 hover:bg-rose-500/15 text-white/20 hover:text-rose-400 transition-all"
+                          title="Apagar contrato e todas as obras"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
                     )}
                     <ChevronRight className="w-4 h-4 text-white/20 group-hover:text-violet-400 transition-colors flex-shrink-0" />
                   </div>
