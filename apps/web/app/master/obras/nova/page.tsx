@@ -652,12 +652,53 @@ export default function NovaObraPage() {
     .filter(l => l.controlado)
     .reduce((s, l) => s + (l.percentual_controlado || 0), 0)
 
+  // ── Verificar duplicata / homônima ─────────────────────────────────────────
+
+  async function verificarDuplicataHomonima(): Promise<{ bloqueado: boolean; homonima: boolean }> {
+    try {
+      const res = await authFetch(`/api/obras?titulo_similar=${encodeURIComponent(titulo.trim())}&per_page=50`)
+      if (!res.ok) return { bloqueado: false, homonima: false }
+      const json = await res.json()
+      const todas: unknown[] = json.data ?? json.obras ?? []
+      const tituloNorm = titulo.trim().toLowerCase()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const obrasEncontradas = todas.filter((o: any) => (o.titulo ?? '').trim().toLowerCase() === tituloNorm)
+      if (obrasEncontradas.length === 0) return { bloqueado: false, homonima: false }
+      const nomesAtuais = links
+        .flatMap(l => l.titulares.map(t => t.nome.trim().toLowerCase()))
+        .filter(Boolean)
+      for (const obra of obrasEncontradas) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const nomesObra: string[] = ((obra as any)._links ?? [])
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .flatMap((l: any) => (l.titulares ?? []).map((t: any) => (t.nome ?? '').trim().toLowerCase()))
+          .filter(Boolean)
+        if (nomesObra.length === 0) continue
+        const todosIguais =
+          nomesAtuais.length === nomesObra.length &&
+          nomesAtuais.every(n => nomesObra.includes(n))
+        const algumIgual = nomesAtuais.some(n => nomesObra.includes(n))
+        if (todosIguais) return { bloqueado: true, homonima: false }
+        if (algumIgual) return { bloqueado: false, homonima: true }
+      }
+      return { bloqueado: false, homonima: false }
+    } catch {
+      return { bloqueado: false, homonima: false }
+    }
+  }
+
   // ── Salvar obra ─────────────────────────────────────────────────────────────
 
   async function salvarObra() {
     if (saving) return
     setSaving(true)
     try {
+      const checagem = await verificarDuplicataHomonima()
+      if (checagem.bloqueado) {
+        alert('Obra já cadastrada no catálogo com os mesmos autores.')
+        setSaving(false)
+        return
+      }
       const payload = {
         titulo,
         titulo_alternativo: tituloAlternativo || null,
@@ -667,6 +708,7 @@ export default function NovaObraPage() {
         letra: letra || null,
         // Regra: com contrato de origem → pré-cadastro; sem contrato → catálogo ativo direto
         status_catalogo: contratoOrigemId ? 'pre_cadastro' : 'catalogo_ativo',
+        homonima: checagem.homonima,
         links,
         fonogramas,
         // vínculo com contrato de origem — obrigatório para rastreabilidade
