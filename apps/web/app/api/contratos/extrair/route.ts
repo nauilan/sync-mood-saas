@@ -16,7 +16,10 @@ const MODEL = 'claude-haiku-4-5-20251001'
 const SYSTEM_PROMPT =
   'Você é um assistente especializado em contratos de cessão de direitos autorais musicais brasileiros. ' +
   'Leia o contrato e extraia as informações em JSON. ' +
-  'Responda APENAS com o JSON, sem texto adicional, sem markdown, sem backticks.'
+  'Responda APENAS com o JSON, sem texto adicional, sem markdown, sem backticks. ' +
+  'Leia atentamente a Cláusula Sexta (ou cláusula de percentuais) do contrato, que detalha os percentuais por tipo de direito separadamente para Brasil e Exterior. ' +
+  'Cada linha (a, b, c, d, e, f, g, h) representa um tipo de direito diferente. ' +
+  'Não generalize um único percentual — extraia cada tipo individualmente, mesmo que vários tenham o mesmo valor.'
 
 const USER_PROMPT = `Extraia do contrato as seguintes informações e retorne APENAS um JSON válido com esta estrutura exata:
 {
@@ -26,23 +29,24 @@ const USER_PROMPT = `Extraia do contrato as seguintes informações e retorne AP
   "data_contrato": "data no formato YYYY-MM-DD",
   "editora_nome": "nome da editora signatária",
   "percentuais_brasil": {
-    "reproducao_grafica": {"autor": 0, "editora": 0},
-    "fonecanico": {"autor": 0, "editora": 0},
-    "audiovisual": {"autor": 0, "editora": 0},
-    "publicidade": {"autor": 0, "editora": 0},
-    "digital": {"autor": 0, "editora": 0},
-    "base_dados": {"autor": 0, "editora": 0},
-    "comunicacao_publico": {"autor": 0, "editora": 0},
-    "autorizacoes": {"autor": 0, "editora": 0}
+    "repr_grafica":          {"autor": 0, "editora": 0},
+    "repr_fonomecanica":     {"autor": 0, "editora": 0},
+    "inclusao_audiovisual":  {"autor": 0, "editora": 0},
+    "inclusao_publicitaria": {"autor": 0, "editora": 0},
+    "distribuicao_meios":    {"autor": 0, "editora": 0},
+    "inclusao_base_dados":   {"autor": 0, "editora": 0},
+    "comunicacao_publico":   {"autor": 0, "editora": 0},
+    "autorizacoes_onus":     {"autor": 0, "editora": 0}
   },
   "percentuais_exterior": {
-    "reproducao_grafica": {"autor": 0, "editora": 0},
-    "fonecanico": {"autor": 0, "editora": 0},
-    "audiovisual": {"autor": 0, "editora": 0},
-    "publicidade": {"autor": 0, "editora": 0},
-    "digital": {"autor": 0, "editora": 0},
-    "base_dados": {"autor": 0, "editora": 0},
-    "comunicacao_publico": {"autor": 0, "editora": 0}
+    "repr_grafica":          {"autor": 0, "editora": 0},
+    "repr_fonomecanica":     {"autor": 0, "editora": 0},
+    "inclusao_audiovisual":  {"autor": 0, "editora": 0},
+    "inclusao_publicitaria": {"autor": 0, "editora": 0},
+    "distribuicao_meios":    {"autor": 0, "editora": 0},
+    "inclusao_base_dados":   {"autor": 0, "editora": 0},
+    "comunicacao_publico":   {"autor": 0, "editora": 0},
+    "autorizacoes_onus":     {"autor": 0, "editora": 0}
   },
   "obras": [
     {
