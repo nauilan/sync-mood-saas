@@ -293,6 +293,7 @@ export default function NovaObraPage() {
   // Contrato de origem (selecionado no step 0 para importar dados)
   const [contratoOrigemId, setContratoOrigemId] = useState(() => searchParams?.get('contrato_id') ?? '')
   const [importado, setImportado] = useState(false)
+  const [modoContrato, setModoContrato] = useState<'upload' | 'existente'>('upload')
   const [contratos, setContratos] = useState<{ id: string; numero: string; tipo: string; status?: string; titulo_obra?: string }[]>([])
 
   useEffect(() => {
@@ -781,65 +782,50 @@ export default function NovaObraPage() {
             <h2 className="text-sm font-semibold text-white">Dados Básicos da Obra</h2>
           </div>
 
-          {/* ── Seletor de contrato de origem ── */}
+          {/* ── Contrato: upload ou vincular existente ── */}
           <div className="border border-violet-500/20 bg-violet-500/5 rounded-xl p-4 space-y-3">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-violet-400 shrink-0" />
-              <p className="text-sm font-semibold text-white">Vincular a Contrato Existente</p>
-              <span className="ml-auto text-xs text-white/30">Recomendado</span>
+              <p className="text-sm font-semibold text-white">Contrato de Cessão</p>
             </div>
-            <p className="text-xs text-white/50">
-              Selecione o contrato já assinado. Os dados do titular, editora, percentuais e vínculos serão importados automaticamente para o passo de Links & Participação.
-            </p>
             <div className="flex gap-2">
-              <select
-                value={contratoOrigemId}
-                onChange={e => {
-                  setContratoOrigemId(e.target.value)
-                  setImportado(false)
-                }}
-                className={inputCls + ' cursor-pointer flex-1'}
-              >
-                <option value="">Selecione um contrato...</option>
-                {contratos.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.numero}{c.titulo_obra ? ` — ${c.titulo_obra}` : ''} ({(c.tipo ?? '').replace(/_/g, ' ')})
-                  </option>
-                ))}
-              </select>
               <button
-                onClick={() => { if (contratoOrigemId) importarContrato(contratoOrigemId) }}
-                disabled={!contratoOrigemId}
-                className="h-9 px-4 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:pointer-events-none text-sm font-semibold text-white transition-colors flex items-center gap-1.5 shrink-0">
-                <Users className="w-4 h-4" />
-                Importar
+                onClick={() => setModoContrato('upload')}
+                className={`flex-1 h-9 rounded-lg border text-xs font-semibold transition-colors ${modoContrato === 'upload' ? 'bg-violet-600 border-violet-500 text-white' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10'}`}
+              >
+                Fazer upload do contrato
+              </button>
+              <button
+                onClick={() => setModoContrato('existente')}
+                className={`flex-1 h-9 rounded-lg border text-xs font-semibold transition-colors ${modoContrato === 'existente' ? 'bg-violet-600 border-violet-500 text-white' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10'}`}
+              >
+                Vincular contrato existente
               </button>
             </div>
-            {importado && contratoOrigemId && (() => {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const c = contratos.find(x => x.id === contratoOrigemId) as any
-              if (!c) return null
-              return (
-                <div className="flex items-start gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-emerald-400">Dados importados com sucesso!</p>
-                    <p className="text-xs text-white/50 mt-0.5">
-                      {c._partes?.length ?? 0} participante(s) carregados para os Links — revise no próximo passo.
-                    </p>
-                    <div className="flex flex-wrap gap-1.5 mt-2">
-                      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                      {c._partes?.map((p: any) => (
-                        <span key={p.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 text-[10px] text-white/60">
-                          <span className={`w-1.5 h-1.5 rounded-full ${p.papel === 'cedente' ? 'bg-sky-400' : 'bg-violet-400'}`} />
-                          {p.nome_titular} · {p.percentual}%
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )
-            })()}
+            {modoContrato === 'upload' && (
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-white/10 rounded-xl p-6 text-center cursor-pointer hover:border-violet-500/40 transition-colors"
+              >
+                <Upload className="w-6 h-6 text-white/30 mx-auto mb-2" />
+                <p className="text-xs text-white/50">{contratoFile ? contratoFile.name : 'Clique para selecionar o PDF do contrato assinado'}</p>
+                <input ref={fileInputRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setContratoFile(f) }} />
+              </div>
+            )}
+            {modoContrato === 'existente' && (
+              <div className="flex gap-2">
+                <select value={contratoOrigemId} onChange={e => { setContratoOrigemId(e.target.value); setImportado(false) }} className={inputCls + ' cursor-pointer flex-1'}>
+                  <option value="">Selecione um contrato...</option>
+                  {contratos.map(c => (
+                    <option key={c.id} value={c.id}>{c.numero}{c.titulo_obra ? ` — ${c.titulo_obra}` : ''} ({(c.tipo ?? '').replace(/_/g, ' ')})</option>
+                  ))}
+                </select>
+                <button onClick={() => { if (contratoOrigemId) importarContrato(contratoOrigemId) }} disabled={!contratoOrigemId} className="h-9 px-4 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:pointer-events-none text-sm font-semibold text-white transition-colors flex items-center gap-1.5 shrink-0">
+                  <Users className="w-4 h-4" />
+                  Importar
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
