@@ -7,9 +7,13 @@ type UserRole = 'master' | 'editora' | 'titular'
 // Fase 2 (futuro): redirecionamento por role
 const PROTECTED = ['/master', '/portal', '/editora', '/titular', '/backoffice', '/admin']
 
-// Todas as rotas /api/* fazem sua própria autenticação via Bearer token no handler.
-// O middleware não bloqueia API routes — cada handler é responsável por validar o token.
-const API_PUBLIC = ['/api/']
+// Rotas de API públicas — chamadas sem sessão de usuário
+const API_PUBLIC = [
+  '/api/auth/login',       // login — sem sessão por definição
+  '/api/d4sign/webhook',   // webhook D4Sign — servidor externo, sem cookie
+  '/api/health',           // health check — Vercel/monitoramento
+  '/api/bootstrap-tenant', // onboarding — primeiro acesso
+]
 
 // Rotas de auth — redireciona para dashboard se já logado
 const AUTH_ROUTES = ['/auth/login', '/auth/signup']
@@ -21,10 +25,6 @@ const ROLE_HOME: Record<UserRole, string> = {
 }
 
 export async function proxy(request: NextRequest) {
-  if (request.nextUrl.pathname.startsWith('/api/')) {
-    return NextResponse.next({ request })
-  }
-
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -88,5 +88,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api/|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }
