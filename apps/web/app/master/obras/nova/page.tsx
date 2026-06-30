@@ -757,7 +757,7 @@ export default function NovaObraPage() {
       setSaved(true)
     } catch (err) {
       console.error('[salvarObra]', err)
-      alert('Erro ao salvar obra. Verifique os dados e tente novamente.')
+      alert(`Erro ao salvar obra: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setSaving(false)
     }
