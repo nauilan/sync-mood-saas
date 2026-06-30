@@ -401,6 +401,9 @@ export default function NovaObraPage() {
   const [letra, setLetra] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [extractDone, setExtractDone] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [obrasExtraidas, setObrasExtraidas] = useState<any[]>([])
+  const [obraSelecionadaIdx, setObraSelecionadaIdx] = useState<number | null>(null)
 
   // Step 4 — contrato assinado
   const [contratoFile, setContratoFile] = useState<File | null>(null)
@@ -519,6 +522,8 @@ export default function NovaObraPage() {
     setContratoFile(file)
     setExtracting(true)
     setExtractDone(false)
+    setObrasExtraidas([])
+    setObraSelecionadaIdx(null)
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -530,47 +535,87 @@ export default function NovaObraPage() {
         return
       }
       const dados = json.data
-      // Preencher campos com dados extraídos
-      if (dados.obras && dados.obras.length > 0) {
+
+      if (dados.obras && dados.obras.length > 1) {
+        // Múltiplas obras — guardar lista e deixar operador escolher
+        setObrasExtraidas(dados.obras)
+        setExtractDone(true)
+        // Criar titular já (independente da obra escolhida)
+        if (dados.autor_nome || dados.autor_pseudonimo) {
+          try {
+            const resTitular = await authFetch('/api/titulares', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                nome_completo: dados.autor_nome || dados.autor_pseudonimo,
+                nome_artistico: dados.autor_pseudonimo || '',
+                cpf_cnpj: dados.autor_cpf || '',
+                tipo: 'autor',
+                tipo_pessoa: 'PF',
+              })
+            })
+            const jsonTitular = await resTitular.json()
+            if (resTitular.ok && jsonTitular.data?.id) {
+              const novoTitularId = jsonTitular.data.id
+              const nomeExibicao = dados.autor_pseudonimo || dados.autor_nome
+              setLinks(prev => {
+                const primeiro = prev[0]
+                if (!primeiro) return prev
+                return prev.map((l, i) => i !== 0 ? l : {
+                  ...l,
+                  titulares: [...l.titulares, {
+                    tempId: uid(), nome: nomeExibicao, ipi: '', papel: 'compositor' as PapelTitularLink,
+                    percentual: 100,
+                    controlado: true, sociedade: '', titular_id: novoTitularId
+                  }]
+                })
+              })
+            }
+          } catch (err) {
+            console.error('Erro ao criar titular automaticamente:', err)
+          }
+        }
+      } else if (dados.obras && dados.obras.length === 1) {
+        // Obra única — preencher campos imediatamente
         const primeira = dados.obras[0]
         setTitulo(primeira.titulo || '')
         setSubtitulo(primeira.subtitulo || '')
         setTituloAlternativo(primeira.titulo_alternativo || '')
         setLetra(primeira.texto_poetico || '')
-      }
-      setExtractDone(true)
-      if (dados.autor_nome || dados.autor_pseudonimo) {
-        try {
-          const resTitular = await authFetch('/api/titulares', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              nome_completo: dados.autor_nome || dados.autor_pseudonimo,
-              nome_artistico: dados.autor_pseudonimo || '',
-              cpf_cnpj: dados.autor_cpf || '',
-              tipo: 'autor',
-              tipo_pessoa: 'PF',
-            })
-          })
-          const jsonTitular = await resTitular.json()
-          if (resTitular.ok && jsonTitular.data?.id) {
-            const novoTitularId = jsonTitular.data.id
-            const nomeExibicao = dados.autor_pseudonimo || dados.autor_nome
-            setLinks(prev => {
-              const primeiro = prev[0]
-              if (!primeiro) return prev
-              return prev.map((l, i) => i !== 0 ? l : {
-                ...l,
-                titulares: [...l.titulares, {
-                  tempId: uid(), nome: nomeExibicao, ipi: '', papel: 'compositor' as PapelTitularLink,
-                  percentual: dados.obras?.[0]?.percentual_autor_na_obra || 100,
-                  controlado: true, sociedade: '', titular_id: novoTitularId
-                }]
+        setExtractDone(true)
+        if (dados.autor_nome || dados.autor_pseudonimo) {
+          try {
+            const resTitular = await authFetch('/api/titulares', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                nome_completo: dados.autor_nome || dados.autor_pseudonimo,
+                nome_artistico: dados.autor_pseudonimo || '',
+                cpf_cnpj: dados.autor_cpf || '',
+                tipo: 'autor',
+                tipo_pessoa: 'PF',
               })
             })
+            const jsonTitular = await resTitular.json()
+            if (resTitular.ok && jsonTitular.data?.id) {
+              const novoTitularId = jsonTitular.data.id
+              const nomeExibicao = dados.autor_pseudonimo || dados.autor_nome
+              setLinks(prev => {
+                const primeiro = prev[0]
+                if (!primeiro) return prev
+                return prev.map((l, i) => i !== 0 ? l : {
+                  ...l,
+                  titulares: [...l.titulares, {
+                    tempId: uid(), nome: nomeExibicao, ipi: '', papel: 'compositor' as PapelTitularLink,
+                    percentual: dados.obras?.[0]?.percentual_autor_na_obra || 100,
+                    controlado: true, sociedade: '', titular_id: novoTitularId
+                  }]
+                })
+              })
+            }
+          } catch (err) {
+            console.error('Erro ao criar titular automaticamente:', err)
           }
-        } catch (err) {
-          console.error('Erro ao criar titular automaticamente:', err)
         }
       }
     } catch (err) {
@@ -890,6 +935,34 @@ export default function NovaObraPage() {
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                 <p className="text-xs text-emerald-400">Dados extraídos com sucesso</p>
+              </div>
+            )}
+            {obrasExtraidas.length > 1 && obraSelecionadaIdx === null && (
+              <div className="mt-3 bg-violet-500/10 border border-violet-500/20 rounded-xl p-4 space-y-2">
+                <p className="text-xs font-semibold text-white">
+                  Este contrato tem {obrasExtraidas.length} obras. Selecione qual cadastrar agora:
+                </p>
+                <div className="space-y-1.5">
+                  {obrasExtraidas.map((obra, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setObraSelecionadaIdx(idx)
+                        setTitulo(obra.titulo || '')
+                        setSubtitulo(obra.subtitulo || '')
+                        setTituloAlternativo(obra.titulo_alternativo || '')
+                        setLetra(obra.texto_poetico || '')
+                      }}
+                      className="flex items-center justify-between w-full px-3 py-2 rounded-lg bg-white/5 hover:bg-violet-500/20 border border-white/10 transition-colors text-left"
+                    >
+                      <span className="text-xs text-white/80">{obra.titulo}</span>
+                      <span className="text-[10px] text-white/40">{obra.percentual_autor_na_obra}% autor</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-white/40">
+                  As demais obras ficarão disponíveis para cadastro posterior usando o mesmo contrato.
+                </p>
               </div>
             )}
             {modoContrato === 'existente' && (
