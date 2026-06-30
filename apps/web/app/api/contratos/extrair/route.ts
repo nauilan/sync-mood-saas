@@ -156,7 +156,8 @@ export async function POST(req: NextRequest) {
 
   let resultado: unknown
   try {
-    resultado = JSON.parse(rawText)
+    const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim()
+    resultado = JSON.parse(cleaned)
   } catch {
     return NextResponse.json(
       { error: 'A IA não retornou um JSON válido', raw: rawText },
