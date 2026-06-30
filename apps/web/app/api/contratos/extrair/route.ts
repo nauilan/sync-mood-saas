@@ -19,7 +19,8 @@ const SYSTEM_PROMPT =
   'Responda APENAS com o JSON, sem texto adicional, sem markdown, sem backticks. ' +
   'Leia atentamente a Cláusula Sexta (ou cláusula de percentuais) do contrato, que detalha os percentuais por tipo de direito separadamente para Brasil e Exterior. ' +
   'Cada linha (a, b, c, d, e, f, g, h) representa um tipo de direito diferente. ' +
-  'Não generalize um único percentual — extraia cada tipo individualmente, mesmo que vários tenham o mesmo valor.'
+  'Não generalize um único percentual — extraia cada tipo individualmente, mesmo que vários tenham o mesmo valor. ' +
+  'É CRÍTICO preservar a estrutura de versos da letra musical — cada quebra de linha do documento original deve ser mantida como \\n no campo texto_poetico. Letras de música perdem o sentido quando convertidas em texto corrido.'
 
 const USER_PROMPT = `Extraia do contrato as seguintes informações e retorne APENAS um JSON válido com esta estrutura exata:
 {
@@ -53,7 +54,7 @@ const USER_PROMPT = `Extraia do contrato as seguintes informações e retorne AP
       "titulo": "título da obra",
       "subtitulo": "subtítulo se houver",
       "titulo_alternativo": "título alternativo se houver",
-      "texto_poetico": "letra/texto poético completo",
+      "texto_poetico": "letra completa da obra, preservando EXATAMENTE as quebras de linha originais do contrato usando \\n entre cada verso. NUNCA junte versos em um parágrafo corrido. Cada linha do PDF deve corresponder a uma linha separada por \\n no JSON, respeitando estrofes e repetições (como '2X') exatamente como aparecem no documento.",
       "percentual_autor_na_obra": 100,
       "coautores": [
         {"nome": "nome do coautor", "pseudonimo": "pseudônimo", "percentual": 0}
