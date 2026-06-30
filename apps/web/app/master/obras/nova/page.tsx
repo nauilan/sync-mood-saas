@@ -539,6 +539,40 @@ export default function NovaObraPage() {
         setLetra(primeira.texto_poetico || '')
       }
       setExtractDone(true)
+      if (dados.autor_nome || dados.autor_pseudonimo) {
+        try {
+          const resTitular = await authFetch('/api/titulares', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              nome_completo: dados.autor_nome || dados.autor_pseudonimo,
+              nome_artistico: dados.autor_pseudonimo || '',
+              cpf_cnpj: dados.autor_cpf || '',
+              tipo: 'autor',
+              tipo_pessoa: 'PF',
+            })
+          })
+          const jsonTitular = await resTitular.json()
+          if (resTitular.ok && jsonTitular.data?.id) {
+            const novoTitularId = jsonTitular.data.id
+            const nomeExibicao = dados.autor_pseudonimo || dados.autor_nome
+            setLinks(prev => {
+              const primeiro = prev[0]
+              if (!primeiro) return prev
+              return prev.map((l, i) => i !== 0 ? l : {
+                ...l,
+                titulares: [...l.titulares, {
+                  tempId: uid(), nome: nomeExibicao, ipi: '', papel: 'compositor' as PapelTitularLink,
+                  percentual: dados.obras?.[0]?.percentual_autor_na_obra || 100,
+                  controlado: true, sociedade: '', titular_id: novoTitularId
+                }]
+              })
+            })
+          }
+        } catch (err) {
+          console.error('Erro ao criar titular automaticamente:', err)
+        }
+      }
     } catch (err) {
       console.error('Erro ao processar contrato:', err)
     } finally {
