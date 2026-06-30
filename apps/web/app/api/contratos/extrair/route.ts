@@ -169,5 +169,6 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  console.log('RESULTADO_EXTRAIR:', JSON.stringify(resultado, null, 2))
   return NextResponse.json({ data: resultado })
 }
