@@ -1,13 +1,13 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   FileText, ChevronLeft, Users, ShieldCheck, Music, Pen,
   TrendingDown, GitBranch, Clock, Info, Building2, User,
   CheckCircle2, AlertCircle, Download, Plus, RefreshCw,
-  ThumbsUp, ThumbsDown, ArrowUpCircle, BadgeCheck,
+  ThumbsUp, ThumbsDown, ArrowUpCircle, BadgeCheck, Upload,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import {
@@ -55,6 +55,11 @@ export default function ContratoDetailPage() {
   const [obraLoading, setObraLoading] = useState(false)
   const [obraResult, setObraResult] = useState<{ ok: boolean; message: string; obraId?: string } | null>(null)
   const [obraMatch, setObraMatch] = useState<{ match_type: 'duplicata_exata' | 'homonima' | null; existentes: Array<{ titulo: string; match_type: 'duplicata_exata' | 'homonima'; obras: Array<{ id: string; codigo_obra: string; titulo: string }> }> } | null>(null)
+  const [manualFile, setManualFile] = useState<File | null>(null)
+  const [manualLoading, setManualLoading] = useState(false)
+  const [manualResult, setManualResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [showManualUpload, setShowManualUpload] = useState(false)
+  const manualFileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!id) return
@@ -86,6 +91,32 @@ export default function ContratoDetailPage() {
       setSendResult({ ok: false, message: 'Erro de conexão ao enviar para assinatura.' })
     } finally {
       setSendLoading(false)
+    }
+  }
+
+  // ── Assinatura manual (fora do sistema) ─────────────────────────────────
+  async function handleAssinaturaManual() {
+    if (!id || !manualFile || manualLoading) return
+    setManualLoading(true)
+    setManualResult(null)
+    try {
+      const formData = new FormData()
+      formData.append('arquivo', manualFile)
+      const res = await authFetch(`/api/contratos/${id}/assinatura-manual`, { method: 'POST', body: formData })
+      const json = await res.json()
+      if (!res.ok) {
+        setManualResult({ ok: false, message: json.error ?? 'Erro ao registrar assinatura manual.' })
+      } else {
+        setManualResult({ ok: true, message: 'Contrato marcado como assinado manualmente.' })
+        setManualFile(null)
+        setShowManualUpload(false)
+        const updated = await authFetch(`/api/contratos/${id}`).then(r => r.json())
+        setContrato((updated.contrato ?? null) as ContratoV2 | null)
+      }
+    } catch {
+      setManualResult({ ok: false, message: 'Erro de conexão ao registrar assinatura.' })
+    } finally {
+      setManualLoading(false)
     }
   }
 
@@ -924,7 +955,7 @@ export default function ContratoDetailPage() {
         </div>
       )}
 
-      {contrato.status === 'rascunho' && (
+      {contrato.status === 'rascunho' && (<>
         <div className="bg-amber-500/[0.07] border border-amber-500/20 rounded-xl px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
           <div className="flex-1">
             <p className="text-sm font-semibold text-amber-300">Contrato em Rascunho</p>
@@ -957,9 +988,64 @@ export default function ContratoDetailPage() {
                 : <><CheckCircle2 className="w-3.5 h-3.5" /> Enviar para Assinatura</>
               }
             </button>
+            <button
+              onClick={() => { setShowManualUpload(v => !v); setManualResult(null); setManualFile(null) }}
+              className="flex items-center gap-1.5 h-8 px-3 text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white/80 rounded-lg transition-colors"
+              title="Registrar assinatura feita fora do sistema — upload do PDF assinado"
+            >
+              <Upload className="w-3.5 h-3.5" /> Assinatura manual
+            </button>
           </div>
         </div>
-      )}
+        {/* Painel de upload manual */}
+        {showManualUpload && (
+          <div className="mt-3 bg-white/[0.03] border border-white/[0.08] rounded-xl p-4 space-y-3">
+            <p className="text-xs font-semibold text-white/70">Assinatura manual — fora do sistema</p>
+            <p className="text-[11px] text-white/40">
+              Faça o upload do PDF já assinado pelas partes. O contrato será marcado automaticamente como assinado.
+            </p>
+            <div
+              onClick={() => manualFileRef.current?.click()}
+              className="border-2 border-dashed border-white/10 rounded-xl p-5 text-center cursor-pointer hover:border-violet-500/40 transition-colors"
+            >
+              <Upload className="w-5 h-5 text-white/25 mx-auto mb-2" />
+              <p className="text-xs text-white/45">
+                {manualFile ? manualFile.name : 'Clique para selecionar o PDF assinado'}
+              </p>
+              <input
+                ref={manualFileRef}
+                type="file"
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) setManualFile(f) }}
+              />
+            </div>
+            {manualResult && (
+              <div className={`rounded-lg px-3 py-2 text-xs ${manualResult.ok ? 'bg-emerald-500/10 text-emerald-300' : 'bg-rose-500/10 text-rose-300'}`}>
+                {manualResult.message}
+              </div>
+            )}
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setShowManualUpload(false); setManualFile(null); setManualResult(null) }}
+                className="px-3 py-1.5 rounded-lg text-xs text-white/40 hover:text-white/60 hover:bg-white/5 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAssinaturaManual}
+                disabled={!manualFile || manualLoading}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-xs font-semibold transition-colors"
+              >
+                {manualLoading
+                  ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Enviando...</>
+                  : <><CheckCircle2 className="w-3.5 h-3.5" /> Confirmar Assinatura</>
+                }
+              </button>
+            </div>
+          </div>
+        )}
+      </>)}
 
       {/* Workflow: Contrato Assinado — fluxo direto (Admin) ou fluxo administrada */}
       {contrato.status === 'assinado' && (
