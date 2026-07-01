@@ -533,15 +533,23 @@ export default function NovaObraPage() {
     },
     titularJaCriado?: { id: string; nome: string }
   ) {
-    // 1. Buscar editora via /api/me
+    // 1. Buscar editora via /api/me e /api/editoras/[id]
     let editoraId = ''
     let editoraNome = ''
+    let editoraTitularId = ''
     try {
       const resMe = await authFetch('/api/me')
       if (resMe.ok) {
         const me = await resMe.json()
         editoraId = me.editora_id ?? ''
         editoraNome = me.tenant_nome ?? ''
+        if (editoraId) {
+          const resEditora = await authFetch(`/api/editoras/${editoraId}`)
+          if (resEditora.ok) {
+            const editora = await resEditora.json()
+            editoraTitularId = editora.editora?.titular_id ?? ''
+          }
+        }
       }
     } catch { /* sem editora */ }
 
@@ -587,7 +595,7 @@ export default function NovaObraPage() {
       tempId: uid(), nome: editoraNome, ipi: '',
       papel: 'editora_original' as PapelTitularLink,
       percentual: pctEditora, controlado: true, sociedade: '',
-      titular_id: editoraId || undefined,
+      titular_id: editoraTitularId || undefined,
     })
     if (titulares.length > 0) {
       setLinks(prev => prev.map((l, i) => i !== 0 ? l : {
