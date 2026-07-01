@@ -261,7 +261,7 @@ export async function POST(req: NextRequest) {
           obra_link_id: linkRow.id,
           obra_id: obra.id,
           tenant_id: usuario.tenant_id,
-          titular_id: t.titular_id ?? null,
+          titular_id: t.titular_id || null,
           nome: t.nome ?? '',
           papel: t.papel ?? 'compositor',
           funcao_no_link: mapPapelToFuncaoLink(t.papel),
@@ -301,14 +301,18 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  await logAudit({
-    tenant_id: usuario.tenant_id,
-    acao: 'criar',
-    modulo: 'obras',
-    tabela_afetada: 'obras',
-    registro_id: (obra as { id: string }).id,
-    dados_novos: obra as Record<string, unknown>,
-    origem_execucao: 'usuario',
-  })
+  try {
+    await logAudit({
+      tenant_id: usuario.tenant_id,
+      acao: 'criar',
+      modulo: 'obras',
+      tabela_afetada: 'obras',
+      registro_id: (obra as { id: string }).id,
+      dados_novos: obra as Record<string, unknown>,
+      origem_execucao: 'usuario',
+    })
+  } catch (auditErr) {
+    console.error('[obras] logAudit falhou silenciosamente:', auditErr)
+  }
   return NextResponse.json(obra, { status: 201 })
 }
