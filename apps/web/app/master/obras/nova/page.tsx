@@ -401,6 +401,7 @@ export default function NovaObraPage() {
   const [letra, setLetra] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [extractDone, setExtractDone] = useState(false)
+  const [montandoLink, setMontandoLink] = useState(false)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [obrasExtraidas, setObrasExtraidas] = useState<any[]>([])
   const [obraSelecionadaIdx, setObraSelecionadaIdx] = useState<number | null>(null)
@@ -533,77 +534,82 @@ export default function NovaObraPage() {
     },
     titularJaCriado?: { id: string; nome: string }
   ) {
-    // 1. Buscar editora via /api/me e /api/editoras/[id]
-    let editoraId = ''
-    let editoraNome = ''
-    let editoraTitularId = ''
+    setMontandoLink(true)
     try {
-      const resMe = await authFetch('/api/me')
-      if (resMe.ok) {
-        const me = await resMe.json()
-        editoraId = me.editora_id ?? ''
-        editoraNome = me.tenant_nome ?? ''
-        if (editoraId) {
-          const resEditora = await authFetch(`/api/editoras/${editoraId}`)
-          if (resEditora.ok) {
-            const editora = await resEditora.json()
-            editoraTitularId = editora.editora?.titular_id ?? ''
+      // 1. Buscar editora via /api/me e /api/editoras/[id]
+      let editoraId = ''
+      let editoraNome = ''
+      let editoraTitularId = ''
+      try {
+        const resMe = await authFetch('/api/me')
+        if (resMe.ok) {
+          const me = await resMe.json()
+          editoraId = me.editora_id ?? ''
+          editoraNome = me.tenant_nome ?? ''
+          if (editoraId) {
+            const resEditora = await authFetch(`/api/editoras/${editoraId}`)
+            if (resEditora.ok) {
+              const editora = await resEditora.json()
+              editoraTitularId = editora.editora?.titular_id ?? ''
+            }
           }
         }
-      }
-    } catch { /* sem editora */ }
+      } catch { /* sem editora */ }
 
-    // 2. Usar titular já criado OU criar agora
-    let novoTitularId = titularJaCriado?.id ?? ''
-    const nomeExibicao = titularJaCriado?.nome ?? (dados.autor_pseudonimo || dados.autor_nome || '')
-    if (!titularJaCriado && nomeExibicao) {
-      try {
-        const res = await authFetch('/api/titulares', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            nome_completo: dados.autor_nome || dados.autor_pseudonimo,
-            nome_artistico: dados.autor_pseudonimo || '',
-            cpf_cnpj: dados.autor_cpf || '',
-            tipo: 'autor',
-            tipo_pessoa: 'PF',
+      // 2. Usar titular já criado OU criar agora
+      let novoTitularId = titularJaCriado?.id ?? ''
+      const nomeExibicao = titularJaCriado?.nome ?? (dados.autor_pseudonimo || dados.autor_nome || '')
+      if (!titularJaCriado && nomeExibicao) {
+        try {
+          const res = await authFetch('/api/titulares', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              nome_completo: dados.autor_nome || dados.autor_pseudonimo,
+              nome_artistico: dados.autor_pseudonimo || '',
+              cpf_cnpj: dados.autor_cpf || '',
+              tipo: 'autor',
+              tipo_pessoa: 'PF',
+            })
           })
-        })
-        const j = await res.json()
-        if (res.ok && j.data?.id) novoTitularId = j.data.id
-      } catch (err) { console.error('Erro ao criar titular:', err) }
-    }
+          const j = await res.json()
+          if (res.ok && j.data?.id) novoTitularId = j.data.id
+        } catch (err) { console.error('Erro ao criar titular:', err) }
+      }
 
-    // 3. Calcular percentuais
-    const percentualAutorNaObra = dadosObra.percentual_autor_na_obra ?? 100
-    const pctBrasil = dados.percentuais_brasil?.comunicacao_publico
-    const divisaoAutor   = pctBrasil?.autor   ?? 75
-    const divisaoEditora = pctBrasil?.editora ?? 25
-    const pctAutor      = normalizarPercentual(percentualAutorNaObra * (divisaoAutor   / 100))
-    const pctEditora    = normalizarPercentual(percentualAutorNaObra * (divisaoEditora / 100))
-    const pctControlado = normalizarPercentual(pctAutor + pctEditora)
+      // 3. Calcular percentuais
+      const percentualAutorNaObra = dadosObra.percentual_autor_na_obra ?? 100
+      const pctBrasil = dados.percentuais_brasil?.comunicacao_publico
+      const divisaoAutor   = pctBrasil?.autor   ?? 75
+      const divisaoEditora = pctBrasil?.editora ?? 25
+      const pctAutor      = normalizarPercentual(percentualAutorNaObra * (divisaoAutor   / 100))
+      const pctEditora    = normalizarPercentual(percentualAutorNaObra * (divisaoEditora / 100))
+      const pctControlado = normalizarPercentual(pctAutor + pctEditora)
 
-    // 4. Montar titulares e atualizar primeiro link
-    const titulares: LinkTitular[] = []
-    if (nomeExibicao) titulares.push({
-      tempId: uid(), nome: nomeExibicao, ipi: '',
-      papel: 'compositor' as PapelTitularLink,
-      percentual: pctAutor, controlado: true, sociedade: '',
-      titular_id: novoTitularId || undefined,
-    })
-    if (editoraNome) titulares.push({
-      tempId: uid(), nome: editoraNome, ipi: '',
-      papel: 'editora_original' as PapelTitularLink,
-      percentual: pctEditora, controlado: true, sociedade: '',
-      titular_id: editoraTitularId || undefined,
-    })
-    if (titulares.length > 0) {
-      setLinks(prev => prev.map((l, i) => i !== 0 ? l : {
-        ...l,
-        controlado: true,
-        percentual_controlado: pctControlado,
-        titulares: [...l.titulares, ...titulares],
-      }))
+      // 4. Montar titulares e atualizar primeiro link
+      const titulares: LinkTitular[] = []
+      if (nomeExibicao) titulares.push({
+        tempId: uid(), nome: nomeExibicao, ipi: '',
+        papel: 'compositor' as PapelTitularLink,
+        percentual: pctAutor, controlado: true, sociedade: '',
+        titular_id: novoTitularId || undefined,
+      })
+      if (editoraNome) titulares.push({
+        tempId: uid(), nome: editoraNome, ipi: '',
+        papel: 'editora_original' as PapelTitularLink,
+        percentual: pctEditora, controlado: true, sociedade: '',
+        titular_id: editoraTitularId || undefined,
+      })
+      if (titulares.length > 0) {
+        setLinks(prev => prev.map((l, i) => i !== 0 ? l : {
+          ...l,
+          controlado: true,
+          percentual_controlado: pctControlado,
+          titulares: [...l.titulares, ...titulares],
+        }))
+      }
+    } finally {
+      setMontandoLink(false)
     }
   }
 
@@ -685,7 +691,7 @@ export default function NovaObraPage() {
   }))
   const todosLinksValidos = somasPorLink.every(l => Math.abs(l.soma - 100) < 0.02)
 
-  const canStep0 = titulo.trim().length >= 2
+  const canStep0 = titulo.trim().length >= 2 && !extracting && !montandoLink
   const canStep1 = links.length > 0 && links.every(l => l.titulares.length > 0) && todosLinksValidos
   const canStep4 = contratoFile !== null
 
@@ -733,6 +739,17 @@ export default function NovaObraPage() {
   async function salvarObra() {
     if (saving) return
     setSaving(true)
+    if (extracting || montandoLink) {
+      alert('Aguarde o processamento do contrato terminar antes de salvar.')
+      setSaving(false)
+      return
+    }
+    const temTitular = links.some(l => l.titulares.length > 0)
+    if (!temTitular) {
+      alert('A obra precisa ter ao menos um titular vinculado antes de salvar.')
+      setSaving(false)
+      return
+    }
     try {
       const checagem = await verificarDuplicataHomonima()
       if (checagem.bloqueado) {
