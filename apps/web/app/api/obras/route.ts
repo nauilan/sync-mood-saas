@@ -215,23 +215,47 @@ export async function POST(req: NextRequest) {
   if (!obraPayload.status_catalogo) {
     obraPayload.status_catalogo = contratoOrigemId ? 'pre_cadastro' : 'catalogo_ativo'
   }
-  // Auto-gerar codigo_obra se não fornecido (NOT NULL constraint no banco)
+  // Auto-gerar codigo_obra robusto: Math.max sobre todos OBR-% do tenant + retry anti-colisão
+  let obra: Record<string, unknown> | null = null
+  let obraErr: { code?: string; message: string } | null = null
+
   if (!obraPayload.codigo_obra) {
-    const { count } = await sb
+    const { data: codigosExistentes } = await sb
       .from('obras')
-      .select('*', { count: 'exact', head: true })
+      .select('codigo_obra')
       .eq('tenant_id', usuario.tenant_id)
-    const seq = String((count ?? 0) + 1).padStart(4, '0')
-    obraPayload.codigo_obra = `OBR-${seq}`
+      .like('codigo_obra', 'OBR-%')
+
+    const maiorNum = (codigosExistentes ?? []).reduce((max, row) => {
+      const n = parseInt(String(row.codigo_obra).replace('OBR-', ''), 10)
+      return isNaN(n) ? max : Math.max(max, n)
+    }, 0)
+    let nextNum = maiorNum + 1
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      obraPayload.codigo_obra = `OBR-${String(nextNum).padStart(5, '0')}`
+      const result = await sb.from('obras').insert(obraPayload).select().single()
+      obra = result.data as Record<string, unknown> | null
+      obraErr = result.error as { code?: string; message: string } | null
+
+      if (!obraErr) break
+      if (
+        obraErr.code === '23505' &&
+        obraErr.message.includes('obras_tenant_id_codigo_obra_key')
+      ) {
+        nextNum++
+        continue
+      }
+      break
+    }
+  } else {
+    const result = await sb.from('obras').insert(obraPayload).select().single()
+    obra = result.data as Record<string, unknown> | null
+    obraErr = result.error as { code?: string; message: string } | null
   }
 
-  const { data: obra, error: obraErr } = await sb
-    .from('obras')
-    .insert(obraPayload)
-    .select()
-    .single()
-
   if (obraErr) return NextResponse.json({ error: obraErr.message }, { status: 500 })
+  if (!obra) return NextResponse.json({ error: 'Obra não foi criada' }, { status: 500 })
 
   // 2. Inserir links e titulares
   if (Array.isArray(links)) {
