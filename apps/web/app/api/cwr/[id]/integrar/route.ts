@@ -238,8 +238,8 @@ export async function POST(
   }
 
   // ── 3. Extrair autores, editoras, fonogramas dos snapshots ────────────────
-  const autoresUnicos   = new Map<string, { nome: string; ipi: string | null; tipo: 'autor' }>()
-  const editorasUnicas  = new Map<string, { nome: string; ipi: string | null; controlled: boolean; tipo: 'editora' | 'editora_administrada' }>()
+  const autoresUnicos   = new Map<string, { nome: string; ipi: string | null; tipo: 'autor'; codigo_interno: string | null }>()
+  const editorasUnicas  = new Map<string, { nome: string; ipi: string | null; controlled: boolean; tipo: 'editora' | 'editora_administrada'; codigo_interno: string | null }>()
 
   type PartObra = {
     chave: string; papel: string
@@ -349,7 +349,8 @@ export async function POST(
       if (!(a.nome as string)?.trim()) continue
       const chave = chaveTitular(a.ipi, a.nome)
       if (!autoresUnicos.has(chave)) {
-        autoresUnicos.set(chave, { nome: (a.nome as string).trim(), ipi: a.ipi ?? null, tipo: 'autor' })
+        const ciA = ((a.ipi_nome ?? '') as string).replace(/\s/g, '').trim()
+        autoresUnicos.set(chave, { nome: (a.nome as string).trim(), ipi: a.ipi ?? null, tipo: 'autor', codigo_interno: ciA || null })
       }
       const isControlled = (a.controlled as boolean | null) ?? false
       const authorIpKey = ((a.ipi_nome ?? a.ipi ?? '') as string).replace(/\s/g, '').trim()
@@ -421,7 +422,8 @@ export async function POST(
       const chave = chaveTitular(e.ipi, e.nome)
       const tipoEdit: 'editora' | 'editora_administrada' = e.controlled ? 'editora' : 'editora_administrada'
       if (!editorasUnicas.has(chave)) {
-        editorasUnicas.set(chave, { nome: (e.nome as string).trim(), ipi: e.ipi ?? null, controlled: e.controlled ?? false, tipo: tipoEdit })
+        const ciE = ((e.ip_name_no ?? '') as string).replace(/\s/g, '').trim()
+        editorasUnicas.set(chave, { nome: (e.nome as string).trim(), ipi: e.ipi ?? null, controlled: e.controlled ?? false, tipo: tipoEdit, codigo_interno: ciE || null })
       }
       // Registrar no staging ANTES do filtro isPendingAm — captura todos os titulares do CWR
       stagingEntries.push({
@@ -475,13 +477,13 @@ export async function POST(
   // ── 4. Buscar TODOS os titulares do tenant (dedup IPI + nome) ─────────────
   const { data: todosExistentes } = await client
     .from('titulares')
-    .select('id, ipi, nome_completo, tipo')
+    .select('id, ipi, nome_completo, tipo, codigo_interno')
     .eq('tenant_id', usuario.tenantId)
     .is('deleted_at', null)
 
   const { data: editorasExistentes } = await client
     .from('editoras')
-    .select('id, codigo_ipi, nome_fantasia, razao_social')
+    .select('id, codigo_ipi, nome_fantasia, razao_social, codigo_interno')
     .eq('tenant_id', usuario.tenantId)
     .is('deleted_at', null)
 
@@ -504,8 +506,20 @@ export async function POST(
     if (razaoSocial && !editoraNomeToId[razaoSocial]) editoraNomeToId[razaoSocial] = e.id as string
   }
 
+  // A2 — Mapas por codigo_interno (Interested Party # estável)
+  const codigoInternoToId: Record<string, string> = {}
+  for (const t of (todosExistentes ?? [])) {
+    const ci = ((t.codigo_interno as string | null) ?? '').trim()
+    if (ci && !codigoInternoToId[ci]) codigoInternoToId[ci] = t.id as string
+  }
+  const editoraCodigoInternoToId: Record<string, string> = {}
+  for (const e of (editorasExistentes ?? [])) {
+    const ci = ((e.codigo_interno as string | null) ?? '').trim()
+    if (ci && !editoraCodigoInternoToId[ci]) editoraCodigoInternoToId[ci] = e.id as string
+  }
+
   // ── 5. Resolver chaves → IDs existentes ou marcar para criar ─────────────
-  const chavesToCreate = new Map<string, { nome: string; ipi: string | null; tipo: 'autor' | 'editora' | 'editora_administrada' }>()
+  const chavesToCreate = new Map<string, { nome: string; ipi: string | null; tipo: 'autor' | 'editora' | 'editora_administrada'; codigo_interno?: string | null }>()
   const chaveToId: Record<string, string> = {}
   const conflitos: { tipo: string; descricao: string }[] = []
 
@@ -513,7 +527,19 @@ export async function POST(
   const chaveMatchCriterio: Record<string, string> = {}
   const chaveMatchScore:    Record<string, number>  = {}
 
-  function resolverChave(chave: string, info: { nome: string; ipi: string | null; tipo: 'autor' | 'editora' | 'editora_administrada' }) {
+  function resolverChave(chave: string, info: { nome: string; ipi: string | null; tipo: 'autor' | 'editora' | 'editora_administrada'; codigo_interno?: string | null }) {
+    // Nível 0 — Interested Party # (mais estável: não varia por pseudônimo)
+    const ci = (info.codigo_interno ?? '').trim()
+    const isEditora = info.tipo === 'editora' || info.tipo === 'editora_administrada'
+    if (ci) {
+      const idByCi = isEditora ? editoraCodigoInternoToId[ci] : codigoInternoToId[ci]
+      if (idByCi) {
+        chaveToId[chave]          = idByCi
+        chaveMatchCriterio[chave] = 'codigo_interno'
+        chaveMatchScore[chave]    = 100
+        return
+      }
+    }
     if (info.ipi && ipiToId[info.ipi]) {
       chaveToId[chave]          = ipiToId[info.ipi]
       chaveMatchCriterio[chave] = 'ipi_cae'
@@ -570,7 +596,7 @@ export async function POST(
       payloads.push({
         tenant_id:      usuario.tenantId,
         codigo_titular: `CWR${String(seq).padStart(5, '0')}`,
-        codigo_interno: `CWR${String(seq).padStart(5, '0')}`,
+        codigo_interno: info.codigo_interno?.trim() || `CWR${String(seq).padStart(5, '0')}`,
         tipo:           (info.tipo === 'editora_administrada' ? 'editora' : info.tipo) as string,
         pessoa:         isEdit ? 'PJ' : 'PF',
         nome_completo:  info.nome,
@@ -888,6 +914,7 @@ export async function POST(
         percentual_fonomecanico:  mr_gravado,
         percentual_sincronizacao: p.sr_pct  ?? 0,
         ipi:                      info?.ipi ?? null,
+        pwr_publisher_code:       info?.codigo_interno?.trim() ?? null,
         status_controle:          p.controlled ? 'controlado' : 'nao_controlado',
       })
     }
@@ -987,13 +1014,14 @@ export async function POST(
       const { data: edCriadas } = await client
         .from('editoras')
         .insert(novas.map(([, e]) => ({
-          tenant_id:     usuario.tenantId,
-          nome_fantasia: e.nome,
-          razao_social:  e.nome,
-          codigo_ipi:    e.ipi ?? null,
-          tipo_editora:  'administrada',
-          controlada:    true,
-          status:        'ativo',
+          tenant_id:        usuario.tenantId,
+          nome_fantasia:    e.nome,
+          razao_social:     e.nome,
+          codigo_ipi:       e.ipi ?? null,
+          codigo_interno:   (e as any).ip_name_no?.trim() ?? null,
+          tipo_editora:     'administrada',
+          controlada:       true,
+          status:           'ativo',
         })))
         .select('id')
       editorasCriadas = edCriadas?.length ?? 0

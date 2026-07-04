@@ -343,8 +343,8 @@ export function parseCwr(conteudo: string, _opts?: unknown): CwrArquivo {
         const mrPct = pct5(col(ln, 123, 128))
         const srPct = pct5(col(ln, 131, 136))
 
-        // IPI Base # via regex (busca após os flags)
-        const ipiBase = extractIpi(ln, 136) || extractIpi(ln, 78)
+        // IPI Base # via regex I-NNNNNNNNN-C (busca na pos 136; sem fallback para evitar capturar IPI Name # variável)
+        const ipiBase = extractIpi(ln, 136)
 
         if (nome) {
           cur.editoras.push({

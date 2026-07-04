@@ -146,12 +146,24 @@ interface TitularExistente {
   nome: string
   ipi: string | null
   tem_contrato_valido?: boolean
+  codigo_interno?: string | null
 }
 
 export function matchAutor(
   autor: CwrAutor,
   titulares: TitularExistente[]
 ): MatchParticipante {
+  // Por Interested Party # (codigo_interno) — mais estável que IPI
+  if (autor.ipi_nome) {
+    const ci = autor.ipi_nome.trim()
+    const m = titulares.find(t => t.codigo_interno && t.codigo_interno.trim() === ci)
+    if (m) return {
+      id: m.id, tipo: 'titular', nome_cwr: autor.nome, ipi_cwr: autor.ipi,
+      match_score: 100, match_criterio: 'codigo_interno',
+      status_editorial: resolverStatus(m.tem_contrato_valido, false),
+    }
+  }
+
   // Por IPI
   if (autor.ipi) {
     const m = titulares.find(t => t.ipi && t.ipi === autor.ipi)
@@ -185,12 +197,20 @@ interface EditoraExistente {
   id: string
   nome: string
   ipi: string | null
+  codigo_interno?: string | null
 }
 
 export function matchEditora(
   editora: CwrEditora,
   editoras: EditoraExistente[]
 ): MatchParticipante {
+  // Por Interested Party # (codigo_interno) — mais estável que IPI
+  if (editora.ip_name_no) {
+    const ci = editora.ip_name_no.trim()
+    const m = editoras.find(e => e.codigo_interno && e.codigo_interno.trim() === ci)
+    if (m) return { id: m.id, tipo: 'editora', nome_cwr: editora.nome, ipi_cwr: editora.ipi, match_score: 100, match_criterio: 'codigo_interno', status_editorial: 'controlado' }
+  }
+
   // Por IPI
   if (editora.ipi) {
     const m = editoras.find(e => e.ipi && e.ipi === editora.ipi)
