@@ -27,7 +27,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { deveZerarMR, calcularMrAM } from '@/lib/backoffice-rules'
 import { previewLinksFromSnapshot } from '@/lib/cwr-materialization'
-import { normalizarPercentual } from '@/lib/percentual'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -861,31 +860,19 @@ export async function POST(
   // quando a AM aparece em 2 links distintos, cada linha AM deve receber
   // apenas o percentual controlado DO SEU LINK (evita duplicação).
 
-  // Papéis que recebem o resíduo quando não há E no link (prioridade: E → autor → controlado)
-  const PAPEIS_AUTOR_CWR = new Set(['CA','C','CE','A','T','V','AD','I'])
-
   const titPayloads: Record<string, unknown>[] = []
   for (const [obraId, partics] of partByObra) {
 
-    // ── Fix 2: normalizar pr/mr/sr antes de qualquer cálculo ─────────────────
-    for (const p of partics) {
-      p.pr_pct = normalizarPercentual(p.pr_pct ?? 0)
-      p.mr_pct = normalizarPercentual(p.mr_pct ?? 0)
-      p.sr_pct = normalizarPercentual(p.sr_pct ?? 0)
-    }
-
-    // Agrupa por link_number para calcular MR da AM (usa pr_pct já normalizados)
+    // Agrupa participantes por link_number para calcular MR da AM por link
     const linkNums = [...new Set(partics.map(p => p.link_number ?? 1))]
     const mrAmPorLink = new Map<number, number>()
     for (const ln of linkNums) {
       const linkPartics = partics.filter(p => (p.link_number ?? 1) === ln)
-      mrAmPorLink.set(ln, normalizarPercentual(calcularMrAM(linkPartics)))
+      mrAmPorLink.set(ln, calcularMrAM(linkPartics))
     }
 
-    // Constrói payloads desta obra sem push imediato (para aplicar resíduo depois)
-    const obraPayloads: Record<string, unknown>[] = []
     for (const p of partics) {
-      // resolver link correto via pwr_links; fallback = LINK 1
+      // Fix 1: resolver link correto via pwr_links; fallback = LINK 1
       const linkId =
         obraLinkNumToId[`${obraId}:${p.link_number}`] ??
         obraLinkNumToId[`${obraId}:1`]
@@ -906,10 +893,10 @@ export async function POST(
 
       // Regra BackOffice: AM recebe MR do SEU link; todos os demais recebem 0.
       const totalControlledPr = mrAmPorLink.get(p.link_number ?? 1) ?? 0
-      const mr_final   = (p.papel === 'AM' && totalControlledPr > 0) ? totalControlledPr : (p.mr_pct ?? 0)
+      const mr_final  = (p.papel === 'AM' && totalControlledPr > 0) ? totalControlledPr : (p.mr_pct ?? 0)
       const mr_gravado = deveZerarMR(p.papel) ? 0 : mr_final
 
-      obraPayloads.push({
+      titPayloads.push({
         obra_link_id:             linkId,
         obra_id:                  obraId,
         tenant_id:                usuario.tenantId,
@@ -936,52 +923,6 @@ export async function POST(
         status_controle:          p.controlled ? 'controlado' : 'nao_controlado',
       })
     }
-
-    // ── Fix 3: distribuir resíduo de PR → E, fallback CA, fallback controlado ─
-    const somaPr = normalizarPercentual(
-      obraPayloads.reduce((s, t) => s + (t.percentual_exec_publica as number), 0)
-    )
-    const residuoPr = normalizarPercentual(100 - somaPr)
-    if (Math.abs(residuoPr) >= 0.005) {
-      const dest =
-        obraPayloads.find(t => String(t.funcao_no_link) === 'E') ??
-        obraPayloads.find(t => PAPEIS_AUTOR_CWR.has(String(t.funcao_no_link ?? '').toUpperCase())) ??
-        obraPayloads.find(t => t.status_controle === 'controlado')
-      if (dest) {
-        dest.percentual_exec_publica = normalizarPercentual(
-          (dest.percentual_exec_publica as number) + residuoPr
-        )
-      }
-    }
-
-    // Distribuir resíduo de SR pelo mesmo critério
-    const somaSr = normalizarPercentual(
-      obraPayloads.reduce((s, t) => s + (t.percentual_sincronizacao as number), 0)
-    )
-    const residuoSr = normalizarPercentual(100 - somaSr)
-    if (Math.abs(residuoSr) >= 0.005) {
-      const destSr =
-        obraPayloads.find(t => String(t.funcao_no_link) === 'E') ??
-        obraPayloads.find(t => PAPEIS_AUTOR_CWR.has(String(t.funcao_no_link ?? '').toUpperCase())) ??
-        obraPayloads.find(t => t.status_controle === 'controlado')
-      if (destSr) {
-        destSr.percentual_sincronizacao = normalizarPercentual(
-          (destSr.percentual_sincronizacao as number) + residuoSr
-        )
-      }
-    }
-
-    // Recalcular MR das AM com os pr_pct finais (após ajuste de resíduo no E)
-    for (const amEntry of obraPayloads) {
-      if (String(amEntry.funcao_no_link) !== 'AM') continue
-      const amLinkId = amEntry.obra_link_id
-      const linkControlledPr = obraPayloads
-        .filter(t => t.obra_link_id === amLinkId && t.status_controle === 'controlado')
-        .reduce((s, t) => s + (t.percentual_exec_publica as number), 0)
-      amEntry.percentual_fonomecanico = normalizarPercentual(linkControlledPr)
-    }
-
-    titPayloads.push(...obraPayloads)
   }
 
   // ── debug: retornar se titPayloads vazio antes de tentar insert ──────────

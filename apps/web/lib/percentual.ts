@@ -3,8 +3,8 @@
  *
  * Regra oficial do sistema:
  *   - Trabalha com 2 casas decimais.
- *   - Terceira casa 0,001–0,004 → arredonda para BAIXO.
- *   - Terceira casa 0,005–0,009 → arredonda para CIMA (favorece autor).
+ *   - Terceira casa 0,001–0,005 → arredonda para BAIXO.
+ *   - Terceira casa 0,006–0,009 → arredonda para CIMA.
  *
  * Convenção do banco: percentuais gravados como inteiros (ex: 60 = 60%).
  * A divisão por 100 é feita nas libs de cálculo, nunca aqui.
@@ -13,13 +13,12 @@
 /**
  * Normaliza um percentual para 2 casas decimais seguindo a regra oficial.
  *
- * Diferente do Math.round padrão, esta função usa a regra editorial:
- * terceira casa 0–4 → baixo; 5–9 → cima (favorece autor no decimal 5).
+ * Diferente do Math.round padrão (que arredonda .005 para cima),
+ * esta função trata .005 como lower-bound (arredonda para baixo).
  *
  * Exemplos:
  *   normalizarPercentual(10.001) → 10.00
- *   normalizarPercentual(10.004) → 10.00
- *   normalizarPercentual(10.005) → 10.01
+ *   normalizarPercentual(10.005) → 10.00
  *   normalizarPercentual(10.006) → 10.01
  *   normalizarPercentual(10.009) → 10.01
  *   normalizarPercentual(50)     → 50.00
@@ -27,11 +26,12 @@
  */
 export function normalizarPercentual(n: number): number {
   if (!isFinite(n)) return 0
-  // Regra: 3ª casa 0–4 → arredonda para baixo; 5–9 → arredonda para cima (favorece autor).
+  // Usar representação string para evitar imprecisão de ponto flutuante.
+  // Regra: 3ª casa 0–5 → arredonda para baixo; 6–9 → arredonda para cima.
   const fixed3 = n.toFixed(3)                // ex: "10.006", "50.000"
   const thirdDigit = parseInt(fixed3.slice(-1)) // dígito da 3ª casa decimal
   const base = parseFloat(fixed3.slice(0, -1))  // valor truncado em 2 casas
-  const result = thirdDigit >= 5 ? base + 0.01 : base
+  const result = thirdDigit >= 6 ? base + 0.01 : base
   return parseFloat(result.toFixed(2))
 }
 
