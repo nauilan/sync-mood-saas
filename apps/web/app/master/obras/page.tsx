@@ -857,8 +857,8 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                           <td className="text-center px-3 py-2 text-violet-400 font-bold">{li + 1}</td>
                           <td className="px-3 py-2">
                             <p className="text-white/80 font-medium">{t.nome}</p>
-                            {t.codigo_interno_legado_titular && (
-                              <p className="text-[9px] font-mono text-white/25">{t.codigo_interno_legado_titular}</p>
+                            {t.codigo_interno && (
+                              <p className="text-[9px] font-mono text-amber-400/50">{t.codigo_interno}</p>
                             )}
                           </td>
                           <td className="px-3 py-2 text-white/45 italic">{t.pseudonimo_fantasia || '—'}</td>
