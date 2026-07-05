@@ -41,7 +41,20 @@ async function autenticar(req: NextRequest, sb: any): Promise<{ id: string; tena
   return data as { id: string; tenant_id: string; role: string } | null
 }
 
+// Mapa CWR funcao_no_link → papel normalizado (espelhado em /links)
+const CWR_ROLE_MAP: Record<string, string> = {
+  E:  'editora_original',
+  SE: 'subeditora', SA: 'subeditora',
+  AM: 'administradora',
+  CA: 'compositor', C: 'compositor', CE: 'compositor',
+  A:  'autor',      T:  'autor',
+  V:  'versionista', AD: 'adaptador',
+  I:  'interprete_referencia',
+}
+
 // ── GET /api/obras/[id] ─────────────────────────────────────────────────────
+// Suporta ?include=links — quando presente, anexa links+titulares no response
+// (retrocompatível: sem o param, retorna exatamente o mesmo que antes)
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -53,16 +66,41 @@ export async function GET(
   if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   const { id } = await params
+  const includeLinks = new URL(req.url).searchParams.get('include') === 'links'
 
   try {
-    const { data: row, error } = await sb
-      .from('obras')
-      .select('*')
-      .eq('id', id)
-      .eq('tenant_id', usuario.tenant_id)
-      .is('deleted_at', null)
-      .single()
+    // Obra e links buscados em paralelo quando ?include=links está presente
+    const linksQuery = includeLinks
+      ? sb.from('obras_links')
+          .select(`
+            id, obra_id, numero_link, percentual_link, tipo_link, controlado, status,
+            obras_links_titulares (
+              id, obra_link_id, nome, papel, funcao_no_link,
+              percentual_exec_publica, percentual_fonomecanico, percentual_sincronizacao,
+              controlado, ipi, cae,
+              titular_id, editora_id, editora_original_id, editora_administradora_id,
+              contrato_id, status_controle,
+              pct_repr_grafica, pct_repr_fonomecanica, pct_inclusao_audiovisual,
+              pct_inclusao_publicitaria, pct_distribuicao_meios, pct_inclusao_base_dados,
+              pct_comunicacao_publico, pct_autorizacoes_onus,
+              pct_ext_repr_grafica, pct_ext_repr_fonomecanica, pct_ext_inclusao_audiovisual,
+              pct_ext_inclusao_publicitaria, pct_ext_distribuicao_meios, pct_ext_inclusao_base_dados,
+              pct_ext_comunicacao_publico
+            )
+          `)
+          .eq('obra_id', id)
+          .eq('tenant_id', usuario.tenant_id)
+          .eq('status', 'ativo')
+          .order('numero_link')
+          .then((r: { data: unknown; error: unknown }) => r)
+      : Promise.resolve(null)
 
+    const [obraRes, linksRes] = await Promise.all([
+      sb.from('obras').select('*').eq('id', id).eq('tenant_id', usuario.tenant_id).is('deleted_at', null).single(),
+      linksQuery,
+    ])
+
+    const { data: row, error } = obraRes as { data: Record<string, unknown> | null; error: unknown }
     if (error || !row) return NextResponse.json({ error: 'Obra não encontrada' }, { status: 404 })
 
     // Enrich com info do contrato para o modal de exclusão
@@ -77,7 +115,29 @@ export async function GET(
       contrato_numero = (ctrRes.data as { numero?: string } | null)?.numero ?? null
     }
 
-    return NextResponse.json({ data: { ...row, contrato_obras_count, contrato_numero } })
+    // Montar links normalizados (mesmo formato que /links retorna)
+    let links: unknown[] | undefined
+    if (includeLinks && linksRes) {
+      const { data: linksData } = linksRes as { data: any[] | null }
+      links = (linksData ?? []).map((l: any) => ({
+        ...l,
+        titulares: (l.obras_links_titulares ?? []).map((t: any) => {
+          const fn = (t.funcao_no_link ?? '').toUpperCase()
+          const papel = fn ? (CWR_ROLE_MAP[fn] ?? t.papel ?? 'autor') : (t.papel ?? 'autor')
+          return { ...t, link_id: t.obra_link_id ?? l.id, papel }
+        }),
+        obras_links_titulares: undefined,
+      }))
+    }
+
+    return NextResponse.json({
+      data: {
+        ...row,
+        contrato_obras_count,
+        contrato_numero,
+        ...(includeLinks ? { links } : {}),
+      },
+    })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }

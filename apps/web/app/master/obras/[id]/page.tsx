@@ -621,19 +621,16 @@ export default function ObraDetailPage() {
     async function load() {
       setLoading(true)
       try {
-        const [obraRes, linksRes, fonoRes, negociosRes] = await Promise.all([
-          authFetch(`/api/obras/${obraId}`),
-          authFetch(`/api/obras/${obraId}/links`),
+        const [obraRes, fonoRes, negociosRes] = await Promise.all([
+          authFetch(`/api/obras/${obraId}?include=links`),
           authFetch(`/api/obras/${obraId}/fonogramas`),
           authFetch('/api/negocios-editoriais?status=ativo&limit=500'),
         ])
         if (obraRes.ok) {
           const d = await obraRes.json()
           setObra(d.data ?? null)
-        }
-        if (linksRes.ok) {
-          const d = await linksRes.json()
-          setLinks(normalizarLinksObra(d.data ?? []))
+          // links chegam embutidos no mesmo response (evita 2º cold start)
+          setLinks(normalizarLinksObra(d.data?.links ?? []))
         }
         if (fonoRes.ok) {
           const d = await fonoRes.json()
