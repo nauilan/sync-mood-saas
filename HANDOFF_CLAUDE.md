@@ -44,4 +44,50 @@ Existem dois espelhos de obra convivendo:
 
 ---
 
+## Pendente 4 — Percentuais de Exterior (pct_ext_*) via negócio editorial
+
+**Contexto:**
+A tabela `obras_links_titulares` tem 7 colunas `pct_ext_*` (migration 059), todas `DEFAULT 0`. O CWR só traz percentuais do Brasil (SPT `0076`) — o exterior NÃO vem no CWR. Os valores de exterior devem ser derivados do `negocios_editoriais` de cada editora.
+
+**Arquitetura dos dois conjuntos de campos:**
+- **Agrupados** (`percentual_exec_publica`, `percentual_fonomecanico`, `percentual_sincronizacao`): populados pelo `/integrar`, usados pelo CWR generator e pelo espelho. FUNCIONAM.
+- **Granulares Brasil** (`pct_repr_grafica` … `pct_autorizacoes_onus`, 8 campos): DEFAULT 0, nenhum código escreve. O espelho usa fallback para os agrupados — visualmente correto. Campos provisionados para o futuro, NÃO são gap atual.
+- **Granulares Exterior** (`pct_ext_*`, 7 campos): DEFAULT 0, nenhum código escreve. Espelho exibe `—`. GAP REAL — precisam ser preenchidos via negócio editorial.
+
+**Regra de negócio confirmada:**
+- Para direitos diferentes de execução pública, o autor fica com 0% e a AM absorve o percentual total do link (CA + E). Zeros nos autores são CORRETOS por design.
+- Percentual de exterior de cada participante:
+  - `E.pct_ext_{direito}` = `E.percentual_exec_publica × negocio.percentuais_exterior[direito].administrada / 100`
+  - `AM.pct_ext_{direito}` = `E.percentual_exec_publica × negocio.percentuais_exterior[direito].administradora / 100`
+  - `CA.pct_ext_{direito}` = `CA.percentual_exec_publica` (mantém sua cota no exterior)
+  - OWR: **definir** — manter `percentual_exec_publica` ou zerar? (decisão de negócio pendente)
+
+**Estrutura de `negocios_editoriais.percentuais_exterior`:**
+```json
+{
+  "repr_grafica":        { "administrada": 60, "administradora": 40 },
+  "repr_fonomecanica":   { "administrada": 60, "administradora": 40 },
+  ...
+}
+```
+As chaves mapeiam diretamente para os sufixos `pct_ext_{chave}`.
+
+**Tarefa:**
+1. Nova rota `POST /api/obras/aplicar-exterior` — percorre obras do tenant, calcula `pct_ext_*` a partir do negócio editorial, faz UPDATE idempotente em `obras_links_titulares`
+2. Botão "Calcular exterior" na listagem de obras com modal de confirmação e progresso
+3. Sem migration (colunas existem)
+
+**Arquivos a tocar:**
+- Novo: `apps/web/app/api/obras/aplicar-exterior/route.ts`
+- `apps/web/app/master/obras/page.tsx` (adicionar botão)
+
+**Bloqueadores antes de implementar:**
+- Definir comportamento de OWR no exterior (zerar ou manter percentual_exec_publica?)
+- Confirmar que `negocios_editoriais` está cadastrado com `percentuais_exterior` preenchido
+
+**Pendente futuro (bloqueado por esta feature):**
+- Exportação CWR 2WL (exterior): `cwr-generator.ts` (módulo protegido) precisaria de loop em `buildSPT`/`buildSWT` para território `2136` (Mundo excl. Brasil), lendo `pct_ext_*`. Só faz sentido após pct_ext_* populados.
+
+---
+
 *Última atualização: 2026-07-05*
