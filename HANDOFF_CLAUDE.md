@@ -4,7 +4,50 @@ Tarefas pendentes registradas para próximas sessões de desenvolvimento.
 
 ---
 
-## Pendente 1 — Unificar fonte de dados dos dois espelhos de obra
+## 🔴 PRIORIDADE 1 — Refazer fix de arredondamento da execução pública (cirúrgico)
+
+**Contexto:**
+O commit `6bd8009` foi **revertido** (revert `2cd666a`) porque quebrou MEC/Sync: fonomecânico ficou zerado e sincronização foi distribuída entre autores indevidamente. O fix de PR estava correto, mas normalizou `mr_pct` e `sr_pct` individualmente e distribuiu resíduo de SR — o que violou as regras BackOffice para MEC/Sync.
+
+**Bug alvo (ainda existe após o revert):**
+- `percentual_exec_publica` (PR) fecha 99.99% em vez de 100% em ~2598 links
+- Causa: `normalizarPercentual` arredonda decimal 5 para BAIXO (ex: 9.375 → 9.37), mas a regra correta é arredondar para CIMA (favorece autor)
+- O resíduo de 0.01% não é distribuído ao Editor Original (E)
+
+**Regra de negócio confirmada:**
+- Decimal ≤ 4 → arredonda para baixo
+- Decimal ≥ 6 → arredonda para cima
+- Decimal = 5 → arredonda para CIMA (favorece autor)
+- Resíduo de PR (100 - soma) → adicionar ao **E** do link; fallback: CA; fallback: primeiro controlado
+
+**REGRAS CRÍTICAS para não repetir a regressão:**
+1. Normalizar **SÓ `pr_pct`** em `percentual.ts` e no `/integrar`. **NÃO normalizar `mr_pct` nem `sr_pct` individualmente.**
+2. Distribuir resíduo **apenas no PR** (`percentual_exec_publica`), **só ao E**. **NÃO aplicar distribuição ao SR nem MR.**
+3. Recalcular MR da AM (`calcularMrAM`) **depois** de normalizar `pr_pct` mas **antes** de distribuir resíduo — MR depende da soma dos `pr_pct` controlados.
+4. MEC (`mr`) e Sync (`sr`) seguem regra própria do BackOffice (autor zerado, AM concentra o total). **NÃO TOCAR nestas regras.**
+
+**Arquivos a tocar:**
+- `apps/web/lib/percentual.ts` — mudar `thirdDigit >= 6` para `thirdDigit >= 5` (e atualizar JSDoc/exemplos)
+- `apps/web/app/api/cwr/[id]/integrar/route.ts` — normalizar só `p.pr_pct`, recalcular `mrAmPorLink` com valores normalizados, distribuir resíduo de PR ao E
+
+**Validar após aplicar:**
+- AGORA AGUENTA: MARCUS (CA) = 9.38%, TOP SHOW (E) = 3.13%, total = 100.00%
+- ELA NAO PARA (T-932925165-2): percentuais MEC/Sync **inalterados** vs antes do fix
+- LEMBRANCA NOSSA (T-335753310-5): idem
+- Query de contagem antes/depois (era 2598 links com PR ≠ 100%):
+```sql
+SELECT COUNT(*) AS links_com_residuo
+FROM obras_links ol
+JOIN obras_links_titulares olt ON olt.obra_link_id = ol.id
+WHERE ol.tenant_id = '<tenant>'
+  AND ol.status = 'ativo'
+GROUP BY ol.id
+HAVING ABS(SUM(olt.percentual_exec_publica) - 100) > 0.005;
+```
+
+---
+
+## Pendente 2 — Unificar fonte de dados dos dois espelhos de obra
 
 **Contexto:**
 Existem dois espelhos de obra convivendo:
