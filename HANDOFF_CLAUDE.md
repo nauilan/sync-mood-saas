@@ -81,9 +81,16 @@ As chaves mapeiam diretamente para os sufixos `pct_ext_{chave}`.
 - Novo: `apps/web/app/api/obras/aplicar-exterior/route.ts`
 - `apps/web/app/master/obras/page.tsx` (adicionar botão)
 
-**Bloqueadores antes de implementar:**
-- Definir comportamento de OWR no exterior (zerar ou manter percentual_exec_publica?)
-- Confirmar que `negocios_editoriais` está cadastrado com `percentuais_exterior` preenchido
+**Pré-requisitos obrigatórios (resolver antes de iniciar a implementação):**
+
+- [ ] **PR-1 — Regra OWR no exterior:** decidir se `pct_ext_*` de autores não controlados (OWR) deve ser igual a `percentual_exec_publica` (mantém cota no exterior) ou `0` (exterior fica 100% editorial). Impacta diretamente o cálculo na rota `aplicar-exterior`.
+- [ ] **PR-2 — Verificar `percentuais_exterior` no banco:** confirmar no Supabase SQL Editor se ao menos um `negocio_editorial` ativo tem `percentuais_exterior` não-nulo (JSONB com as chaves `repr_grafica`, `repr_fonomecanica`, etc.). Se estiver vazio, a feature não tem de onde calcular e o cadastro de negócios precisa ser feito primeiro.
+  ```sql
+  SELECT id, nome, percentuais_exterior
+  FROM negocios_editoriais
+  WHERE status = 'ativo' AND percentuais_exterior IS NOT NULL
+  LIMIT 5;
+  ```
 
 **Pendente futuro (bloqueado por esta feature):**
 - Exportação CWR 2WL (exterior): `cwr-generator.ts` (módulo protegido) precisaria de loop em `buildSPT`/`buildSWT` para território `2136` (Mundo excl. Brasil), lendo `pct_ext_*`. Só faz sentido após pct_ext_* populados.
