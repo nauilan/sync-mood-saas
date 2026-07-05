@@ -121,7 +121,7 @@ export function Sidebar({ nav, role, editoraNome, tenantNome, userName, userInit
 
       {/* Navigation */}
       <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-2 scroll-smooth">
-        {nav.map((section) => (
+        {nav.filter(section => section.items.some(item => !item.hidden)).map((section) => (
           <div key={section.title}>
             {section.title !== 'Principal' && (
               <p className="text-[9px] font-semibold text-white/20 uppercase tracking-widest px-3 mb-1 mt-3">
@@ -129,7 +129,7 @@ export function Sidebar({ nav, role, editoraNome, tenantNome, userName, userInit
               </p>
             )}
             <ul className="space-y-0.5">
-              {section.items.map((item) => {
+              {section.items.filter(item => !item.hidden).map((item) => {
                 const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
                 const Icon = ICON_MAP[item.iconName] ?? LayoutDashboard
                 return (
