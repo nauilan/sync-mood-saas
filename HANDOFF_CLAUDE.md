@@ -12,22 +12,59 @@ Tarefas pendentes registradas para próximas sessões de desenvolvimento.
 
 ### Bug A — Distribuição incorreta de MEC/Sync (fono + sinc)
 
-**Estado atual confirmado — obra AGORA AGUENTA (pós-revert):**
-- `percentual_fonomecanico`: TODOS zerados, inclusive a editora — **ERRADO**
-- `percentual_sincronizacao`: autores controlados têm valor (9.37 / 12.50 / 25) — **ERRADO**, deveriam estar zerados
+**Estado do código:** commit `e807513` aplicou o fix de concentrador (E quando não há AM, SR com lógica própria). **Mas a BASE da concentração está errada.** Requer correção antes de reintegrar.
 
 **Regra de negócio confirmada pelo dono:**
-> Nos direitos que a editora cobra (fono/MEC e Sync), os **autores controlados ficam ZERADOS** e a **editora administradora (AM) concentra o percentual total de controle** (soma do percentual de autor + editora original do link). Se não houver AM, concentra na Editora Original (E). Isso alimenta o CWR.
+> Nos direitos que a editora cobra (fono/MEC e Sync), os **autores controlados ficam ZERADOS** e o **concentrador do link** (AM se houver; senão E) recebe o **BRUTO do link** (CA.pr_pct + E.pr_pct + AM.pr_pct). Não os fracionados apenas do CA.
 
-**Inconsistência crítica a investigar (FASE 1 — diagnóstico):**
-- AGORA ESQUECE → MEC/Sync **correto** (Top Show/AM com 50% fono/sync, autores zerados)
-- AGORA AGUENTA → MEC/Sync **errado** (fono tudo zero, sinc nos autores)
-- Hipótese: estrutura CWR difere entre as duas obras (AM explícita no link de uma, ausente na outra), ou `deveZerarMR` / `calcularMrAM` só dispara sob certas condições
+**Diagnóstico do erro de base (investigado em sessão 2026-07-05):**
 
-**Diagnóstico necessário ANTES de qualquer fix:**
-1. Comparar snapshot CWR das duas obras — como SPU/PWR diferem entre AGORA ESQUECE (certa) e AGORA AGUENTA (errada)
-2. No `/integrar`, rastrear onde `percentual_fonomecanico` e `percentual_sincronizacao` são calculados e por que concentra numa obra e não na outra
-3. Verificar se `deveZerarMR(papel)` retorna `true` para papéis CA/C/etc. nas duas obras
+O CWR já entrega os percentuais **pós-fracionamento** por participante (o ECAD fraciona antes de gerar o arquivo):
+- MARCUS (CA): `pr_pct = 9.38`
+- EDI MUSIC (E): `pr_pct = 1.04`
+- TOP SHOW (AM): `pr_pct = 2.08`
+
+O "bruto" de 12.50% não existe como campo — é a **soma implícita** de todos os pr_pct do link.
+
+**Problema em `calcularMrAM`:** filtra apenas `controlled: true`. A AM tem `controlled: false` (linha 423 do route.ts: `e.controlled ? 'editora' : 'editora_administrada'` — AM é mapeada como `editora_administrada` com `controlled: false`). Portanto:
+
+| Participante | `controlled` | `pr_pct` | entra em `calcularMrAM`? |
+|---|---|---|---|
+| MARCUS (CA) | true | 9.38 | ✅ |
+| EDI MUSIC (E) | true | 1.04 | ✅ |
+| TOP SHOW (AM) | **false** | 2.08 | ❌ excluída |
+
+`totalControlledPr = 10.42` → concentrador recebe 10.42%, mas o correto é **12.50%**.
+
+**Correção proposta (aguardando aprovação do dono — NÃO aplicar sem revisar os 3 cenários):**
+
+Substituir `calcularMrAM` (que filtra por `controlled`) por soma bruta de TODOS os pr_pct do link:
+
+```typescript
+// SUBSTITUIR o bloco atual de mrAmPorLink:
+const brutoPorLink = new Map<number, number>()
+for (const ln of linkNums) {
+  const linkPartics = partics.filter(p => (p.link_number ?? 1) === ln)
+  // Bruto = CA + E + AM (todos os participantes do link, sem filtro de controlled)
+  brutoPorLink.set(ln, linkPartics.reduce((sum, p) => sum + (p.pr_pct ?? 0), 0))
+}
+
+// No corpo do loop de partics, trocar totalControlledPr → brutoDoLink:
+const brutoDoLink = brutoPorLink.get(p.link_number ?? 1) ?? 0
+const ehConcentrador = p.papel === 'AM' || (!linkTemAM && p.papel === 'E')
+const mr_final   = (ehConcentrador && brutoDoLink > 0) ? brutoDoLink : (p.mr_pct ?? 0)
+const mr_gravado = deveZerarMR(p.papel) && !ehConcentrador ? 0 : mr_final
+const sr_gravado = ehConcentrador
+  ? (brutoDoLink > 0 ? brutoDoLink : (p.sr_pct ?? 0))
+  : 0
+```
+
+**Não afeta:** execução pública (`p.pr_pct ?? 0` — linha inalterada) nem analítico (`obras_analitico` — arquivo separado).
+
+**Validar mentalmente antes de aplicar:**
+- AGORA AGUENTA (CA=9.38, E=3.12, sem AM): `brutoDoLink = 12.50`, E concentra 12.50% ✅
+- AGORA ESQUECE (CA=9.38, E=1.04, AM=2.08): `brutoDoLink = 12.50`, AM concentra 12.50% ✅
+- JAMIL (OWR, link exclusivo): `brutoDoLink = 22.5`, mas `ehConcentrador = false` → fono=0, sinc=0 ✅
 
 ---
 
@@ -174,6 +211,40 @@ As chaves mapeiam diretamente para os sufixos `pct_ext_{chave}`.
 
 **Pendente futuro (bloqueado por esta feature):**
 - Exportação CWR 2WL (exterior): `cwr-generator.ts` (módulo protegido) precisaria de loop em `buildSPT`/`buildSWT` para território `2136` (Mundo excl. Brasil), lendo `pct_ext_*`. Só faz sentido após pct_ext_* populados.
+
+---
+
+## Pendente 5 — FEATURE: Aba "Obras pendentes de contrato" (CWR sem contrato vinculado)
+
+**Contexto:**
+Obras importadas via CWR entram sem documento de contrato (o CWR não traz contrato). Ficam com `origem_importacao = 'cwr'` e sem contrato vinculado. O operador precisa subir o contrato para completar o cadastro e ativar a obra no catálogo.
+
+**Requisitos:**
+
+1. **Tela/aba de pendências:** lista obras SEM contrato vinculado filtrando APENAS `origem_importacao = 'cwr'`. Obras cadastradas manualmente não entram (já sobem contrato no ato do cadastro).
+
+2. **Upload de contrato:** operador sobe o arquivo → sistema:
+   - Armazena no bucket de contratos (já existe)
+   - Lê via IA (`POST /api/contratos/extrair`, modelo Haiku — já existe)
+   - Identifica autor + obras cobertas pelo contrato
+
+3. **Resolução em lote:** um contrato pode cobrir **várias obras do mesmo autor**. Ao vincular, resolver pendência de TODAS as obras daquele autor cobertas pelo contrato de uma vez. Cruzar: `autor extraído pelo IA` × `títulos das obras extraídas` × `obras pendentes daquele autor`.
+   - Não pedir o mesmo contrato repetidamente para obras do mesmo autor.
+
+4. **Ativação:** ao vincular contrato validado → obra muda de `pré_cadastro` → `ativo` (conecta com fluxo de validação AM existente).
+
+**Reutilização de componentes existentes:**
+- Extração IA de contrato: `/api/contratos/extrair` (Haiku) — já funciona
+- Fluxo pré-cadastro → ativo: já existe (verificar se a aba de pendências de validação AM pode ser estendida ou se cria nova)
+- Bucket de contratos: já existe
+
+**Arquivos a tocar (estimativa):**
+- Nova rota: `apps/web/app/api/obras/pendentes-contrato/route.ts` — lista obras CWR sem contrato
+- Nova rota ou extensão: `apps/web/app/api/obras/vincular-contrato/route.ts` — recebe upload, extrai via IA, vincula a obras do autor
+- Nova aba: `apps/web/app/master/obras/pendentes/page.tsx` (ou aba dentro da listagem existente)
+- Adicionar item no menu (nav-config.ts) em Obras ou Contratos
+
+**Não construir agora — registrado para sessão dedicada.**
 
 ---
 
