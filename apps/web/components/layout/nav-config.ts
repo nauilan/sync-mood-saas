@@ -80,13 +80,13 @@ export const MASTER_NAV: NavSection[] = [
   ]},
 
   { title: 'M6 TV Audiovisual', items: [
-    { label: 'TV Dashboard',    href: '/master/tv/dashboard',    iconName: 'BarChart3',     hidden: true },
-    { label: 'Importacoes TV',  href: '/master/tv/importacoes',  iconName: 'FileInput',     hidden: true },
-    { label: 'Execucoes TV',    href: '/master/tv/execucoes',    iconName: 'Tv',            hidden: true },
+    { label: 'TV Dashboard',    href: '/master/tv/dashboard',    iconName: 'BarChart3'                   },
+    { label: 'Importacoes TV',  href: '/master/tv/importacoes',  iconName: 'FileInput'                   },
+    { label: 'Execucoes TV',    href: '/master/tv/execucoes',    iconName: 'Tv'                          },
     { label: 'Divergencias TV', href: '/master/tv/divergencias', iconName: 'AlertTriangle', hidden: true },
     { label: 'Precificacao TV', href: '/master/tv/precificacao', iconName: 'DollarSign',    hidden: true },
     { label: 'Autorizacoes TV', href: '/master/tv/autorizacoes', iconName: 'Shield',        hidden: true },
-    { label: 'Cobranca TV',     href: '/master/tv/cobranca',     iconName: 'TrendingUp',    hidden: true },
+    { label: 'Cobranca TV',     href: '/master/tv/cobranca',     iconName: 'TrendingUp'                  },
     { label: 'TV Home',         href: '/master/tv',              iconName: 'Tv',            hidden: true },
   ]},
   { title: 'M7 Conciliacao', items: [
