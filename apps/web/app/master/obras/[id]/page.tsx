@@ -1081,6 +1081,7 @@ export default function ObraDetailPage() {
                   <tr className="border-b border-white/[0.06]">
                     <th className="text-center px-3 py-2.5 text-white/30 font-semibold text-xs w-12">Link</th>
                     <th className="text-left px-3 py-2.5 text-white/30 font-semibold text-xs">Nome</th>
+                    <th className="text-left px-3 py-2.5 text-white/30 font-semibold text-xs w-24">ID / Código</th>
                     <th className="text-center px-3 py-2.5 text-white/30 font-semibold text-xs w-16">Cat.</th>
                     <th className="text-center px-3 py-2.5 text-white/30 font-semibold text-xs w-16">Controle</th>
                     <th className="text-right px-3 py-2.5 text-white/30 font-semibold text-xs w-20">PR</th>
@@ -1170,6 +1171,12 @@ export default function ObraDetailPage() {
                                 <span className="block text-[10px] font-mono text-white/30">{t.ipi || t.cae}</span>
                               )}
                             </td>
+                            <td className="px-3 py-3">
+                              {t.codigo_interno
+                                ? <span className="text-[11px] font-mono text-amber-400/70">{t.codigo_interno}</span>
+                                : <span className="text-white/20">—</span>
+                              }
+                            </td>
                             <td className="px-3 py-3 text-center">
                               <SiglaBadge papel={t.papel} />
                             </td>
@@ -1198,7 +1205,7 @@ export default function ObraDetailPage() {
                   })()}
                   {links.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-xs text-white/30">
+                      <td colSpan={8} className="px-4 py-8 text-center text-xs text-white/30">
                         Nenhum integrante vinculado.
                       </td>
                     </tr>
@@ -1207,8 +1214,7 @@ export default function ObraDetailPage() {
                 <tfoot>
                   <tr className="border-t border-white/[0.08]">
                     <td colSpan={4} className="px-3 py-2 text-right text-xs text-white/25 font-medium">
-                      {modoAnalitico ? '% por link (anal.)' : 'Total PR / MR / SR'}
-                    </td>
+                      {modoAnalitico ? '% por link (anal.)' : 'Total PR / MR / SR'}</td>
                     <td className="px-3 py-2 text-right text-xs font-bold tabular-nums text-sky-300/70">
                       {formatarPercentual(links.flatMap((l: any) => l.titulares ?? []).reduce((s: number, t: any) => s + (t.percentual_exec_publica ?? 0), 0))}
                     </td>

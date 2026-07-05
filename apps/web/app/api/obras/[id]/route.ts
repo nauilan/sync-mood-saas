@@ -85,7 +85,8 @@ export async function GET(
               pct_comunicacao_publico, pct_autorizacoes_onus,
               pct_ext_repr_grafica, pct_ext_repr_fonomecanica, pct_ext_inclusao_audiovisual,
               pct_ext_inclusao_publicitaria, pct_ext_distribuicao_meios, pct_ext_inclusao_base_dados,
-              pct_ext_comunicacao_publico
+              pct_ext_comunicacao_publico,
+              titulares ( codigo_interno )
             )
           `)
           .eq('obra_id', id)
@@ -124,7 +125,13 @@ export async function GET(
         titulares: (l.obras_links_titulares ?? []).map((t: any) => {
           const fn = (t.funcao_no_link ?? '').toUpperCase()
           const papel = fn ? (CWR_ROLE_MAP[fn] ?? t.papel ?? 'autor') : (t.papel ?? 'autor')
-          return { ...t, link_id: t.obra_link_id ?? l.id, papel }
+          const { titulares: titNested, ...rest } = t
+          return {
+            ...rest,
+            link_id: t.obra_link_id ?? l.id,
+            papel,
+            codigo_interno: (titNested as any)?.codigo_interno ?? null,
+          }
         }),
         obras_links_titulares: undefined,
       }))
