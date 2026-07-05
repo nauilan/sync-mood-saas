@@ -863,12 +863,13 @@ export async function POST(
   const titPayloads: Record<string, unknown>[] = []
   for (const [obraId, partics] of partByObra) {
 
-    // Agrupa participantes por link_number para calcular MR da AM por link
+    // Bruto de cada link = soma de TODOS os pr_pct do link (CA + E + AM),
+    // sem filtro de controlled — este é o percentual bruto de participação na obra.
     const linkNums = [...new Set(partics.map(p => p.link_number ?? 1))]
-    const mrAmPorLink = new Map<number, number>()
+    const brutoPorLink = new Map<number, number>()
     for (const ln of linkNums) {
       const linkPartics = partics.filter(p => (p.link_number ?? 1) === ln)
-      mrAmPorLink.set(ln, calcularMrAM(linkPartics))
+      brutoPorLink.set(ln, linkPartics.reduce((s, p) => s + (p.pr_pct ?? 0), 0))
     }
 
     for (const p of partics) {
@@ -893,7 +894,7 @@ export async function POST(
 
       // Regra BackOffice: concentrador do link (AM se houver; senão E) recebe MR/SR do link.
       // Todos os demais (autores controlados, OWR, E quando há AM) recebem 0.
-      const totalControlledPr = mrAmPorLink.get(p.link_number ?? 1) ?? 0
+      const totalControlledPr = brutoPorLink.get(p.link_number ?? 1) ?? 0
       const linkTemAM = partics.some(
         p2 => (p2.link_number ?? 1) === (p.link_number ?? 1) && p2.papel === 'AM'
       )
@@ -983,6 +984,20 @@ export async function POST(
         snapshot_date: obraIdToSnapshotDate[p.obra_id as string] ?? '?',
       })),
     }, { status: 422 })
+  }
+
+  // Delete idempotente: garante que reintegrar a mesma obra nunca duplica titulares,
+  // mesmo que relAnterior.participacoes_ids esteja vazio ou incompleto.
+  const obraIdsParaLimpar = [...new Set(titPayloads.map(p => p.obra_id as string))]
+  if (obraIdsParaLimpar.length > 0) {
+    const DEL_CHUNK = 200
+    for (let i = 0; i < obraIdsParaLimpar.length; i += DEL_CHUNK) {
+      await client
+        .from('obras_links_titulares')
+        .delete()
+        .eq('tenant_id', usuario.tenantId)
+        .in('obra_id', obraIdsParaLimpar.slice(i, i + DEL_CHUNK))
+    }
   }
 
   let insertError: string | null = null
