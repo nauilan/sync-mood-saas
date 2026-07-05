@@ -40,6 +40,8 @@ export default function CwrPage() {
   const [confirmId, setConfirmId]       = useState<string | null>(null)
   const [deleting, setDeleting]         = useState(false)
   const [deleteErro, setDeleteErro]     = useState('')
+  const [reintegrando, setReintegrando] = useState<string | null>(null)
+  const [reintegrarMsg, setReintegrarMsg] = useState<{ ok: boolean; texto: string } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { load() }, [])
@@ -73,6 +75,30 @@ export default function CwrPage() {
     finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  async function handleReintegrar(id: string) {
+    setReintegrando(id)
+    setReintegrarMsg(null)
+    try {
+      const res = await authFetch(`/api/cwr/${id}/integrar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setReintegrarMsg({ ok: false, texto: d.error ?? `Erro ${res.status}` })
+      } else {
+        const n = d.obras_integradas ?? d.obras ?? '?'
+        setReintegrarMsg({ ok: true, texto: `${n} obras reintegradas com sucesso.` })
+        load()
+      }
+    } catch (e: unknown) {
+      setReintegrarMsg({ ok: false, texto: e instanceof Error ? e.message : 'Falha na reintegração.' })
+    } finally {
+      setReintegrando(null)
     }
   }
 
@@ -129,6 +155,18 @@ export default function CwrPage() {
         <div className="flex items-center gap-2 px-4 py-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-rose-300 text-sm">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           {erro || uploadErro}
+        </div>
+      )}
+
+      {reintegrarMsg && (
+        <div className={`flex items-center justify-between gap-2 px-4 py-3 rounded-lg text-sm border ${reintegrarMsg.ok ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' : 'bg-rose-500/10 border-rose-500/20 text-rose-300'}`}>
+          <div className="flex items-center gap-2">
+            {reintegrarMsg.ok
+              ? <CheckCircle2 className="w-4 h-4 shrink-0" />
+              : <AlertTriangle className="w-4 h-4 shrink-0" />}
+            {reintegrarMsg.texto}
+          </div>
+          <button onClick={() => setReintegrarMsg(null)} className="text-white/30 hover:text-white/60 text-xs">✕</button>
         </div>
       )}
 
@@ -255,6 +293,16 @@ export default function CwrPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => handleReintegrar(item.id)}
+                            disabled={reintegrando === item.id}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-violet-500/15 text-white/20 hover:text-violet-400 disabled:opacity-50 transition-colors"
+                            title="Reintegrar obras deste CWR (pode levar alguns minutos)"
+                          >
+                            {reintegrando === item.id
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-400" />
+                              : <RefreshCw className="w-3.5 h-3.5" />}
+                          </button>
                           <button
                             onClick={() => { setConfirmId(item.id); setDeleteErro('') }}
                             className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-rose-500/15 text-white/20 hover:text-rose-400 transition-colors"
