@@ -817,13 +817,17 @@ export async function POST(
   }
 
   // Carregar IDs dos links indexados por "obraId:linkNum"
+  // IMPORTANTE: usar chunk pequeno (50 obras) para evitar truncamento silencioso do PostgREST.
+  // Com CHUNK=500 obras × ~3 links cada = ~1500 linhas, acima do limite padrão de 1000 do PostgREST.
+  // Com SELECT_CHUNK=50 obras × ~5 links = ~250 linhas por chamada — seguro em qualquer tier.
   const obraLinkNumToId: Record<string, string> = {}
   const obrasLinksIds: string[] = []
-  for (let i = 0; i < obraIds.length; i += CHUNK) {
+  const SELECT_CHUNK = 50
+  for (let i = 0; i < obraIds.length; i += SELECT_CHUNK) {
     const { data: lks } = await client
       .from('obras_links')
       .select('id, obra_id, numero_link')
-      .in('obra_id', obraIds.slice(i, i + CHUNK))
+      .in('obra_id', obraIds.slice(i, i + SELECT_CHUNK))
     for (const l of (lks ?? [])) {
       const key = `${l.obra_id}:${l.numero_link}`
       obraLinkNumToId[key] = l.id as string
