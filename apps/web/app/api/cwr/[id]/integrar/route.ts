@@ -156,7 +156,7 @@ export async function POST(
 
   if (!imp) return NextResponse.json({ error: 'Importação não encontrada' }, { status: 404 })
   // Modo unitário (obra_ids fornecido): permite reintegrar obras de importação já integrada
-  const statusPermitidos = obraIdsFilter ? ['confirmado', 'integrado'] : ['confirmado']
+  const statusPermitidos = ['confirmado', 'integrado']
   if (!statusPermitidos.includes(imp.status as string)) {
     return NextResponse.json(
       { error: 'A importação precisa estar confirmada antes de integrar.' },
