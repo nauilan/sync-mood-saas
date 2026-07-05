@@ -62,7 +62,6 @@ export async function GET(
     `)
     .eq('obra_id', obra_id)
     .eq('tenant_id', usuario.tenant_id)
-    .is('deleted_at', null)
     .order('titulo_fonograma')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
