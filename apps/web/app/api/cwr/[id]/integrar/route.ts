@@ -901,9 +901,8 @@ export async function POST(
       const ehConcentrador = p.papel === 'AM' || (!linkTemAM && p.papel === 'E')
       const mr_final   = (ehConcentrador && totalControlledPr > 0) ? totalControlledPr : (p.mr_pct ?? 0)
       const mr_gravado = deveZerarMR(p.papel) && !ehConcentrador ? 0 : mr_final
-      const sr_gravado = ehConcentrador
-        ? (totalControlledPr > 0 ? totalControlledPr : (p.sr_pct ?? 0))
-        : 0
+      const sr_final   = (ehConcentrador && totalControlledPr > 0) ? totalControlledPr : (p.sr_pct ?? 0)
+      const sr_gravado = deveZerarMR(p.papel) && !ehConcentrador ? 0 : sr_final
 
       titPayloads.push({
         obra_link_id:             linkId,
