@@ -822,7 +822,7 @@ export async function POST(
   // Com SELECT_CHUNK=50 obras × ~5 links = ~250 linhas por chamada — seguro em qualquer tier.
   const obraLinkNumToId: Record<string, string> = {}
   const obrasLinksIds: string[] = []
-  const SELECT_CHUNK = 50
+  const SELECT_CHUNK = 200  // 200 obras × ~4 links = ~800 linhas/query, abaixo do limite 1000 do PostgREST
   for (let i = 0; i < obraIds.length; i += SELECT_CHUNK) {
     const { data: lks } = await client
       .from('obras_links')
