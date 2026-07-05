@@ -171,8 +171,7 @@ jobs:
         run: npm install -g vercel@latest
       - name: Create Vercel project config
         run: |
-          mkdir -p apps/web/.vercel
-          echo '{"projectId":"prj_81eomK8Uie2j1dPv0mIbJEgbn4Eg","orgId":"team_oSlrnl2yyOTFvhvjIgtBZan7"}' > apps/web/.vercel/project.json
+          mkdir -p .vercel
+          echo '{"projectId":"prj_81eomK8Uie2j1dPv0mIbJEgbn4Eg","orgId":"team_oSlrnl2yyOTFvhvjIgtBZan7"}' > .vercel/project.json
       - name: Deploy to Production
         run: vercel --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: apps/web
