@@ -124,14 +124,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (fono.length > 0) {
       const fonoRows = fono.map((f: unknown) => {
         const fg = f as Record<string, unknown>
+        // Converte HHMMSS → segundos; guard: 0 < resultado ≤ 3600 (mais de 1h = null)
+        let duracaoSeg: number | null = null
+        const dur = fg.duracao as string | null
+        if (dur && /^\d{6}$/.test(dur)) {
+          const total = parseInt(dur.slice(0,2),10)*3600 + parseInt(dur.slice(2,4),10)*60 + parseInt(dur.slice(4,6),10)
+          if (total > 0 && total <= 3600) duracaoSeg = total
+        }
         return {
-          obra_id:          obraId,
-          tenant_id:        usuario.tenantId,
-          isrc:             fg.isrc       ?? null,
-          titulo_fonograma: (fg.titulo as string) ?? payload.titulo,
-          interprete:       (fg.interprete as string) ?? '',
-          versao:           (fg.versao as string) ?? 'original',
-          ano_gravacao:     fg.ano        ?? null,
+          obra_id:           obraId,
+          tenant_id:         usuario.tenantId,
+          isrc:              fg.isrc       ?? null,
+          titulo_fonograma:  (fg.titulo as string) ?? payload.titulo,
+          interprete:        (fg.interprete as string) ?? '',
+          versao:            (fg.versao as string) ?? 'original',
+          ano_gravacao:      fg.ano        ?? null,
+          duracao_segundos:  duracaoSeg,
         }
       })
       await client.from('fonogramas').insert(fonoRows)

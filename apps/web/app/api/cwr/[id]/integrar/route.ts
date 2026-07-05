@@ -274,7 +274,7 @@ export async function POST(
   let obrasAmDefinido      = 0   // AM com percentual explícito no CWR
   let obrasAmPendente      = 0   // AM presente mas pct=0 e não é Cenário C
   let adminsPendentesCount = 0   // total de entradas AM pendentes
-  type FgObra = { obraId: string; isrc: string | null; titulo: string; interprete: string | null; versao: string | null; ano: number | null }
+  type FgObra = { obraId: string; isrc: string | null; titulo: string; interprete: string | null; versao: string | null; ano: number | null; duracao: string | null }
   const obraFonogramas: FgObra[] = []
 
   // Mapa auxiliar para debug: obraId → titulo e data do snapshot usado
@@ -470,6 +470,7 @@ export async function POST(
         interprete: fg.interprete ?? null,
         versao:     fg.versao     ?? null,
         ano:        fg.ano        ?? null,
+        duracao:    fg.duracao    ?? null,
       })
     }
   }
@@ -1066,15 +1067,24 @@ export async function POST(
     for (let i = 0; i < novos.length; i += FCHUNK) {
       const { data: fgCriados, error: fgErr } = await client
         .from('fonogramas')
-        .insert(novos.slice(i, i + FCHUNK).map(f => ({
-          obra_id:          f.obraId,
-          tenant_id:        usuario.tenantId,
-          isrc:             f.isrc         ?? null,
-          titulo_fonograma: f.titulo       ?? '',
-          interprete:       f.interprete   ?? null,
-          versao:           f.versao       ?? 'original',
-          ano_gravacao:     f.ano          ?? null,
-        })))
+        .insert(novos.slice(i, i + FCHUNK).map(f => {
+          // Converte HHMMSS → segundos; guard: 0 < resultado ≤ 3600 (músicas com mais de 1h = null)
+          let duracaoSeg: number | null = null
+          if (f.duracao && /^\d{6}$/.test(f.duracao)) {
+            const total = parseInt(f.duracao.slice(0,2),10)*3600 + parseInt(f.duracao.slice(2,4),10)*60 + parseInt(f.duracao.slice(4,6),10)
+            if (total > 0 && total <= 3600) duracaoSeg = total
+          }
+          return {
+            obra_id:           f.obraId,
+            tenant_id:         usuario.tenantId,
+            isrc:              f.isrc         ?? null,
+            titulo_fonograma:  f.titulo       ?? '',
+            interprete:        f.interprete   ?? null,
+            versao:            f.versao       ?? 'original',
+            ano_gravacao:      f.ano          ?? null,
+            duracao_segundos:  duracaoSeg,
+          }
+        }))
         .select('id')
       if (fgErr) {
         return NextResponse.json({
