@@ -4,45 +4,82 @@ Tarefas pendentes registradas para próximas sessões de desenvolvimento.
 
 ---
 
-## 🔴 PRIORIDADE 1 — Refazer fix de arredondamento da execução pública (cirúrgico)
+## 🔴 PRIORIDADE 1 — Distribuição de MEC/Sync + arredondamento de PR (dois bugs conectados)
 
-**Contexto:**
-O commit `6bd8009` foi **revertido** (revert `2cd666a`) porque quebrou MEC/Sync: fonomecânico ficou zerado e sincronização foi distribuída entre autores indevidamente. O fix de PR estava correto, mas normalizou `mr_pct` e `sr_pct` individualmente e distribuiu resíduo de SR — o que violou as regras BackOffice para MEC/Sync.
+**Escopo expandido após análise pós-revert. INICIAR PELA FASE DE DIAGNÓSTICO — não codificar antes de entender a inconsistência das duas obras.**
 
-**Bug alvo (ainda existe após o revert):**
-- `percentual_exec_publica` (PR) fecha 99.99% em vez de 100% em ~2598 links
-- Causa: `normalizarPercentual` arredonda decimal 5 para BAIXO (ex: 9.375 → 9.37), mas a regra correta é arredondar para CIMA (favorece autor)
-- O resíduo de 0.01% não é distribuído ao Editor Original (E)
+---
+
+### Bug A — Distribuição incorreta de MEC/Sync (fono + sinc)
+
+**Estado atual confirmado — obra AGORA AGUENTA (pós-revert):**
+- `percentual_fonomecanico`: TODOS zerados, inclusive a editora — **ERRADO**
+- `percentual_sincronizacao`: autores controlados têm valor (9.37 / 12.50 / 25) — **ERRADO**, deveriam estar zerados
+
+**Regra de negócio confirmada pelo dono:**
+> Nos direitos que a editora cobra (fono/MEC e Sync), os **autores controlados ficam ZERADOS** e a **editora administradora (AM) concentra o percentual total de controle** (soma do percentual de autor + editora original do link). Se não houver AM, concentra na Editora Original (E). Isso alimenta o CWR.
+
+**Inconsistência crítica a investigar (FASE 1 — diagnóstico):**
+- AGORA ESQUECE → MEC/Sync **correto** (Top Show/AM com 50% fono/sync, autores zerados)
+- AGORA AGUENTA → MEC/Sync **errado** (fono tudo zero, sinc nos autores)
+- Hipótese: estrutura CWR difere entre as duas obras (AM explícita no link de uma, ausente na outra), ou `deveZerarMR` / `calcularMrAM` só dispara sob certas condições
+
+**Diagnóstico necessário ANTES de qualquer fix:**
+1. Comparar snapshot CWR das duas obras — como SPU/PWR diferem entre AGORA ESQUECE (certa) e AGORA AGUENTA (errada)
+2. No `/integrar`, rastrear onde `percentual_fonomecanico` e `percentual_sincronizacao` são calculados e por que concentra numa obra e não na outra
+3. Verificar se `deveZerarMR(papel)` retorna `true` para papéis CA/C/etc. nas duas obras
+
+---
+
+### Bug B — Arredondamento de PR (execução pública)
+
+**Contexto:** commit `6bd8009` revertido (`2cd666a`) — fix de PR estava conceitualmente correto, mas normalizou `mr_pct`/`sr_pct` individualmente e distribuiu resíduo ao SR, violando regras BackOffice.
+
+**Bug alvo (ainda existe):**
+- `percentual_exec_publica` (PR) fecha 99.99% em vez de 100% em ~2598 obras
+- Causa: `normalizarPercentual` arredonda decimal 5 para BAIXO (9.375 → 9.37); regra correta é CIMA (favorece autor)
+- Resíduo de 0.01% não distribuído ao Editor Original (E)
 
 **Regra de negócio confirmada:**
-- Decimal ≤ 4 → arredonda para baixo
-- Decimal ≥ 6 → arredonda para cima
-- Decimal = 5 → arredonda para CIMA (favorece autor)
-- Resíduo de PR (100 - soma) → adicionar ao **E** do link; fallback: CA; fallback: primeiro controlado
+- Decimal ≤ 4 → arredonda para baixo | Decimal ≥ 6 → arredonda para cima
+- Decimal = 5 → **CIMA** (favorece autor)
+- Resíduo de PR (100 − soma) → **E** do link; fallback: CA; fallback: primeiro controlado
 
-**REGRAS CRÍTICAS para não repetir a regressão:**
-1. Normalizar **SÓ `pr_pct`** em `percentual.ts` e no `/integrar`. **NÃO normalizar `mr_pct` nem `sr_pct` individualmente.**
-2. Distribuir resíduo **apenas no PR** (`percentual_exec_publica`), **só ao E**. **NÃO aplicar distribuição ao SR nem MR.**
-3. Recalcular MR da AM (`calcularMrAM`) **depois** de normalizar `pr_pct` mas **antes** de distribuir resíduo — MR depende da soma dos `pr_pct` controlados.
-4. MEC (`mr`) e Sync (`sr`) seguem regra própria do BackOffice (autor zerado, AM concentra o total). **NÃO TOCAR nestas regras.**
+**REGRAS CRÍTICAS — não repetir a regressão do 6bd8009:**
+1. Normalizar **SÓ `pr_pct`** — **NÃO tocar em `mr_pct` nem `sr_pct`**
+2. Distribuir resíduo **só no PR**, **só ao E** — **NÃO aplicar ao SR nem MR**
+3. Recalcular `mrAmPorLink` via `calcularMrAM` **após** normalizar `pr_pct`, **antes** de distribuir resíduo
+4. MEC e Sync seguem regra própria do BackOffice — **NÃO TOCAR**
 
-**Arquivos a tocar:**
-- `apps/web/lib/percentual.ts` — mudar `thirdDigit >= 6` para `thirdDigit >= 5` (e atualizar JSDoc/exemplos)
-- `apps/web/app/api/cwr/[id]/integrar/route.ts` — normalizar só `p.pr_pct`, recalcular `mrAmPorLink` com valores normalizados, distribuir resíduo de PR ao E
+---
 
-**Validar após aplicar:**
-- AGORA AGUENTA: MARCUS (CA) = 9.38%, TOP SHOW (E) = 3.13%, total = 100.00%
-- ELA NAO PARA (T-932925165-2): percentuais MEC/Sync **inalterados** vs antes do fix
-- LEMBRANCA NOSSA (T-335753310-5): idem
-- Query de contagem antes/depois (era 2598 links com PR ≠ 100%):
+### Arquivos a tocar (ambos os bugs)
+
+- `apps/web/lib/percentual.ts` — `thirdDigit >= 6` → `thirdDigit >= 5` + JSDoc (Bug B)
+- `apps/web/app/api/cwr/[id]/integrar/route.ts` — corrigir MEC/Sync (Bug A) + normalizar `pr_pct` + resíduo PR ao E (Bug B)
+- `apps/web/lib/backoffice-rules.ts` — verificar `deveZerarMR` e `calcularMrAM` (diagnóstico Bug A)
+
+### Validação obrigatória após fix
+
+| Obra | PR total | Fono (AM) | Sinc (AM) | Autores fono | Autores sinc |
+|---|---|---|---|---|---|
+| AGORA AGUENTA | 100.00% | concentrado na AM | concentrado na AM | 0% | 0% |
+| AGORA ESQUECE | 100.00% | igual ao atual (já correto) | igual ao atual | 0% | 0% |
+| ELA NAO PARA (T-932925165-2) | 100.00% | inalterado vs legado | inalterado | 0% | 0% |
+| LEMBRANCA NOSSA (T-335753310-5) | 100.00% | inalterado vs legado | inalterado | 0% | 0% |
+
+**Query de medição antes/depois (PR ≠ 100%):**
 ```sql
-SELECT COUNT(*) AS links_com_residuo
-FROM obras_links ol
-JOIN obras_links_titulares olt ON olt.obra_link_id = ol.id
-WHERE ol.tenant_id = '<tenant>'
-  AND ol.status = 'ativo'
-GROUP BY ol.id
-HAVING ABS(SUM(olt.percentual_exec_publica) - 100) > 0.005;
+SELECT COUNT(*) AS obras_com_residuo_pr
+FROM (
+  SELECT ol.obra_id
+  FROM obras_links ol
+  JOIN obras_links_titulares olt ON olt.obra_link_id = ol.id
+  WHERE ol.tenant_id = '<tenant>' AND ol.status = 'ativo'
+  GROUP BY ol.obra_id
+  HAVING ABS(SUM(olt.percentual_exec_publica) - 100) > 0.005
+) sub;
+-- Valor atual esperado: ~2598 obras afetadas
 ```
 
 ---
