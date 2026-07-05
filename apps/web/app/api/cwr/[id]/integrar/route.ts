@@ -891,10 +891,18 @@ export async function POST(
             })()
           : null
 
-      // Regra BackOffice: AM recebe MR do SEU link; todos os demais recebem 0.
+      // Regra BackOffice: concentrador do link (AM se houver; senão E) recebe MR/SR do link.
+      // Todos os demais (autores controlados, OWR, E quando há AM) recebem 0.
       const totalControlledPr = mrAmPorLink.get(p.link_number ?? 1) ?? 0
-      const mr_final  = (p.papel === 'AM' && totalControlledPr > 0) ? totalControlledPr : (p.mr_pct ?? 0)
-      const mr_gravado = deveZerarMR(p.papel) ? 0 : mr_final
+      const linkTemAM = partics.some(
+        p2 => (p2.link_number ?? 1) === (p.link_number ?? 1) && p2.papel === 'AM'
+      )
+      const ehConcentrador = p.papel === 'AM' || (!linkTemAM && p.papel === 'E')
+      const mr_final   = (ehConcentrador && totalControlledPr > 0) ? totalControlledPr : (p.mr_pct ?? 0)
+      const mr_gravado = deveZerarMR(p.papel) && !ehConcentrador ? 0 : mr_final
+      const sr_gravado = ehConcentrador
+        ? (totalControlledPr > 0 ? totalControlledPr : (p.sr_pct ?? 0))
+        : 0
 
       titPayloads.push({
         obra_link_id:             linkId,
@@ -917,7 +925,7 @@ export async function POST(
         } as Record<string, string>)[p.papel?.toUpperCase() ?? ''] ?? 'autor',
         percentual_exec_publica:  p.pr_pct  ?? 0,
         percentual_fonomecanico:  mr_gravado,
-        percentual_sincronizacao: p.sr_pct  ?? 0,
+        percentual_sincronizacao: sr_gravado,
         ipi:                      info?.ipi ?? null,
         pwr_publisher_code:       info?.codigo_interno?.trim() ?? null,
         status_controle:          p.controlled ? 'controlado' : 'nao_controlado',
