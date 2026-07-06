@@ -391,7 +391,7 @@ export default function ObraDetailPage() {
     if (activeTab === 'saneamento' && !saneamento && !saneamentoLoading) {
       loadSaneamento()
     }
-    if ((activeTab === 'interpretes' || activeTab === 'fonogramas') && !interpretesCarregado && !interpretesLoading) {
+    if (activeTab === 'interpretes' && !interpretesCarregado && !interpretesLoading) {
       loadInterpretes()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -621,10 +621,11 @@ export default function ObraDetailPage() {
     async function load() {
       setLoading(true)
       try {
-        const [obraRes, fonoRes, negociosRes] = await Promise.all([
+        const [obraRes, fonoRes, negociosRes, interpRes] = await Promise.all([
           authFetch(`/api/obras/${obraId}?include=links`),
           authFetch(`/api/obras/${obraId}/fonogramas`),
           authFetch('/api/negocios-editoriais?status=ativo&limit=500'),
+          authFetch(`/api/obras/${obraId}/interpretes`),
         ])
         if (obraRes.ok) {
           const d = await obraRes.json()
@@ -639,6 +640,11 @@ export default function ObraDetailPage() {
         if (negociosRes.ok) {
           const d = await negociosRes.json()
           setNegocios(d.negocios ?? [])
+        }
+        if (interpRes.ok) {
+          const d = await interpRes.json()
+          setInterpretes(d.data ?? [])
+          setInterpretesCarregado(true)
         }
       } catch (e) {
         console.error('[obra/detail]', e)
