@@ -621,36 +621,31 @@ export default function ObraDetailPage() {
     async function load() {
       setLoading(true)
       try {
-        const [obraRes, fonoRes, negociosRes, interpRes] = await Promise.all([
-          authFetch(`/api/obras/${obraId}?include=links`),
-          authFetch(`/api/obras/${obraId}/fonogramas`),
-          authFetch('/api/negocios-editoriais?status=ativo&limit=500'),
-          authFetch(`/api/obras/${obraId}/interpretes`),
-        ])
+        // ── Caminho crítico: obra + links (bloqueia o render) ──────────────
+        const obraRes = await authFetch(`/api/obras/${obraId}?include=links`)
         if (obraRes.ok) {
           const d = await obraRes.json()
           setObra(d.data ?? null)
-          // links chegam embutidos no mesmo response (evita 2º cold start)
           setLinks(normalizarLinksObra(d.data?.links ?? []))
-        }
-        if (fonoRes.ok) {
-          const d = await fonoRes.json()
-          setFonogramas(d.data ?? [])
-        }
-        if (negociosRes.ok) {
-          const d = await negociosRes.json()
-          setNegocios(d.negocios ?? [])
-        }
-        if (interpRes.ok) {
-          const d = await interpRes.json()
-          setInterpretes(d.data ?? [])
-          setInterpretesCarregado(true)
         }
       } catch (e) {
         console.error('[obra/detail]', e)
       } finally {
+        // Libera o render ASSIM QUE a obra chega — não espera os outros fetches
         setLoading(false)
       }
+
+      // ── Background: fonogramas + negócios + intérpretes em paralelo ──────
+      // Não bloqueiam o render — a página já está visível
+      Promise.all([
+        authFetch(`/api/obras/${obraId}/fonogramas`),
+        authFetch('/api/negocios-editoriais?status=ativo&limit=500'),
+        authFetch(`/api/obras/${obraId}/interpretes`),
+      ]).then(async ([fonoRes, negociosRes, interpRes]) => {
+        if (fonoRes.ok)     { const d = await fonoRes.json();     setFonogramas(d.data ?? []) }
+        if (negociosRes.ok) { const d = await negociosRes.json(); setNegocios(d.negocios ?? []) }
+        if (interpRes.ok)   { const d = await interpRes.json();   setInterpretes(d.data ?? []); setInterpretesCarregado(true) }
+      }).catch(e => console.error('[obra/detail/bg]', e))
     }
     load()
   }, [obraId])
