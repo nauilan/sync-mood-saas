@@ -1130,24 +1130,28 @@ export async function POST(
       nome_normalizado: string; tipo: string; origem: string;
     }[] = []
     for (const [obraId, performers] of obraInterpretesMap) {
-      performers.forEach(nome => {
+      // Dedup por nome_normalizado dentro da mesma obra (evita violação do índice único)
+      const seenNorm = new Set<string>()
+      for (const nome of performers) {
+        const norm = normNome(nome)
+        if (!norm || seenNorm.has(norm)) continue
+        seenNorm.add(norm)
         interpRows.push({
           tenant_id:        usuario.tenantId,
           obra_id:          obraId,
           nome_artistico:   nome,
-          nome_normalizado: normNome(nome),
+          nome_normalizado: norm,
           tipo:             'principal',
           origem:           'cwr',
         })
-      })
+      }
     }
     const ICHUNK = 500
     for (let i = 0; i < interpRows.length; i += ICHUNK) {
       const { error: interpErr } = await client
         .from('obras_interpretes')
-        .insert(interpRows.slice(i, i + ICHUNK))
+        .upsert(interpRows.slice(i, i + ICHUNK), { onConflict: 'obra_id,nome_normalizado', ignoreDuplicates: true })
       if (interpErr) {
-        // Loga o erro real — não engole em silêncio
         console.error('[integrar] obras_interpretes insert error:', interpErr.message, interpErr.code)
       }
     }
