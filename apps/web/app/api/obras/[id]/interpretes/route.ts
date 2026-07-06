@@ -58,16 +58,7 @@ export async function GET(
 
   const { data, error } = await sb
     .from('obras_interpretes')
-    .select(`
-      id,
-      nome_artistico,
-      nome_civil,
-      tipo,
-      origem,
-      created_at,
-      titular_id,
-      titulares ( nome_completo, codigo_interno )
-    `)
+    .select('id, nome_artistico, nome_civil, tipo, origem, created_at, titular_id')
     .eq('obra_id', id)
     .eq('tenant_id', tenant_id)
     .order('created_at', { ascending: true })

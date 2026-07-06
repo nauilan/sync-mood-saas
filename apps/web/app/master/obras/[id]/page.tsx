@@ -862,7 +862,7 @@ export default function ObraDetailPage() {
         {TABS.map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => React.startTransition(() => setActiveTab(tab.id))}
             className={`flex items-center gap-1.5 h-9 px-4 text-xs font-medium whitespace-nowrap transition-colors border-b-2 -mb-px
               ${activeTab === tab.id
                 ? 'border-violet-500 text-white'
