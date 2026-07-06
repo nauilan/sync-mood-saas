@@ -287,32 +287,11 @@ export function parseCwr(conteudo: string, _opts?: unknown): CwrArquivo {
 
   const flush = () => {
     if (!cur) return
-    // Distribuir performers acumulados (registros PER) para todos os fonogramas da obra
-    const perfs = cur.performers ?? []
-    if (perfs.length > 0) {
-      if (cur.fonogramas.length === 0) {
-        // PER sem REC — cria fonograma vazio para abrigar os intérpretes
-        // (intérprete sem ISRC: estado válido, ISRC vem depois da gravação)
-        cur.fonogramas.push({
-          isrc:       null,
-          titulo:     null,
-          interprete: perfs[0] || null,
-          versao:     null,
-          ano:        null,
-          duracao:    null,
-          performers: perfs,
-        })
-      } else {
-        // Distribuir para TODOS os fonogramas da obra
-        // (PER é registro de nível obra no CWR; quando há múltiplos REC, aplica a todos)
-        for (const fg of cur.fonogramas) {
-          fg.performers = perfs
-        }
-      }
-    }
-    // Remove fonogramas completamente vazios (sem ISRC, intérprete, performers, título ou ano)
+    // performers acumulados (registros PER) ficam em cur.performers[] para o integrar usar.
+    // NÃO cria fonograma vazio — intérprete sem REC vai para obras_interpretes (fonograma_id null).
+    // Remove fonogramas completamente vazios (sem ISRC, intérprete, título ou ano)
     cur.fonogramas = cur.fonogramas.filter(f =>
-      f.isrc || f.interprete || f.performers.length > 0 || (f.titulo && f.titulo !== '00') || f.ano
+      f.isrc || f.interprete || (f.titulo && f.titulo !== '00') || f.ano
     )
     // Recalcular percentual_total usando os percentuais SWR/OWR diretos
     cur.percentual_total = Math.round(

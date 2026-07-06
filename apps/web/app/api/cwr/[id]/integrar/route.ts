@@ -276,6 +276,8 @@ export async function POST(
   let adminsPendentesCount = 0   // total de entradas AM pendentes
   type FgObra = { obraId: string; isrc: string | null; titulo: string; interprete: string | null; versao: string | null; ano: number | null; duracao: string | null; performers: string[] }
   const obraFonogramas: FgObra[] = []
+  // Mapa obraId → performers para gravar em obras_interpretes (step 8.5)
+  const obraInterpretesMap = new Map<string, string[]>()
 
   // Mapa auxiliar para debug: obraId → titulo e data do snapshot usado
   const obraIdToTitulo:       Record<string, string> = {}
@@ -473,6 +475,14 @@ export async function POST(
         duracao:    fg.duracao    ?? null,
         performers: Array.isArray(fg.performers) ? (fg.performers as string[]).filter(Boolean) : [],
       })
+    }
+
+    // Coletar performers da obra (registros PER — nível obra, não fonograma)
+    const snapPerformers = Array.isArray((snap as any).performers)
+      ? ((snap as any).performers as string[]).filter(Boolean)
+      : []
+    if (snapPerformers.length > 0) {
+      obraInterpretesMap.set(obraId, snapPerformers)
     }
   }
 
@@ -1057,6 +1067,44 @@ export async function POST(
     }
   }
 
+  // ── 8.5 Gravar obras_interpretes (PER — idempotente por origem='cwr') ────
+  if (obraInterpretesMap.size > 0) {
+    const obraIds = [...obraInterpretesMap.keys()]
+    // Apaga intérpretes CWR antigos dessas obras (idempotência)
+    await client
+      .from('obras_interpretes')
+      .delete()
+      .in('obra_id', obraIds)
+      .eq('origem', 'cwr')
+
+    const interpRows: {
+      tenant_id: string; obra_id: string; nome_artistico: string;
+      nome_normalizado: string; tipo: string; origem: string;
+    }[] = []
+    for (const [obraId, performers] of obraInterpretesMap) {
+      performers.forEach(nome => {
+        interpRows.push({
+          tenant_id:        usuario.tenantId,
+          obra_id:          obraId,
+          nome_artistico:   nome,
+          nome_normalizado: normNome(nome),
+          tipo:             'principal',
+          origem:           'cwr',
+        })
+      })
+    }
+    const ICHUNK = 500
+    for (let i = 0; i < interpRows.length; i += ICHUNK) {
+      const { error: interpErr } = await client
+        .from('obras_interpretes')
+        .insert(interpRows.slice(i, i + ICHUNK))
+      if (interpErr) {
+        // Loga o erro real — não engole em silêncio
+        console.error('[integrar] obras_interpretes insert error:', interpErr.message, interpErr.code)
+      }
+    }
+  }
+
   // ── 9. Fonogramas (dedup ISRC + obra_id+titulo) ───────────────────────────
   let fonogramasCriados  = 0
   let fonogramasVinculados = 0
@@ -1130,45 +1178,7 @@ export async function POST(
         })
       }
     }
-
-    // ── 9.5 Gravar fonograma_interpretes (idempotente por origem='cwr') ──────
-    if (fgPerformersMap.size > 0) {
-      // Apaga intérpretes CWR antigos dos fonogramas recém-criados
-      const fgIds = [...fgPerformersMap.keys()]
-      await client
-        .from('fonograma_interpretes')
-        .delete()
-        .in('fonograma_id', fgIds)
-        .eq('origem', 'cwr')
-
-      const interpRows: {
-        tenant_id: string; fonograma_id: string; nome: string;
-        nome_normalizado: string; ordem: number; papel: string; origem: string;
-      }[] = []
-      for (const [fgId, performers] of fgPerformersMap) {
-        performers.forEach((nome, ordem) => {
-          interpRows.push({
-            tenant_id:        usuario.tenantId,
-            fonograma_id:     fgId,
-            nome,
-            nome_normalizado: normNome(nome),
-            ordem,
-            papel:            'principal',
-            origem:           'cwr',
-          })
-        })
-      }
-      const ICHUNK = 500
-      for (let i = 0; i < interpRows.length; i += ICHUNK) {
-        const { error: interpErr } = await client
-          .from('fonograma_interpretes')
-          .insert(interpRows.slice(i, i + ICHUNK))
-        if (interpErr) {
-          // Não aborta a integração — loga e continua
-          console.error('[integrar] fonograma_interpretes insert error:', interpErr.message)
-        }
-      }
-    }
+    void fgPerformersMap  // reservado para futura vinculação fonograma_id em obras_interpretes (estado 3)
   }
 
   // ── 10. Gravar relatorio.integracao (rollback + auditoria) ────────────────
