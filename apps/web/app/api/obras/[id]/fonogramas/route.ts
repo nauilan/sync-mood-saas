@@ -54,12 +54,7 @@ export async function GET(
 
   const { data, error } = await sb
     .from('fonogramas')
-    .select(`
-      id, obra_id, isrc, titulo_fonograma, interprete,
-      versao, duracao_segundos, ano_gravacao, gravadora,
-      produtor_fonografico, data_lancamento, pais, plataformas,
-      url_preview, status, created_at, updated_at
-    `)
+    .select('*')
     .eq('obra_id', obra_id)
     .eq('tenant_id', usuario.tenant_id)
     .order('titulo_fonograma')
