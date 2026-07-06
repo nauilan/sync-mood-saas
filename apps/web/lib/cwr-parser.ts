@@ -149,7 +149,7 @@ export interface CwrObra {
   pct_controlado?: number
   tem_editora?: boolean
   spt_shares?: unknown[]
-  performers?: unknown[]
+  performers: string[]          // performers acumulados dos registros PER desta obra
   codigo_interno_legado?: string
 }
 
@@ -287,9 +287,32 @@ export function parseCwr(conteudo: string, _opts?: unknown): CwrArquivo {
 
   const flush = () => {
     if (!cur) return
-    // Remove fonogramas completamente vazios
+    // Distribuir performers acumulados (registros PER) para todos os fonogramas da obra
+    const perfs = cur.performers ?? []
+    if (perfs.length > 0) {
+      if (cur.fonogramas.length === 0) {
+        // PER sem REC — cria fonograma vazio para abrigar os intérpretes
+        // (intérprete sem ISRC: estado válido, ISRC vem depois da gravação)
+        cur.fonogramas.push({
+          isrc:       null,
+          titulo:     null,
+          interprete: perfs[0] || null,
+          versao:     null,
+          ano:        null,
+          duracao:    null,
+          performers: perfs,
+        })
+      } else {
+        // Distribuir para TODOS os fonogramas da obra
+        // (PER é registro de nível obra no CWR; quando há múltiplos REC, aplica a todos)
+        for (const fg of cur.fonogramas) {
+          fg.performers = perfs
+        }
+      }
+    }
+    // Remove fonogramas completamente vazios (sem ISRC, intérprete, performers, título ou ano)
     cur.fonogramas = cur.fonogramas.filter(f =>
-      f.isrc || f.interprete || (f.titulo && f.titulo !== '00') || f.ano
+      f.isrc || f.interprete || f.performers.length > 0 || (f.titulo && f.titulo !== '00') || f.ano
     )
     // Recalcular percentual_total usando os percentuais SWR/OWR diretos
     cur.percentual_total = Math.round(
@@ -340,6 +363,7 @@ export function parseCwr(conteudo: string, _opts?: unknown): CwrArquivo {
           pwr_links:    [],
           percentual_total: 0,
           registros_raw: [ln],
+          performers:   [],       // acumulado pelos registros PER desta obra
         }
       }
 
@@ -544,17 +568,14 @@ export function parseCwr(conteudo: string, _opts?: unknown): CwrArquivo {
       // ── PER (Performing Artist) ───────────────────────────────────────────
       else if (t === 'PER' && cur) {
         cur.registros_raw.push(ln)
-        // Liga ao último fonograma do bloco (REC anterior)
-        const lastFg = cur.fonogramas.at(-1)
-        if (lastFg) {
-          const nomes = parsePer(ln)
-          for (const n of nomes) {
-            if (n && n.length > 1) {    // ignora tokens de 1 letra
-              lastFg.performers.push(n)
-            } else if (n) {
-              // Token curto — loga mas não trava
-              console.warn(`[parsePer] token curto ignorado: "${n}" — linha: ${ln.slice(0, 60)}`)
-            }
+        // PER é registro de nível obra no CWR — vem antes do REC no bloco NWR.
+        // Acumula em cur.performers; distribuição para fonogramas ocorre em flush().
+        const nomes = parsePer(ln)
+        for (const n of nomes) {
+          if (n && n.length > 1) {
+            cur.performers.push(n)
+          } else if (n) {
+            console.warn(`[parsePer] token curto ignorado: "${n}" — linha: ${ln.slice(0, 60)}`)
           }
         }
       }
