@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useRef, useEffect } from 'react'
+import React, { useState, useMemo, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { PageHeader } from '@/components/ui/page-header'
 import {
@@ -187,14 +187,14 @@ function ObraDrawer({ obra: obraInicial, onClose, editoras = [] }: { obra: any; 
   // Percentual controlado: soma TODOS os participantes de links não-OWR.
   // Um link não-OWR significa cadeia editorial completa (CA+E+AM) → 100% sob controle.
   // NÃO filtra por t.controlado pois essa flag pode estar errada em dados antigos.
-  const pctControladoCalc = parseFloat(
+  const pctControladoCalc = useMemo(() => parseFloat(
     links.reduce((total: number, link: any) => {
       const lt = link.titulares ?? []
       if (isOwrLink(lt)) return total
       return total + lt.reduce((s: number, t: any) =>
         s + (t.percentual_exec_publica ?? t.percentual ?? 0), 0)
     }, 0).toFixed(2)
-  )
+  ), [links]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Fonogramas + Intérpretes ─────────────────────────────────────────────
   const [fonogramas, setFonogramas] = useState<Fonograma[]>([])
@@ -277,10 +277,12 @@ function ObraDrawer({ obra: obraInicial, onClose, editoras = [] }: { obra: any; 
   }, [obra.id, tab])
 
   const editora = editoras.find(e => e.id === obra.editora_id)
-  const editoraNome = editora?.nome_fantasia
+  const editoraNome = useMemo(() =>
+    editora?.nome_fantasia
     ?? links.flatMap((l: any) => l.titulares ?? [])
         .find((t: any) => ['editora_original', 'administradora'].includes(t.papel))?.nome
     ?? null
+  , [editora, links])
 
   const startEdit = () => {
     setEditData({
@@ -553,7 +555,7 @@ tfoot td{background:#f7f7f7;font-weight:bold}
 
         <div className="flex items-center gap-1 px-4 py-2 border-b border-white/[0.06]">
           {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
+            <button key={t.id} onClick={() => React.startTransition(() => setTab(t.id))}
               className={`flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-semibold transition-colors
                 ${tab === t.id ? 'bg-violet-600/20 text-violet-300' : 'text-white/30 hover:text-white/60 hover:bg-white/5'}`}>
               <t.icon className="w-3 h-3" />
@@ -980,22 +982,35 @@ tfoot td{background:#f7f7f7;font-weight:bold}
                       <Mic2 className="w-7 h-7" /><p className="text-sm">Nenhuma gravação cadastrada</p>
                     </div>
                   )}
-                  {!loadingFonogramas && fonogramas.map((f, i) => (
-                    <div key={f.id || i} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center shrink-0">
-                        <Mic2 className="w-3.5 h-3.5 text-sky-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white/80 font-medium truncate">{f.titulo_fonograma || f.interprete || `Gravação ${i + 1}`}</p>
-                        <div className="flex items-center gap-3 mt-0.5">
-                          {f.isrc && <span className="text-[10px] font-mono text-emerald-400">{f.isrc}</span>}
-                          {f.interprete && <span className="text-[10px] text-sky-300 uppercase">{f.interprete}</span>}
-                          {f.versao && f.versao !== 'original' && <span className="text-[10px] text-white/30">{f.versao}</span>}
+                  {!loadingFonogramas && fonogramas.map((f, i) => {
+                    const interpStr = interpretes.length > 0
+                      ? interpretes.map((p: any) => p.nome_artistico).filter(Boolean).join(', ')
+                      : (f.interprete || null)
+                    return (
+                      <div key={f.id || i} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center shrink-0">
+                          <Mic2 className="w-3.5 h-3.5 text-sky-400" />
                         </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {f.isrc
+                              ? <span className="font-mono text-emerald-400 text-sm font-semibold">{f.isrc}</span>
+                              : <span className="text-amber-400/60 italic text-xs">ISRC pendente</span>}
+                            {interpStr && (
+                              <>
+                                <span className="text-white/20 text-xs">—</span>
+                                <span className="text-white/70 text-xs">{interpStr}</span>
+                              </>
+                            )}
+                          </div>
+                          {f.versao && f.versao !== 'original' && (
+                            <span className="text-[10px] text-white/30 mt-0.5 block">{f.versao}</span>
+                          )}
+                        </div>
+                        {f.ano_gravacao && <span className="text-xs text-white/25 shrink-0">{f.ano_gravacao}</span>}
                       </div>
-                      {f.ano_gravacao && <span className="text-xs text-white/25 shrink-0">{f.ano_gravacao}</span>}
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
 
@@ -1239,13 +1254,20 @@ export default function ObrasPage() {
   }, [])
 
   // Catálogo unificado: deduplicado por codigo, com % controlado recalculado dinamicamente
+  // Pre-computa _autores e _editorasLinks por obra para evitar normalizarLinksObra no render loop
   const catalogoCompleto = useMemo(() => {
     const map = new Map<string, any>()
-    const PAPEIS_AUTOR_RECALC = ['autor', 'compositor', 'versionista', 'adaptador']
+    const PAPEIS_EDI_PRE = ['editora_original', 'administradora', 'subeditora', 'E', 'AM', 'SE', 'AQ']
     obrasData.forEach(o => {
       const linksRaw = normalizarLinksObra(o._links ?? MOCK_OBRAS_LINKS[o.id] ?? [])
+      const todos = linksRaw.flatMap((l: any) => l.titulares ?? [])
+      const _autores = todos.filter((t: any) =>
+        !PAPEIS_EDI_PRE.includes(t.papel ?? '') && !PAPEIS_EDI_PRE.includes((t.papel ?? '').toUpperCase())
+      )
+      const _editorasLinks = todos.filter((t: any) =>
+        PAPEIS_EDI_PRE.includes(t.papel ?? '') || PAPEIS_EDI_PRE.includes((t.papel ?? '').toUpperCase())
+      )
       if (linksRaw.length > 0) {
-        // Ctrl% = soma dos percentual_link dos links controlados (link.controlado === true)
         const pctCtrl = parseFloat(
           linksRaw.reduce((total: number, link: any) => {
             return total + (link.controlado ? (link.percentual_link ?? 0) : 0)
@@ -1253,6 +1275,7 @@ export default function ObrasPage() {
         )
         o = { ...o, _percentual_controlado: pctCtrl }
       }
+      o = { ...o, _autores, _editorasLinks }
       map.set(o.codigo ?? o.codigo_obra ?? o.id, o)
     })
     return Array.from(map.values())
@@ -1479,15 +1502,9 @@ export default function ObrasPage() {
             </thead>
             <tbody className="divide-y divide-white/[0.04]">
               {obras.map(obra => {
-                const links = normalizarLinksObra(obra._links ?? MOCK_OBRAS_LINKS[obra.id] ?? [])
-                const todosParticipantes = links.flatMap((l: any) => l.titulares ?? [])
-                const PAPEIS_EDI = ['editora_original', 'administradora', 'subeditora', 'E', 'AM', 'SE', 'AQ']
-                const autores = todosParticipantes.filter((t: any) =>
-                  !PAPEIS_EDI.includes(t.papel ?? '') && !PAPEIS_EDI.includes((t.papel ?? '').toUpperCase())
-                )
-                const editorasLinks = todosParticipantes.filter((t: any) =>
-                  PAPEIS_EDI.includes(t.papel ?? '') || PAPEIS_EDI.includes((t.papel ?? '').toUpperCase())
-                )
+                // _autores e _editorasLinks são pré-computados no catalogoCompleto useMemo
+                const autores: any[] = obra._autores ?? []
+                const editorasLinks: any[] = obra._editorasLinks ?? []
                 const editora = editoras.find(e => e.id === obra.editora_id)
                 const editoraNome = editora?.nome_fantasia ?? editorasLinks[0]?.nome ?? null
                 const isAtiva = obraAtiva?.id === obra.id
@@ -1495,7 +1512,7 @@ export default function ObrasPage() {
                 return (
                   <tr
                     key={obra.id}
-                    onClick={() => setObraAtiva(isAtiva ? null : obra)}
+                    onClick={() => React.startTransition(() => setObraAtiva(isAtiva ? null : obra))}
                     className={`hover:bg-white/[0.03] transition-colors group cursor-pointer
                       ${isAtiva ? 'bg-violet-500/10 border-l-2 border-violet-500' : ''}`}
                   >
