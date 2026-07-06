@@ -299,6 +299,42 @@ export async function POST(
   // Mapa obraId → performers para gravar em obras_interpretes (step 8.5)
   const obraInterpretesMap = new Map<string, string[]>()
 
+  // ── PRÉ-LOOP: Construir obraInterpretesMap via reparse fresco ────────────
+  // NÃO usa snap.performers (snapshot pode ser stale). Reparseia conteudo_raw
+  // e faz lookup obra_id via submitter_work_no + ISWC (duplo fallback).
+  if ((imp as any).conteudo_raw) {
+    const workNoToObraId = new Map<string, string>()
+    const iswcToObraId   = new Map<string, string>()
+    for (const row of impObras) {
+      const s      = (row.snapshot_cwr ?? {}) as any
+      const obraId = row.obra_id as string
+      const wn     = (s.submitter_work_no as string | undefined)?.trim()
+      const iswc   = s.iswc as string | null | undefined
+      if (wn)   workNoToObraId.set(wn, obraId)
+      if (iswc) iswcToObraId.set(iswc, obraId)
+    }
+    try {
+      const freshParsed = parseCwr((imp as any).conteudo_raw as string)
+      let perfMatched = 0
+      for (const obra of freshParsed.obras) {
+        if (obra.performers.length === 0) continue
+        const wn     = obra.submitter_work_no?.trim()
+        const obraId = (wn ? workNoToObraId.get(wn) : undefined)
+          ?? (obra.iswc ? iswcToObraId.get(obra.iswc) : undefined)
+        if (obraId) {
+          obraInterpretesMap.set(obraId, obra.performers)
+          perfMatched++
+        }
+      }
+      const comPerfs = freshParsed.obras.filter(o => o.performers.length > 0).length
+      console.log(`[integrar] performers: obras_parsed=${freshParsed.obras.length}, com_per=${comPerfs}, matched=${perfMatched}, map_size=${obraInterpretesMap.size}`)
+    } catch (e) {
+      console.error('[integrar] conteudo_raw reparse falhou:', e)
+    }
+  } else {
+    console.warn('[integrar] conteudo_raw ausente — performers nao gravados')
+  }
+
   // Mapa auxiliar para debug: obraId → titulo e data do snapshot usado
   const obraIdToTitulo:       Record<string, string> = {}
   const obraIdToSnapshotDate: Record<string, string> = {}
@@ -495,15 +531,6 @@ export async function POST(
         duracao:    fg.duracao    ?? null,
         performers: Array.isArray(fg.performers) ? (fg.performers as string[]).filter(Boolean) : [],
       })
-    }
-
-    // Coletar performers da obra — usa reparse fresco do conteudo_raw (evita snapshot stale).
-    // Fallback para snap.performers caso conteudo_raw não estivesse disponível.
-    const snapWorkNo = (snap as any).submitter_work_no as string | undefined
-    const snapPerformers = (snapWorkNo ? freshPerformersMap.get(snapWorkNo) : undefined)
-      ?? (Array.isArray((snap as any).performers) ? ((snap as any).performers as string[]).filter(Boolean) : [])
-    if (snapPerformers.length > 0) {
-      obraInterpretesMap.set(obraId, snapPerformers)
     }
   }
 
