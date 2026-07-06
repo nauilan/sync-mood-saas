@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter, useParams } from 'next/navigation'
 import { PageHeader } from '@/components/ui/page-header'
@@ -655,6 +655,36 @@ export default function ObraDetailPage() {
     load()
   }, [obraId])
 
+  // ── Memoize: computações sobre `links` rodam APENAS quando links mudam ──────
+  const PAPEIS_AUTOR_SET  = ['autor', 'compositor', 'versionista', 'adaptador']
+  const PAPEIS_EDITORA_SET = ['editora_original', 'administradora', 'subeditora']
+
+  const editoraNome = useMemo(() =>
+    links
+      .flatMap((l: any) => l.titulares ?? [])
+      .find((t: any) => ['editora_original', 'administradora'].includes(t.papel))
+      ?.nome ?? null
+  , [links])
+
+  const pcControlado = useMemo(() => {
+    const isOwrLink = (titulares: any[]): boolean => {
+      const autores = titulares.filter(t => PAPEIS_AUTOR_SET.includes(t.papel ?? ''))
+      if (autores.length === 0) return false
+      return !titulares.some(t =>
+        PAPEIS_EDITORA_SET.includes(t.papel ?? '') ||
+        ['E', 'AM', 'SE', 'AQ'].includes((t.papel ?? '').toUpperCase())
+      )
+    }
+    return parseFloat(
+      links.reduce((total: number, link: any) => {
+        const lt = link.titulares ?? []
+        if (isOwrLink(lt)) return total
+        return total + lt.reduce((s: number, t: any) =>
+          s + (t.percentual_exec_publica ?? t.percentual ?? 0), 0)
+      }, 0).toFixed(2)
+    )
+  }, [links])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-white/30 text-sm">
@@ -674,32 +704,6 @@ export default function ObraDetailPage() {
       </div>
     )
   }
-
-  // Resolve editora a partir dos integrantes (editora_original ou administradora)
-  const editoraNome = links
-    .flatMap((l: any) => l.titulares ?? [])
-    .find((t: any) => ['editora_original', 'administradora'].includes(t.papel))
-    ?.nome ?? null
-
-  const PAPEIS_AUTOR_SET = ['autor', 'compositor', 'versionista', 'adaptador']
-  const PAPEIS_EDITORA_SET = ['editora_original', 'administradora', 'subeditora']
-  const isOwrLink = (titulares: any[]): boolean => {
-    const autores = titulares.filter(t => PAPEIS_AUTOR_SET.includes(t.papel ?? ''))
-    if (autores.length === 0) return false
-    const hasEditora = titulares.some(t =>
-      PAPEIS_EDITORA_SET.includes(t.papel ?? '') ||
-      ['E', 'AM', 'SE', 'AQ'].includes((t.papel ?? '').toUpperCase())
-    )
-    return !hasEditora
-  }
-  const pcControlado = parseFloat(
-    links.reduce((total: number, link: any) => {
-      const lt = link.titulares ?? []
-      if (isOwrLink(lt)) return total
-      return total + lt.reduce((s: number, t: any) =>
-        s + (t.percentual_exec_publica ?? t.percentual ?? 0), 0)
-    }, 0).toFixed(2)
-  )
 
   return (
     <div className="space-y-5">
@@ -2131,8 +2135,11 @@ export default function ObraDetailPage() {
                             </span>
                           </div>
                           <div className="flex gap-3 pl-5 text-[10px] text-white/30">
-                            <span className="truncate max-w-[150px]">{f.titulo_fonograma ?? obra?.titulo ?? '—'}</span>
-                            <span className="truncate max-w-[120px]">{f.interprete ?? '—'}</span>
+                            <span className="truncate max-w-[260px]">
+                              {interpretes.length > 0
+                                ? interpretes.map((i: any) => i.nome_artistico).filter(Boolean).join(', ')
+                                : (f.interprete ?? '—')}
+                            </span>
                             <span className="ml-auto text-white/20">ISRC_SHARE {f.isrc_share ?? '100.00'}</span>
                           </div>
                         </div>
