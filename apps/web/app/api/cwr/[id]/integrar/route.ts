@@ -274,7 +274,7 @@ export async function POST(
   let obrasAmDefinido      = 0   // AM com percentual explícito no CWR
   let obrasAmPendente      = 0   // AM presente mas pct=0 e não é Cenário C
   let adminsPendentesCount = 0   // total de entradas AM pendentes
-  type FgObra = { obraId: string; isrc: string | null; titulo: string; interprete: string | null; versao: string | null; ano: number | null; duracao: string | null }
+  type FgObra = { obraId: string; isrc: string | null; titulo: string; interprete: string | null; versao: string | null; ano: number | null; duracao: string | null; performers: string[] }
   const obraFonogramas: FgObra[] = []
 
   // Mapa auxiliar para debug: obraId → titulo e data do snapshot usado
@@ -471,6 +471,7 @@ export async function POST(
         versao:     fg.versao     ?? null,
         ano:        fg.ano        ?? null,
         duracao:    fg.duracao    ?? null,
+        performers: Array.isArray(fg.performers) ? (fg.performers as string[]).filter(Boolean) : [],
       })
     }
   }
@@ -1085,11 +1086,15 @@ export async function POST(
       return true
     })
 
+    // Mapa fonograma_id → performers (populado durante o insert chunk abaixo)
+    const fgPerformersMap = new Map<string, string[]>()
+
     const FCHUNK = 500
     for (let i = 0; i < novos.length; i += FCHUNK) {
+      const chunk = novos.slice(i, i + FCHUNK)
       const { data: fgCriados, error: fgErr } = await client
         .from('fonogramas')
-        .insert(novos.slice(i, i + FCHUNK).map(f => {
+        .insert(chunk.map(f => {
           // Converte HHMMSS → segundos; guard: 0 < resultado ≤ 3600 (músicas com mais de 1h = null)
           let duracaoSeg: number | null = null
           if (f.duracao && /^\d{6}$/.test(f.duracao)) {
@@ -1118,6 +1123,50 @@ export async function POST(
       if (fgCriados) {
         fonogramasCriados += fgCriados.length
         fonogramasCriadosIds.push(...fgCriados.map(x => x.id as string))
+        // Associar performers ao fonograma criado (por índice)
+        fgCriados.forEach((fg, j) => {
+          const performers = chunk[j]?.performers ?? []
+          if (performers.length > 0) fgPerformersMap.set(fg.id as string, performers)
+        })
+      }
+    }
+
+    // ── 9.5 Gravar fonograma_interpretes (idempotente por origem='cwr') ──────
+    if (fgPerformersMap.size > 0) {
+      // Apaga intérpretes CWR antigos dos fonogramas recém-criados
+      const fgIds = [...fgPerformersMap.keys()]
+      await client
+        .from('fonograma_interpretes')
+        .delete()
+        .in('fonograma_id', fgIds)
+        .eq('origem', 'cwr')
+
+      const interpRows: {
+        tenant_id: string; fonograma_id: string; nome: string;
+        nome_normalizado: string; ordem: number; papel: string; origem: string;
+      }[] = []
+      for (const [fgId, performers] of fgPerformersMap) {
+        performers.forEach((nome, ordem) => {
+          interpRows.push({
+            tenant_id:        usuario.tenantId,
+            fonograma_id:     fgId,
+            nome,
+            nome_normalizado: normNome(nome),
+            ordem,
+            papel:            'principal',
+            origem:           'cwr',
+          })
+        })
+      }
+      const ICHUNK = 500
+      for (let i = 0; i < interpRows.length; i += ICHUNK) {
+        const { error: interpErr } = await client
+          .from('fonograma_interpretes')
+          .insert(interpRows.slice(i, i + ICHUNK))
+        if (interpErr) {
+          // Não aborta a integração — loga e continua
+          console.error('[integrar] fonograma_interpretes insert error:', interpErr.message)
+        }
       }
     }
   }

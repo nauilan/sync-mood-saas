@@ -248,4 +248,30 @@ Obras importadas via CWR entram sem documento de contrato (o CWR não traz contr
 
 ---
 
+---
+
+## Pendente 6 — FEATURE: Intérpretes — busca automática de ISRC via Spotify Web API
+
+**Pré-requisito:** tabela `fonograma_interpretes` populada (migration 071 + import de PER — feito em 2026-07-05).
+
+**Objetivo:** preencher `fonogramas.isrc` (nullable) das obras autorizadas cuja gravação já saiu, usando a Spotify Web API (gratuita, OAuth client credentials).
+
+**Fluxo:**
+1. Selecionar fonogramas SEM `isrc` que tenham intérpretes em `fonograma_interpretes`
+2. Para cada fonograma, buscar no Spotify por `artista + título da obra`
+3. Se match único e exato → preencher `isrc` automaticamente + salvar `spotify_track_id`
+4. Se múltiplos candidatos → retornar lista para confirmação humana (original vs ao vivo vs regravação)
+5. Rate limit: processar em lotes com backoff exponencial
+6. Fallback: MusicBrainz (API gratuita) quando Spotify não encontrar
+
+**Campos novos necessários em fonogramas:**
+- `spotify_track_id TEXT` — ID da faixa confirmada no Spotify (para re-verificação)
+- `isrc_status TEXT` — `'manual'`, `'auto_spotify'`, `'auto_musicbrainz'`, `'pendente_confirmacao'`
+
+**UI:** botão "Buscar ISRC" na aba Gravações, com modal de progresso e lista de candidatos para confirmação.
+
+**NÃO construir agora — sessão dedicada após fonograma_interpretes populados e validados.**
+
+---
+
 *Última atualização: 2026-07-05*

@@ -87,6 +87,34 @@ export interface CwrFonograma {
   versao: string | null
   ano: number | null
   duracao: string | null
+  performers: string[]   // nomes dos intérpretes via registros PER
+}
+
+/** Extrai nomes de intérpretes de uma linha PER (CWR 2.1 / ECAD-BR).
+ *  Layout (0-indexed):
+ *   pos 19-63 (45): Last Name field — pode ter N sobrenomes separados por vírgula
+ *   pos 64-93 (30): First Name field — se trailing comma → artista adicional;
+ *                                       senão → primeiro nome do artista de campo1
+ *  TAB é tratado como espaço. "&" NÃO separa (é parte do nome de dupla).
+ */
+export function parsePer(ln: string): string[] {
+  const clean = (s: string) => s.replace(/\t/g, ' ').trim()
+  const campo1 = clean(ln.slice(19, 64))
+  const campo2R = ln.slice(64, 94)
+  const campo2IsExtra = campo2R.trimEnd().endsWith(',')
+  const campo2 = clean(campo2R).replace(/,\s*$/, '')
+
+  const lastList = campo1.split(',').map(s => s.trim()).filter(Boolean)
+  if (lastList.length === 0) return campo2IsExtra && campo2 ? [campo2] : []
+
+  if (campo2IsExtra) {
+    // campo2 = co-performer separado (ex: "4I4,")
+    return [...lastList, ...(campo2 ? [campo2] : [])]
+  } else {
+    // campo2 = primeiro nome do primeiro artista
+    const artista0 = [campo2, lastList[0]].filter(Boolean).join(' ')
+    return [artista0, ...lastList.slice(1)].filter(Boolean)
+  }
 }
 
 export interface CwrPwrLink {
@@ -509,7 +537,26 @@ export function parseCwr(conteudo: string, _opts?: unknown): CwrArquivo {
           versao:     null,
           ano,
           duracao,
+          performers: [],
         })
+      }
+
+      // ── PER (Performing Artist) ───────────────────────────────────────────
+      else if (t === 'PER' && cur) {
+        cur.registros_raw.push(ln)
+        // Liga ao último fonograma do bloco (REC anterior)
+        const lastFg = cur.fonogramas.at(-1)
+        if (lastFg) {
+          const nomes = parsePer(ln)
+          for (const n of nomes) {
+            if (n && n.length > 1) {    // ignora tokens de 1 letra
+              lastFg.performers.push(n)
+            } else if (n) {
+              // Token curto — loga mas não trava
+              console.warn(`[parsePer] token curto ignorado: "${n}" — linha: ${ln.slice(0, 60)}`)
+            }
+          }
+        }
       }
 
       // ── GRH / GRT / TRL — fim de grupo/arquivo ────────────────────────────
