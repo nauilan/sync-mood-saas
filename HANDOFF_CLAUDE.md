@@ -274,4 +274,17 @@ Obras importadas via CWR entram sem documento de contrato (o CWR não traz contr
 
 ---
 
-*Última atualização: 2026-07-05*
+## Pendente 7 — Exportação CWR: PER + REC são registros SEPARADOS no bloco
+
+**Confirmado no arquivo real CW260021TSL_592:**
+- Registro `PER` = intérprete da obra/gravação — contém o nome do artista, SEM ISRC.
+- Registro `REC` = gravação — contém o ISRC, SEM nome de intérprete.
+- No bloco NWR, o `PER` vem **antes** do `REC` (ordem real no arquivo).
+- Para exportar corretamente: emitir N registros `PER` (um por intérprete em `obra_interpretes`) + N registros `REC` (um por fonograma em `fonogramas`), como entradas independentes no bloco — não concatenar intérprete dentro do REC nem ISRC dentro do PER.
+- Fonte dos dados: `obra_interpretes.nome_artistico` → PER; `fonogramas.isrc` → REC.
+
+**NÃO implementado ainda — registrar aqui para a sessão de exportação CWR.**
+
+---
+
+*Última atualização: 2026-07-06*

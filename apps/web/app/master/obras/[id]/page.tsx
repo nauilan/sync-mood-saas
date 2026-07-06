@@ -391,7 +391,7 @@ export default function ObraDetailPage() {
     if (activeTab === 'saneamento' && !saneamento && !saneamentoLoading) {
       loadSaneamento()
     }
-    if (activeTab === 'interpretes' && !interpretesCarregado && !interpretesLoading) {
+    if ((activeTab === 'interpretes' || activeTab === 'fonogramas') && !interpretesCarregado && !interpretesLoading) {
       loadInterpretes()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1591,40 +1591,45 @@ export default function ObraDetailPage() {
             <div className="py-8 text-center text-xs text-white/30">Nenhum fonograma cadastrado.</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs min-w-[700px]">
+              <table className="w-full text-xs min-w-[600px]">
                 <thead>
                   <tr className="border-b border-white/[0.04]">
-                    <th className="text-left px-5 py-2.5 text-white/30 font-semibold">Título Fonograma</th>
-                    <th className="text-left px-4 py-2.5 text-white/30 font-semibold">Intérprete</th>
-                    <th className="text-center px-4 py-2.5 text-white/30 font-semibold">ISRC</th>
+                    <th className="text-left px-5 py-2.5 text-white/30 font-semibold">Gravação</th>
                     <th className="text-center px-4 py-2.5 text-white/30 font-semibold">Versão</th>
                     <th className="text-center px-4 py-2.5 text-white/30 font-semibold">Ano</th>
                     <th className="w-10" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.03]">
-                  {fonogramas.map((f: any) => (
-                    <tr key={f.id} className="hover:bg-white/[0.02]">
-                      <td className="px-5 py-3 font-medium text-white/70">{f.titulo_fonograma || '—'}</td>
-                      <td className="px-4 py-3 text-white/55">
-                        {f.interprete
-                          ? <span className="bg-sky-500/10 text-sky-300 px-2 py-0.5 rounded-full text-[11px] font-medium">{f.interprete}</span>
-                          : <span className="text-white/25 italic">Não informado</span>}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {f.isrc
-                          ? <span className="font-mono text-violet-300/80 text-[11px] bg-violet-500/10 px-2 py-0.5 rounded">{f.isrc}</span>
-                          : <span className="text-amber-400/60 italic">Pendente</span>}
-                      </td>
-                      <td className="px-4 py-3 text-center text-white/40">{f.versao ?? '—'}</td>
-                      <td className="px-4 py-3 text-center text-white/40">{f.ano_gravacao ?? f.data_lancamento?.substring(0, 4) ?? '—'}</td>
-                      <td className="px-4 py-3 text-center">
-                        <button onClick={() => removeFonograma(f.id)} className="text-rose-400/40 hover:text-rose-400 transition-colors">
-                          <X className="w-3 h-3" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {fonogramas.map((f: any) => {
+                    const interpretesStr = interpretes.length > 0
+                      ? interpretes.map((i: any) => i.nome_artistico).filter(Boolean).join(', ')
+                      : null
+                    return (
+                      <tr key={f.id} className="hover:bg-white/[0.02]">
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {f.isrc
+                              ? <span className="font-mono text-violet-300/80 text-[11px] bg-violet-500/10 px-2 py-0.5 rounded">{f.isrc}</span>
+                              : <span className="text-amber-400/60 italic text-[11px]">ISRC pendente</span>}
+                            {interpretesStr && (
+                              <>
+                                <span className="text-white/20">—</span>
+                                <span className="text-white/55">{interpretesStr}</span>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center text-white/40">{f.versao ?? '—'}</td>
+                        <td className="px-4 py-3 text-center text-white/40">{f.ano_gravacao ?? f.data_lancamento?.substring(0, 4) ?? '—'}</td>
+                        <td className="px-4 py-3 text-center">
+                          <button onClick={() => removeFonograma(f.id)} className="text-rose-400/40 hover:text-rose-400 transition-colors">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
