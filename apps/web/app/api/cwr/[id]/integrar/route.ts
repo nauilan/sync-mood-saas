@@ -27,6 +27,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { deveZerarMR, calcularMrAM } from '@/lib/backoffice-rules'
 import { previewLinksFromSnapshot } from '@/lib/cwr-materialization'
+import { parseCwr } from '@/lib/cwr-parser'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -149,12 +150,31 @@ export async function POST(
   // ── 0. Verificar importação ───────────────────────────────────────────────
   const { data: imp } = await client
     .from('cwr_importacoes')
-    .select('id, status, tenant_id, relatorio')
+    .select('id, status, tenant_id, relatorio, conteudo_raw')
     .eq('id', id)
     .eq('tenant_id', usuario.tenantId)
     .single()
 
   if (!imp) return NextResponse.json({ error: 'Importação não encontrada' }, { status: 404 })
+
+  // ── 0b. Parsear conteudo_raw para obter performers frescos ───────────────────
+  // snapshot_cwr pode estar stale (gravado antes do handler PER existir).
+  // Para performers, reparsear é a fonte de verdade — evita ter que reprocessar
+  // sempre que o parser muda. Snapshot continua sendo fonte de todo o restante.
+  const freshPerformersMap = new Map<string, string[]>() // submitter_work_no → performers
+  if ((imp as any).conteudo_raw) {
+    try {
+      const freshParsed = parseCwr((imp as any).conteudo_raw as string)
+      for (const obra of freshParsed.obras) {
+        if (obra.submitter_work_no && obra.performers.length > 0) {
+          freshPerformersMap.set(obra.submitter_work_no, obra.performers)
+        }
+      }
+    } catch (e) {
+      console.error('[integrar] conteudo_raw reparse failed:', e)
+    }
+  }
+
   // Modo unitário (obra_ids fornecido): permite reintegrar obras de importação já integrada
   const statusPermitidos = ['confirmado', 'integrado']
   if (!statusPermitidos.includes(imp.status as string)) {
@@ -477,10 +497,11 @@ export async function POST(
       })
     }
 
-    // Coletar performers da obra (registros PER — nível obra, não fonograma)
-    const snapPerformers = Array.isArray((snap as any).performers)
-      ? ((snap as any).performers as string[]).filter(Boolean)
-      : []
+    // Coletar performers da obra — usa reparse fresco do conteudo_raw (evita snapshot stale).
+    // Fallback para snap.performers caso conteudo_raw não estivesse disponível.
+    const snapWorkNo = (snap as any).submitter_work_no as string | undefined
+    const snapPerformers = (snapWorkNo ? freshPerformersMap.get(snapWorkNo) : undefined)
+      ?? (Array.isArray((snap as any).performers) ? ((snap as any).performers as string[]).filter(Boolean) : [])
     if (snapPerformers.length > 0) {
       obraInterpretesMap.set(obraId, snapPerformers)
     }
