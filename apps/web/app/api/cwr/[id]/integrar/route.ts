@@ -988,11 +988,12 @@ export async function POST(
         percentual_fonomecanico:  mr_gravado,
         percentual_sincronizacao: sr_gravado,
         // ── Colunas canônicas por direito (migration 059) ──────────────────
-        // MR → fonomecânica; SR → audiovisual + publicitária (SR cobre ambos no CWR)
+        // MR → fonomecânica; SR → SOMENTE audiovisual (C); publicitária (D) = 0 do CWR
+        // D preenchido via contrato na Etapa 3 (duplicar SR em C+D somaria duas vezes)
         // PR → comunicacao_publico individual (diluído ECAD — NÃO concentra)
         pct_repr_fonomecanica:      mr_gravado,
         pct_inclusao_audiovisual:   sr_gravado,
-        pct_inclusao_publicitaria:  sr_gravado,
+        pct_inclusao_publicitaria:  0,
         pct_comunicacao_publico:    p.pr_pct ?? 0,
         // ───────────────────────────────────────────────────────────────────
         ipi:                      info?.ipi ?? null,
