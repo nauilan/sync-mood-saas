@@ -920,6 +920,8 @@ export async function POST(
   // apenas o percentual controlado DO SEU LINK (evita duplicação).
 
   const titPayloads: Record<string, unknown>[] = []
+  // Extras paralelos a titPayloads — usados pra popular titular_direito_controle depois do insert
+  const titExtras: { mr: number; sr: number; ehConc: boolean; controlled: boolean }[] = []
   for (const [obraId, partics] of partByObra) {
 
     // Bruto de cada link = soma de TODOS os pr_pct do link (CA + E + AM),
@@ -985,10 +987,19 @@ export async function POST(
         percentual_exec_publica:  p.pr_pct  ?? 0,
         percentual_fonomecanico:  mr_gravado,
         percentual_sincronizacao: sr_gravado,
+        // ── Colunas canônicas por direito (migration 059) ──────────────────
+        // MR → fonomecânica; SR → audiovisual + publicitária (SR cobre ambos no CWR)
+        // PR → comunicacao_publico individual (diluído ECAD — NÃO concentra)
+        pct_repr_fonomecanica:      mr_gravado,
+        pct_inclusao_audiovisual:   sr_gravado,
+        pct_inclusao_publicitaria:  sr_gravado,
+        pct_comunicacao_publico:    p.pr_pct ?? 0,
+        // ───────────────────────────────────────────────────────────────────
         ipi:                      info?.ipi ?? null,
         pwr_publisher_code:       info?.codigo_interno?.trim() ?? null,
         status_controle:          p.controlled ? 'controlado' : 'nao_controlado',
       })
+      titExtras.push({ mr: mr_gravado, sr: sr_gravado, ehConc: ehConcentrador, controlled: p.controlled })
     }
   }
 
@@ -1060,6 +1071,8 @@ export async function POST(
 
   let insertError: string | null = null
   const TCHUNK = 500
+  // allInsertedOltIds[i] corresponde a titPayloads[i] e titExtras[i] — usado para titular_direito_controle
+  const allInsertedOltIds: string[] = []
   for (let i = 0; i < titPayloads.length; i += TCHUNK) {
     const { data: ins, error: insErr } = await client
       .from('obras_links_titulares')
@@ -1079,7 +1092,44 @@ export async function POST(
     if (ins) {
       participacoesGravadas += ins.length
       participacoesIds.push(...ins.map(x => x.id as string))
+      allInsertedOltIds.push(...ins.map(x => x.id as string))
     }
+  }
+
+  // ── 7.5 Gravar titular_direito_controle (ETAPA 2 — por (titular × direito × BR)) ──
+  // ON DELETE CASCADE em obra_link_titular_id garante idempotência:
+  // o delete de obras_links_titulares acima já apagou as linhas antigas.
+  // Populamos 4 direitos com dados do CWR (fono, audiovisual, publicitaria, comunicacao_publico).
+  // Os outros 4 (repr_grafica, distribuicao_meios, base_dados, autorizacoes_onus) ficam para contratos.
+  if (allInsertedOltIds.length === titExtras.length) {
+    const tdcRows: Record<string, unknown>[] = []
+    for (let i = 0; i < allInsertedOltIds.length; i++) {
+      const oltId  = allInsertedOltIds[i]
+      const ex     = titExtras[i]
+      const tenant = titPayloads[i].tenant_id as string
+
+      // repr_fonomecanica — MR concentrado no AM/E
+      tdcRows.push({ tenant_id: tenant, obra_link_titular_id: oltId, direito: 'repr_fonomecanica',     territorio: 'BR', controlado: ex.ehConc, pct_sintetico: ex.mr,  origem: 'cwr' })
+      // inclusao_audiovisual — SR concentrado (SR cobre audiovisual no CWR)
+      tdcRows.push({ tenant_id: tenant, obra_link_titular_id: oltId, direito: 'inclusao_audiovisual',  territorio: 'BR', controlado: ex.ehConc, pct_sintetico: ex.sr,  origem: 'cwr' })
+      // inclusao_publicitaria — SR concentrado (SR cobre publicitária no CWR)
+      tdcRows.push({ tenant_id: tenant, obra_link_titular_id: oltId, direito: 'inclusao_publicitaria', territorio: 'BR', controlado: ex.ehConc, pct_sintetico: ex.sr,  origem: 'cwr' })
+      // comunicacao_publico — individual diluído; pct_sintetico=0 (CHECK no banco)
+      tdcRows.push({ tenant_id: tenant, obra_link_titular_id: oltId, direito: 'comunicacao_publico',   territorio: 'BR', controlado: ex.controlled, pct_sintetico: 0,  origem: 'cwr' })
+    }
+    const TDC_CHUNK = 500
+    for (let i = 0; i < tdcRows.length; i += TDC_CHUNK) {
+      const { error: tdcErr } = await client
+        .from('titular_direito_controle')
+        .insert(tdcRows.slice(i, i + TDC_CHUNK))
+      if (tdcErr) {
+        // Não aborta — TDC é aditivo; erro aqui não invalida os dados principais
+        console.error('[integrar] titular_direito_controle insert error:', tdcErr.message, tdcErr.code)
+      }
+    }
+    console.log(`[integrar] titular_direito_controle: ${tdcRows.length} linhas gravadas (${allInsertedOltIds.length} participações × 4 direitos)`)
+  } else {
+    console.error('[integrar] titular_direito_controle SKIP: allInsertedOltIds.length !== titExtras.length', allInsertedOltIds.length, titExtras.length)
   }
 
   // ── 8. Editoras reais (tabela editoras) ───────────────────────────────────
