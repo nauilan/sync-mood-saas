@@ -1164,6 +1164,7 @@ export default function ObrasPage() {
   const [filterEditora, setFilterEditora] = useState('')
   const [filterIswc, setFilterIswc] = useState<'todos' | 'com' | 'sem'>('todos')
   const [filterFono, setFilterFono] = useState<'todos' | 'com' | 'sem'>('todos')
+  const [page, setPage] = useState(0)
   const [obraAtiva, setObraAtiva] = useState<any>(null)
   const [cwrInvalidos, setCwrInvalidos] = useState(0)
   const [limpando, setLimpando] = useState(false)
@@ -1327,6 +1328,13 @@ export default function ObrasPage() {
       return true
     })
   }, [search, filterStatus, filterEditora, filterIswc, filterFono, catalogoCompleto])
+
+  // Reset página quando filtros ou busca mudam
+  useEffect(() => { setPage(0) }, [search, filterStatus, filterEditora, filterIswc, filterFono])
+
+  const PAGE_SIZE = 50
+  const totalPages = Math.ceil(obras.length / PAGE_SIZE)
+  const obrasPaginated = obras.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   const selectCls = 'h-8 bg-white/5 border border-white/[0.06] rounded-lg px-2.5 text-xs text-white/70 focus:outline-none cursor-pointer'
 
@@ -1501,7 +1509,7 @@ export default function ObrasPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.04]">
-              {obras.map(obra => {
+              {obrasPaginated.map(obra => {
                 // _autores e _editorasLinks são pré-computados no catalogoCompleto useMemo
                 const autores: any[] = obra._autores ?? []
                 const editorasLinks: any[] = obra._editorasLinks ?? []
@@ -1608,6 +1616,44 @@ export default function ObrasPage() {
               })}
             </tbody>
           </table>
+
+          {/* ── Paginação ──────────────────────────────────────────────── */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-5 py-3 border-t border-white/[0.06]">
+              <span className="text-xs text-white/30">
+                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, obras.length)} de {obras.length} obras
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => React.startTransition(() => setPage(p => Math.max(0, p - 1)))}
+                  disabled={page === 0}
+                  className="h-7 px-3 rounded-lg text-xs text-white/50 hover:text-white hover:bg-white/5 disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
+                >
+                  Anterior
+                </button>
+                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                  const idx = totalPages <= 7 ? i : page < 4 ? i : page > totalPages - 4 ? totalPages - 7 + i : page - 3 + i
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => React.startTransition(() => setPage(idx))}
+                      className={`h-7 w-7 rounded-lg text-xs font-semibold transition-colors
+                        ${idx === page ? 'bg-violet-600 text-white' : 'text-white/40 hover:text-white hover:bg-white/5'}`}
+                    >
+                      {idx + 1}
+                    </button>
+                  )
+                })}
+                <button
+                  onClick={() => React.startTransition(() => setPage(p => Math.min(totalPages - 1, p + 1)))}
+                  disabled={page >= totalPages - 1}
+                  className="h-7 px-3 rounded-lg text-xs text-white/50 hover:text-white hover:bg-white/5 disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
+                >
+                  Próxima
+                </button>
+              </div>
+            </div>
+          )}
 
           {obrasLoading && (
             <div className="flex flex-col items-center gap-2 py-12 text-white/30">
