@@ -120,3 +120,59 @@ export function calcularAnaliticoPct(
   if (somaPrControladosDoLink <= 0) return 0
   return (prParticipante / somaPrControladosDoLink) * 100
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// CONCENTRAÇÃO SINTÉTICA POR LINK — reutilizável (CWR, contrato, manual)
+// ═══════════════════════════════════════════════════════════════════
+
+export interface ParticipacaoConcentracao {
+  link_number: number   // número do link (já normalizado: ?? 1 antes de chamar)
+  papel: string         // funcao_no_link: 'AM', 'E', 'CA', 'OWR', etc.
+  pr_pct: number        // percentual_exec_publica (participação individual)
+  mr_pct?: number       // MR bruto do CWR — fallback quando não concentrador; default 0
+  sr_pct?: number       // SR bruto do CWR — fallback quando não concentrador; default 0
+  controlled: boolean   // status_controle === 'controlado'
+}
+
+export interface ResultadoConcentracao {
+  mr_gravado: number      // → pct_repr_fonomecanica + percentual_fonomecanico
+  sr_gravado: number      // → pct_inclusao_audiovisual + percentual_sincronizacao
+  ehConcentrador: boolean // AM, ou E quando não há AM no link
+}
+
+/**
+ * Calcula a concentração sintética para todos os participantes de uma obra.
+ *
+ * EXTRAÇÃO EXATA do bloco inline do integrar/route.ts (linhas 929–966 originais).
+ * Lógica bit-a-bit idêntica — refactor de extração, não reescrita.
+ *
+ * Regras (ver §REGRA 1 e §REGRA 2 acima):
+ *   brutoPorLink = Σ pr_pct de TODOS os participantes do link (sem filtro controlled)
+ *   Concentrador = AM se houver no link; senão E
+ *   Concentrador: mr_gravado = brutoPorLink; demais: 0 via deveZerarMR
+ *
+ * Retorna array PARALELO a `partics` (índice 1:1 — mesma ordem, mesmo length).
+ */
+export function calcularConcentracaoLink(
+  partics: ParticipacaoConcentracao[]
+): ResultadoConcentracao[] {
+  // 1. brutoPorLink: soma de TODOS os pr_pct por link_number (sem filtro)
+  const brutoPorLink = new Map<number, number>()
+  for (const p of partics) {
+    brutoPorLink.set(p.link_number, (brutoPorLink.get(p.link_number) ?? 0) + p.pr_pct)
+  }
+
+  // 2. Por participante — lógica exata extraída do integrar/route.ts
+  return partics.map(p => {
+    const total     = brutoPorLink.get(p.link_number) ?? 0
+    const linkTemAM = partics.some(p2 => p2.link_number === p.link_number && p2.papel === 'AM')
+    const ehConc    = p.papel === 'AM' || (!linkTemAM && p.papel === 'E')
+
+    const mr_final   = (ehConc && total > 0) ? total : (p.mr_pct ?? 0)
+    const mr_gravado = deveZerarMR(p.papel) && !ehConc ? 0 : mr_final
+    const sr_final   = (ehConc && total > 0) ? total : (p.sr_pct ?? 0)
+    const sr_gravado = deveZerarMR(p.papel) && !ehConc ? 0 : sr_final
+
+    return { mr_gravado, sr_gravado, ehConcentrador: ehConc }
+  })
+}

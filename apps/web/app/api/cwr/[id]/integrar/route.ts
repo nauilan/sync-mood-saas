@@ -25,7 +25,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { deveZerarMR, calcularMrAM } from '@/lib/backoffice-rules'
+import { deveZerarMR, calcularMrAM, calcularConcentracaoLink, type ParticipacaoConcentracao } from '@/lib/backoffice-rules'
 import { previewLinksFromSnapshot } from '@/lib/cwr-materialization'
 import { parseCwr } from '@/lib/cwr-parser'
 
@@ -924,16 +924,21 @@ export async function POST(
   const titExtras: { mr: number; sr: number; ehConc: boolean; controlled: boolean }[] = []
   for (const [obraId, partics] of partByObra) {
 
-    // Bruto de cada link = soma de TODOS os pr_pct do link (CA + E + AM),
-    // sem filtro de controlled — este é o percentual bruto de participação na obra.
-    const linkNums = [...new Set(partics.map(p => p.link_number ?? 1))]
-    const brutoPorLink = new Map<number, number>()
-    for (const ln of linkNums) {
-      const linkPartics = partics.filter(p => (p.link_number ?? 1) === ln)
-      brutoPorLink.set(ln, linkPartics.reduce((s, p) => s + (p.pr_pct ?? 0), 0))
-    }
+    // Concentração sintética via lib/backoffice-rules (extração exata, sem mudança de lógica)
+    const partics_conc: ParticipacaoConcentracao[] = partics.map(p => ({
+      link_number: p.link_number ?? 1,
+      papel:       p.papel ?? '',
+      pr_pct:      p.pr_pct ?? 0,
+      mr_pct:      p.mr_pct ?? 0,
+      sr_pct:      p.sr_pct ?? 0,
+      controlled:  p.controlled,
+    }))
+    const concResults = calcularConcentracaoLink(partics_conc)
 
-    for (const p of partics) {
+    for (let i = 0; i < partics.length; i++) {
+      const p    = partics[i]
+      const conc = concResults[i]
+
       // Fix 1: resolver link correto via pwr_links; fallback = LINK 1
       const linkId =
         obraLinkNumToId[`${obraId}:${p.link_number}`] ??
@@ -953,17 +958,10 @@ export async function POST(
             })()
           : null
 
-      // Regra BackOffice: concentrador do link (AM se houver; senão E) recebe MR/SR do link.
-      // Todos os demais (autores controlados, OWR, E quando há AM) recebem 0.
-      const totalControlledPr = brutoPorLink.get(p.link_number ?? 1) ?? 0
-      const linkTemAM = partics.some(
-        p2 => (p2.link_number ?? 1) === (p.link_number ?? 1) && p2.papel === 'AM'
-      )
-      const ehConcentrador = p.papel === 'AM' || (!linkTemAM && p.papel === 'E')
-      const mr_final   = (ehConcentrador && totalControlledPr > 0) ? totalControlledPr : (p.mr_pct ?? 0)
-      const mr_gravado = deveZerarMR(p.papel) && !ehConcentrador ? 0 : mr_final
-      const sr_final   = (ehConcentrador && totalControlledPr > 0) ? totalControlledPr : (p.sr_pct ?? 0)
-      const sr_gravado = deveZerarMR(p.papel) && !ehConcentrador ? 0 : sr_final
+      // Concentração calculada em bloco por calcularConcentracaoLink()
+      const mr_gravado     = conc.mr_gravado
+      const sr_gravado     = conc.sr_gravado
+      const ehConcentrador = conc.ehConcentrador
 
       titPayloads.push({
         obra_link_id:             linkId,
