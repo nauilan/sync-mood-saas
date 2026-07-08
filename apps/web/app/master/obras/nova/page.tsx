@@ -14,6 +14,47 @@ import { PAPEL_TITULAR_LABELS, PAPEL_TITULAR_COLORS, GENEROS_MUSICAIS } from '@/
 import { formatarPercentual, normalizarPercentual } from '@/lib/percentual'
 import { authFetch } from '@/lib/supabase/client'
 
+// ── Direitos por contrato ─────────────────────────────────────────────────────
+const DIREITOS_CONFIG = [
+  { key: 'repr_grafica',          label: 'Reprodução Gráfica',         soBr: true  },
+  { key: 'repr_fonomecanica',     label: 'Reprodução Fonomecânica',    soBr: false },
+  { key: 'inclusao_audiovisual',  label: 'Inclusão Audiovisual',       soBr: false },
+  { key: 'inclusao_publicitaria', label: 'Inclusão Publicitária',      soBr: false },
+  { key: 'distribuicao_meios',    label: 'Distribuição Digital',       soBr: false },
+  { key: 'inclusao_base_dados',   label: 'Base de Dados',              soBr: false },
+  { key: 'comunicacao_publico',   label: 'Comunicação ao Público',     soBr: false },
+  { key: 'autorizacoes_onus',     label: 'Autorizações com Ônus',      soBr: true  },
+] as const
+
+type DireitoKey = typeof DIREITOS_CONFIG[number]['key']
+type SplitDireito = {
+  contratado: boolean
+  br_autor: number
+  br_editora: number
+  ext_autor: number
+  ext_editora: number
+}
+type SplitsDireitos = Record<DireitoKey, SplitDireito>
+
+function initSplitsFromIA(dados: any): SplitsDireitos {
+  const br  = dados?.percentuais_brasil   ?? {}
+  const ext = dados?.percentuais_exterior ?? {}
+  return Object.fromEntries(
+    DIREITOS_CONFIG.map(({ key, soBr }) => {
+      const brV  = br[key]  ?? { autor: 0, editora: 0 }
+      const extV = ext[key] ?? { autor: 0, editora: 0 }
+      const temValor = brV.autor > 0 || brV.editora > 0 || extV.autor > 0 || extV.editora > 0
+      return [key, {
+        contratado:  temValor,
+        br_autor:    brV.autor   ?? 0,
+        br_editora:  brV.editora ?? 0,
+        ext_autor:   soBr ? 0 : (extV.autor   ?? 0),
+        ext_editora: soBr ? 0 : (extV.editora ?? 0),
+      }]
+    })
+  ) as SplitsDireitos
+}
+
 // ── Siglas oficiais ──────────────────────────────────────────────────────────
 // CA = Compositor/Autor | AD = Adaptador | AR = Arranjador | V = Versionista
 // E  = Editora          | SE = Subeditora | AM = Editora Administradora
@@ -413,6 +454,7 @@ export default function NovaObraPage() {
   const [contratoFile, setContratoFile] = useState<File | null>(null)
   const [maisDeUmaObra, setMaisDeUmaObra] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [splitsDireitos, setSplitsDireitos] = useState<SplitsDireitos | null>(null)
 
   // Modal: novo titular rápido
   const [showNovoTitular, setShowNovoTitular] = useState(false)
@@ -636,6 +678,7 @@ export default function NovaObraPage() {
         // Múltiplas obras — guardar lista e deixar operador escolher
         setObrasExtraidas(dados.obras)
         setDadosExtraidos(dados)
+        setSplitsDireitos(initSplitsFromIA(dados))
         setExtractDone(true)
         // Criar apenas o titular (sem montar link ainda — aguarda seleção da obra)
         const nomeExibicao = dados.autor_pseudonimo || dados.autor_nome || ''
@@ -1500,6 +1543,140 @@ export default function NovaObraPage() {
                 </button>
               </div>
             )}
+
+            {/* ── Tabela de splits por direito (3B-1a) ─────────────────────── */}
+            {splitsDireitos && (() => {
+              const todosMarcados = DIREITOS_CONFIG.every(d => splitsDireitos[d.key].contratado)
+
+              function patchSplit(key: DireitoKey, patch: Partial<SplitDireito>) {
+                setSplitsDireitos(prev => prev ? { ...prev, [key]: { ...prev[key], ...patch } } : prev)
+              }
+
+              function aplicarATodos(field: 'br_autor'|'br_editora'|'ext_autor'|'ext_editora', val: number) {
+                setSplitsDireitos(prev => {
+                  if (!prev) return prev
+                  const next = { ...prev }
+                  DIREITOS_CONFIG.forEach(({ key, soBr }) => {
+                    if ((field === 'ext_autor' || field === 'ext_editora') && soBr) return
+                    next[key] = { ...next[key], [field]: val }
+                  })
+                  return next
+                })
+              }
+
+              return (
+                <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="w-4 h-4 text-violet-400" />
+                      <h3 className="text-sm font-semibold text-white">Splits por Direito</h3>
+                      <span className="text-[10px] text-white/30 bg-white/5 px-1.5 py-0.5 rounded">IA extraiu</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-[11px] text-violet-400 hover:text-violet-300 transition-colors"
+                      onClick={() => setSplitsDireitos(prev => {
+                        if (!prev) return prev
+                        const next = { ...prev }
+                        DIREITOS_CONFIG.forEach(({ key }) => { next[key] = { ...next[key], contratado: !todosMarcados } })
+                        return next
+                      })}
+                    >
+                      {todosMarcados ? 'Desmarcar todos' : 'Marcar todos'}
+                    </button>
+                  </div>
+
+                  {/* Header */}
+                  <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-2 text-[10px] text-white/30 font-medium px-1">
+                    <span>Direito</span>
+                    <span className="w-8 text-center">Ctr.</span>
+                    <span className="w-16 text-center">BR Autor %</span>
+                    <span className="w-16 text-center">BR Edit. %</span>
+                    <span className="w-16 text-center">EXT Autor %</span>
+                    <span className="w-16 text-center">EXT Edit. %</span>
+                  </div>
+
+                  {/* Atalhos aplicar a todos */}
+                  <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-2 px-1 items-center">
+                    <span className="text-[10px] text-white/20">Aplicar a todos →</span>
+                    <span className="w-8" />
+                    {(['br_autor','br_editora','ext_autor','ext_editora'] as const).map(field => (
+                      <div key={field} className="w-16 flex gap-1 justify-center">
+                        {[75,50,25].map(v => (
+                          <button key={v} type="button"
+                            onClick={() => aplicarATodos(field, v)}
+                            className="text-[9px] text-violet-400/60 hover:text-violet-300 transition-colors"
+                          >{v}</button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Linhas */}
+                  <div className="space-y-1">
+                    {DIREITOS_CONFIG.map(({ key, label, soBr }) => {
+                      const sp = splitsDireitos[key]
+                      const brOk  = !sp.contratado || Math.abs(sp.br_autor + sp.br_editora - 100) < 0.02
+                      const extOk = !sp.contratado || soBr || Math.abs(sp.ext_autor + sp.ext_editora - 100) < 0.02
+
+                      return (
+                        <div key={key}
+                          className={`grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-2 items-center px-2 py-1.5 rounded-lg transition-colors
+                            ${sp.contratado ? 'bg-white/[0.03]' : 'opacity-40'}
+                            ${(!brOk || !extOk) ? 'border border-rose-500/30' : ''}`}
+                        >
+                          <span className={`text-xs truncate ${sp.contratado ? 'text-white/80' : 'text-white/30'}`}>{label}</span>
+
+                          <div className="w-8 flex justify-center">
+                            <input type="checkbox" checked={sp.contratado}
+                              onChange={e => patchSplit(key, { contratado: e.target.checked })}
+                              className="w-3.5 h-3.5 accent-violet-500 cursor-pointer" />
+                          </div>
+
+                          <input type="number" min={0} max={100} step={0.01}
+                            disabled={!sp.contratado}
+                            value={sp.br_autor}
+                            onChange={e => patchSplit(key, { br_autor: parseFloat(e.target.value) || 0 })}
+                            className={`w-16 text-xs text-right bg-white/5 border rounded px-1.5 py-0.5 text-white disabled:opacity-30 focus:outline-none ${!brOk ? 'border-rose-500/60' : 'border-white/10 focus:border-violet-500/50'}`}
+                          />
+                          <input type="number" min={0} max={100} step={0.01}
+                            disabled={!sp.contratado}
+                            value={sp.br_editora}
+                            onChange={e => patchSplit(key, { br_editora: parseFloat(e.target.value) || 0 })}
+                            className={`w-16 text-xs text-right bg-white/5 border rounded px-1.5 py-0.5 text-white disabled:opacity-30 focus:outline-none ${!brOk ? 'border-rose-500/60' : 'border-white/10 focus:border-violet-500/50'}`}
+                          />
+                          <input type="number" min={0} max={100} step={0.01}
+                            disabled={!sp.contratado || soBr}
+                            value={soBr ? 0 : sp.ext_autor}
+                            onChange={e => !soBr && patchSplit(key, { ext_autor: parseFloat(e.target.value) || 0 })}
+                            className={`w-16 text-xs text-right bg-white/5 border rounded px-1.5 py-0.5 text-white disabled:opacity-30 focus:outline-none ${!extOk && !soBr ? 'border-rose-500/60' : 'border-white/10 focus:border-violet-500/50'}`}
+                          />
+                          <input type="number" min={0} max={100} step={0.01}
+                            disabled={!sp.contratado || soBr}
+                            value={soBr ? 0 : sp.ext_editora}
+                            onChange={e => !soBr && patchSplit(key, { ext_editora: parseFloat(e.target.value) || 0 })}
+                            className={`w-16 text-xs text-right bg-white/5 border rounded px-1.5 py-0.5 text-white disabled:opacity-30 focus:outline-none ${!extOk && !soBr ? 'border-rose-500/60' : 'border-white/10 focus:border-violet-500/50'}`}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Aviso soma inválida */}
+                  {DIREITOS_CONFIG.some(({ key, soBr }) => {
+                    const sp = splitsDireitos[key]
+                    if (!sp.contratado) return false
+                    return Math.abs(sp.br_autor + sp.br_editora - 100) >= 0.02
+                      || (!soBr && Math.abs(sp.ext_autor + sp.ext_editora - 100) >= 0.02)
+                  }) && (
+                    <div className="flex items-center gap-1.5 text-rose-400 text-[11px] bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      Direitos marcados em vermelho não fecham 100% — corrija antes de salvar.
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* Múltiplas obras no mesmo contrato */}
             <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4 space-y-3">
