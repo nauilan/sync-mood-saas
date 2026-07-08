@@ -19,13 +19,13 @@ async function autenticar(req: NextRequest) {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const usuario = await autenticar(req)
   if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   const client = sb()
-  const obraId = params.id
+  const { id: obraId } = await params
 
   const { data: obra, error: obraErr } = await client
     .from('obras')
