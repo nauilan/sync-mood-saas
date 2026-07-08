@@ -425,6 +425,7 @@ export default function NovaObraPage() {
   // UI
   const [saved, setSaved] = useState(false)
   const [savedCodigo, setSavedCodigo] = useState('')
+  const [savedId, setSavedId] = useState('')
   const [saving, setSaving] = useState(false)
 
   const inputCls = 'w-full h-9 bg-white/5 border border-white/[0.08] rounded-lg px-3 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 focus:bg-violet-500/5 transition-colors'
@@ -779,6 +780,7 @@ export default function NovaObraPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Erro ao salvar obra')
       setSavedCodigo(data.codigo_obra || '')
+      setSavedId(data.id || '')
       setSaved(true)
     } catch (err) {
       console.error('[salvarObra]', err)
@@ -1580,6 +1582,7 @@ export default function NovaObraPage() {
             </div>
             <div className="grid grid-cols-2 gap-y-3 gap-x-6">
               {[
+                { label: 'ID Interno', value: savedId || '—' },
                 { label: 'Título', value: titulo || '—' },
                 { label: 'Título Alternativo', value: tituloAlternativo || '—' },
                 { label: 'Idioma', value: idioma },
