@@ -381,6 +381,127 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── 4. 3B-1b: Gravar analítico (contrato + contrato_titular_direito) ─────────
+  {
+    type SplitPayload = { contratado: boolean; br_autor: number; br_editora: number; ext_autor: number; ext_editora: number }
+    const splitsDireitosRaw = rest.splits_direitos as Record<string, SplitPayload> | null | undefined
+    const nomeContratanteP  = rest.nome_contratante as string | null | undefined
+    const dataContratoP     = rest.data_contrato    as string | null | undefined
+
+    if (splitsDireitosRaw && typeof splitsDireitosRaw === 'object') {
+      // Encontrar compositor principal (primeiro titular do primeiro link)
+      let compositorTitularId: string | null = null
+      if (Array.isArray(links) && links.length > 0) {
+        const primeiroLink = links[0] as { titulares?: { papel?: string; titular_id?: string }[] }
+        const compositor = (primeiroLink.titulares ?? []).find(t =>
+          ['compositor', 'autor', 'adaptador', 'versionista'].includes(t.papel ?? '')
+        )
+        if (compositor?.titular_id) compositorTitularId = compositor.titular_id
+      }
+
+      if (compositorTitularId) {
+        // Obter ou criar contrato
+        let contratoId = contratoOrigemId || null
+
+        if (!contratoId) {
+          const { count: cntC } = await sb.from('contratos')
+            .select('*', { count: 'exact', head: true })
+            .eq('tenant_id', usuario.tenant_id)
+          const numContrato = `CNT-${String((cntC ?? 0) + 1).padStart(5, '0')}`
+
+          const { data: novoContrato } = await sb.from('contratos').insert({
+            tenant_id:          usuario.tenant_id,
+            titular_id:         compositorTitularId,
+            numero:             numContrato,
+            tipo:               'cessao',
+            data_inicio:        dataContratoP || new Date().toISOString().split('T')[0],
+            prazo_indeterminado: !dataContratoP,
+            status:             'ativo',
+            splits_direitos:    splitsDireitosRaw,
+            observacoes:        nomeContratanteP ? `Titular: ${nomeContratanteP}` : null,
+          }).select('id').single()
+
+          if (novoContrato) {
+            contratoId = novoContrato.id
+            await sb.from('contrato_obras').insert({
+              tenant_id:   usuario.tenant_id,
+              contrato_id: contratoId,
+              obra_id:     (obra as { id: string }).id,
+            })
+            await sb.from('obras')
+              .update({ contrato_origem_id: contratoId })
+              .eq('id', (obra as { id: string }).id)
+              .eq('tenant_id', usuario.tenant_id)
+          }
+        }
+
+        if (contratoId) {
+          const DIREITOS_KEYS = [
+            'repr_grafica', 'repr_fonomecanica',
+            'inclusao_audiovisual', 'inclusao_publicitaria',
+            'distribuicao_meios', 'inclusao_base_dados',
+            'comunicacao_publico', 'autorizacoes_onus',
+          ] as const
+          const SO_BR = new Set(['repr_grafica', 'autorizacoes_onus'])
+
+          const ctdRows: Record<string, unknown>[] = []
+          for (const direito of DIREITOS_KEYS) {
+            const sp = splitsDireitosRaw[direito]
+            if (!sp?.contratado) continue
+
+            // Linha BR
+            ctdRows.push({
+              tenant_id:      usuario.tenant_id,
+              contrato_id:    contratoId,
+              titular_id:     compositorTitularId,
+              direito,
+              territorio:     'BR',
+              pct_autor:      sp.br_autor,
+              pct_ed_original: sp.br_editora,
+              pct_ed_adm:     0,
+              ativo:          true,
+              origem:         'contrato',
+            })
+
+            // Linha EXT (só se não-soBr E valores somam ~100)
+            if (!SO_BR.has(direito)) {
+              const extSum = (sp.ext_autor ?? 0) + (sp.ext_editora ?? 0)
+              if (Math.abs(extSum - 100) < 0.02) {
+                ctdRows.push({
+                  tenant_id:      usuario.tenant_id,
+                  contrato_id:    contratoId,
+                  titular_id:     compositorTitularId,
+                  direito,
+                  territorio:     'EXT',
+                  pct_autor:      sp.ext_autor,
+                  pct_ed_original: sp.ext_editora,
+                  pct_ed_adm:     0,
+                  ativo:          true,
+                  origem:         'contrato',
+                })
+              }
+            }
+          }
+
+          if (ctdRows.length > 0) {
+            // Idempotência: delete + reinsert
+            await sb.from('contrato_titular_direito')
+              .delete()
+              .eq('contrato_id', contratoId)
+              .eq('tenant_id', usuario.tenant_id)
+            await sb.from('contrato_titular_direito').insert(ctdRows)
+
+            // Sync splits_direitos JSONB (cópia derivada da tabela)
+            await sb.from('contratos')
+              .update({ splits_direitos: splitsDireitosRaw })
+              .eq('id', contratoId)
+              .eq('tenant_id', usuario.tenant_id)
+          }
+        }
+      }
+    }
+  }
+
   try {
     await logAudit({
       tenant_id: usuario.tenant_id,

@@ -825,6 +825,10 @@ export default function NovaObraPage() {
         fonogramas,
         // vínculo com contrato de origem — obrigatório para rastreabilidade
         contrato_origem_id: contratoOrigemId || null,
+        // 3B-1b: analítico — splits por direito extraídos da IA / revisados pelo usuário
+        splits_direitos: splitsDireitos || null,
+        nome_contratante: nomeContratante || null,
+        data_contrato: dataContrato || null,
       }
       const res = await authFetch('/api/obras', {
         method: 'POST',
