@@ -1002,6 +1002,38 @@ export async function POST(
     }
   }
 
+  // ── Dedup editorial: remover linhas duplicadas E/SE/AM/SA por (obra_link_id, funcao) ─
+  // Causa: snapshot CWR pode ter a mesma editora em 2 posições PWR do mesmo link.
+  // Ex: SABOR BRUTO tem Top Show como E em 2 registros → o insert cria 2 linhas a cada vez.
+  // CAs são únicos por (link + titular/nome); editoriais são únicos por (link + papel).
+  // titPayloads e titExtras são arrays paralelos — dedup mantém índices 1:1.
+  {
+    const ddSeen: Set<string> = new Set()
+    const ddPayloads: Record<string, unknown>[] = []
+    const ddExtras:   { mr: number; sr: number; ehConc: boolean; controlled: boolean }[] = []
+    for (let i = 0; i < titPayloads.length; i++) {
+      const p  = titPayloads[i]
+      const fn = ((p.funcao_no_link as string) ?? '').toUpperCase()
+      const isEditorial = fn === 'E' || fn === 'SE' || fn === 'AM' || fn === 'SA'
+      const key = isEditorial
+        ? `${p.obra_link_id}:${fn}`
+        : `${p.obra_link_id}:${fn}:${(p.titular_id as string | null) ?? (p.nome as string)}`
+      if (!ddSeen.has(key)) {
+        ddSeen.add(key)
+        ddPayloads.push(p)
+        ddExtras.push(titExtras[i])
+      }
+    }
+    const removidas = titPayloads.length - ddPayloads.length
+    if (removidas > 0) {
+      console.warn(`[integrar] dedup editorial: ${removidas} duplicata(s) removida(s) antes do insert`)
+    }
+    titPayloads.length = 0
+    titPayloads.push(...ddPayloads)
+    titExtras.length = 0
+    titExtras.push(...ddExtras)
+  }
+
   // ── debug: retornar se titPayloads vazio antes de tentar insert ──────────
   if (titPayloads.length === 0) {
     return NextResponse.json({
@@ -1111,8 +1143,8 @@ export async function POST(
       tdcRows.push({ tenant_id: tenant, obra_link_titular_id: oltId, direito: 'repr_fonomecanica',     territorio: 'BR', controlado: ex.ehConc, pct_sintetico: ex.mr,  origem: 'cwr' })
       // inclusao_audiovisual — SR concentrado (SR cobre audiovisual no CWR)
       tdcRows.push({ tenant_id: tenant, obra_link_titular_id: oltId, direito: 'inclusao_audiovisual',  territorio: 'BR', controlado: ex.ehConc, pct_sintetico: ex.sr,  origem: 'cwr' })
-      // inclusao_publicitaria — SR concentrado (SR cobre publicitária no CWR)
-      tdcRows.push({ tenant_id: tenant, obra_link_titular_id: oltId, direito: 'inclusao_publicitaria', territorio: 'BR', controlado: ex.ehConc, pct_sintetico: ex.sr,  origem: 'cwr' })
+      // inclusao_publicitaria — D preenchido via contrato; CWR não distingue C/D → 0
+      tdcRows.push({ tenant_id: tenant, obra_link_titular_id: oltId, direito: 'inclusao_publicitaria', territorio: 'BR', controlado: ex.ehConc, pct_sintetico: 0,      origem: 'cwr' })
       // comunicacao_publico — individual diluído; pct_sintetico=0 (CHECK no banco)
       tdcRows.push({ tenant_id: tenant, obra_link_titular_id: oltId, direito: 'comunicacao_publico',   territorio: 'BR', controlado: ex.controlled, pct_sintetico: 0,  origem: 'cwr' })
     }
