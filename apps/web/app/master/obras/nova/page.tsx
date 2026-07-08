@@ -36,6 +36,18 @@ type SplitDireito = {
 }
 type SplitsDireitos = Record<DireitoKey, SplitDireito>
 
+function initSplitsManual(): SplitsDireitos {
+  return Object.fromEntries(
+    DIREITOS_CONFIG.map(({ key, soBr }) => [key, {
+      contratado:  true,
+      br_autor:    100,
+      br_editora:  0,
+      ext_autor:   soBr ? 0 : 100,
+      ext_editora: 0,
+    }])
+  ) as SplitsDireitos
+}
+
 function initSplitsFromIA(dados: any): SplitsDireitos {
   const br  = dados?.percentuais_brasil   ?? {}
   const ext = dados?.percentuais_exterior ?? {}
@@ -1542,6 +1554,18 @@ export default function NovaObraPage() {
                   <X className="w-4 h-4" />
                 </button>
               </div>
+            )}
+
+            {/* ── Preencher splits manualmente (sem PDF) ──────────────────── */}
+            {!splitsDireitos && (
+              <button
+                type="button"
+                onClick={() => setSplitsDireitos(initSplitsManual())}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-dashed border-white/10 text-sm text-white/40 hover:text-violet-400 hover:border-violet-500/30 transition-colors"
+              >
+                <BookOpen className="w-4 h-4" />
+                Preencher splits por direito manualmente
+              </button>
             )}
 
             {/* ── Tabela de splits por direito (3B-1a) ─────────────────────── */}
