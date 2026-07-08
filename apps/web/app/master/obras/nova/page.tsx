@@ -72,12 +72,12 @@ function initSplitsFromIA(dados: any): SplitsDireitos {
 // E  = Editora          | SE = Subeditora | AM = Editora Administradora
 
 const STEPS = [
-  { label: 'Titulo & Genero', icon: Music2 },
-  { label: 'Fonogramas', icon: Mic2 },
-  { label: 'Texto Poético', icon: AlignLeft },
-  { label: 'Contrato Assinado', icon: FileCheck2 },
-  { label: 'Links & Participacao', icon: Link2 },
-  { label: 'Revisao', icon: CheckCircle2 },
+  { label: 'Titulo & Genero',      icon: Music2       },
+  { label: 'Texto Poético',        icon: AlignLeft    },
+  { label: 'Fonogramas',           icon: Mic2         },
+  { label: 'Contrato Assinado',    icon: FileCheck2   },
+  { label: 'Links & Participacao', icon: Link2        },
+  { label: 'Revisao',              icon: CheckCircle2 },
 ]
 
 interface LinkTitular {
@@ -467,6 +467,9 @@ export default function NovaObraPage() {
   const [maisDeUmaObra, setMaisDeUmaObra] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [splitsDireitos, setSplitsDireitos] = useState<SplitsDireitos | null>(null)
+  const [splitsTocados, setSplitsTocados] = useState<Set<DireitoKey>>(new Set())
+  const [nomeContratante, setNomeContratante] = useState('')
+  const [dataContrato, setDataContrato] = useState('')
 
   // Modal: novo titular rápido
   const [showNovoTitular, setShowNovoTitular] = useState(false)
@@ -557,23 +560,7 @@ export default function NovaObraPage() {
 
   function handleFileSelect(file: File) {
     if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-      setContratoFile(file)
-      // IA auto-extrai a letra do contrato assim que o PDF é enviado
-      if (titulo.trim()) {
-        setExtracting(true)
-        setExtractDone(false)
-        setTimeout(() => {
-          const chave = titulo.toLowerCase().trim()
-          const encontrada = Object.entries(LETRAS_DEMO).find(([k]) => chave.includes(k) || k.includes(chave))
-          if (encontrada) {
-            setLetra(encontrada[1])
-          } else {
-            setLetra(`[Letra de "${titulo}" extraída do contrato via IA]\n\n— O texto poético foi identificado no PDF. Revise e edite se necessário.`)
-          }
-          setExtractDone(true)
-          setExtracting(false)
-        }, 2200)
-      }
+      processarContratoUpload(file)
     }
   }
 
@@ -691,6 +678,11 @@ export default function NovaObraPage() {
         setObrasExtraidas(dados.obras)
         setDadosExtraidos(dados)
         setSplitsDireitos(initSplitsFromIA(dados))
+        setSplitsTocados(new Set())
+        if (dados.autor_nome || dados.autor_pseudonimo) {
+          setNomeContratante(dados.autor_nome || dados.autor_pseudonimo || '')
+        }
+        if (dados.data_contrato) setDataContrato(dados.data_contrato)
         setExtractDone(true)
         // Criar apenas o titular (sem montar link ainda — aguarda seleção da obra)
         const nomeExibicao = dados.autor_pseudonimo || dados.autor_nome || ''
@@ -718,6 +710,12 @@ export default function NovaObraPage() {
         setSubtitulo(primeira.subtitulo || '')
         setTituloAlternativo(primeira.titulo_alternativo || '')
         setLetra(primeira.texto_poetico || '')
+        setSplitsDireitos(initSplitsFromIA(dados))
+        setSplitsTocados(new Set())
+        if (dados.autor_nome || dados.autor_pseudonimo) {
+          setNomeContratante(dados.autor_nome || dados.autor_pseudonimo || '')
+        }
+        if (dados.data_contrato) setDataContrato(dados.data_contrato)
         setExtractDone(true)
         await criarTitularEMontarLink(primeira, dados)
       }
@@ -1305,19 +1303,63 @@ export default function NovaObraPage() {
             const todosMarcados = DIREITOS_CONFIG.every(d => splitsDireitos[d.key].contratado)
 
             function patchSplit(key: DireitoKey, patch: Partial<SplitDireito>) {
-              setSplitsDireitos(prev => prev ? { ...prev, [key]: { ...prev[key], ...patch } } : prev)
+              // Auto-balance: quando um lado muda, o outro se ajusta para fechar 100
+              const balancedPatch = { ...patch }
+              if ('br_autor' in patch)    balancedPatch.br_editora  = Math.max(0, 100 - (patch.br_autor    ?? 0))
+              if ('br_editora' in patch)  balancedPatch.br_autor    = Math.max(0, 100 - (patch.br_editora  ?? 0))
+              if ('ext_autor' in patch)   balancedPatch.ext_editora = Math.max(0, 100 - (patch.ext_autor   ?? 0))
+              if ('ext_editora' in patch) balancedPatch.ext_autor   = Math.max(0, 100 - (patch.ext_editora ?? 0))
+
+              // Cascade: se este direito ainda não foi tocado, marca como tocado e propaga a todos os não-tocados
+              const jaTocado = splitsTocados.has(key)
+              if (!jaTocado && !('contratado' in patch)) {
+                setSplitsTocados(prev => new Set([...prev, key]))
+                // Propaga o mesmo balancedPatch para todos os direitos ainda não tocados (exceto o atual)
+                setSplitsDireitos(prev => {
+                  if (!prev) return prev
+                  const next = { ...prev, [key]: { ...prev[key], ...balancedPatch } }
+                  DIREITOS_CONFIG.forEach(({ key: k, soBr }) => {
+                    if (k === key) return
+                    if (splitsTocados.has(k)) return
+                    const p: Partial<SplitDireito> = {}
+                    if ('br_autor'    in balancedPatch) p.br_autor    = balancedPatch.br_autor
+                    if ('br_editora'  in balancedPatch) p.br_editora  = balancedPatch.br_editora
+                    if (!soBr) {
+                      if ('ext_autor'   in balancedPatch) p.ext_autor   = balancedPatch.ext_autor
+                      if ('ext_editora' in balancedPatch) p.ext_editora = balancedPatch.ext_editora
+                    }
+                    next[k] = { ...next[k], ...p }
+                  })
+                  return next
+                })
+              } else {
+                setSplitsDireitos(prev => prev ? { ...prev, [key]: { ...prev[key], ...balancedPatch } } : prev)
+                if (!jaTocado && 'contratado' in patch) {
+                  // don't mark as touched for checkbox-only changes
+                } else if (!('contratado' in patch)) {
+                  setSplitsTocados(prev => new Set([...prev, key]))
+                }
+              }
             }
 
             function aplicarATodos(field: 'br_autor'|'br_editora'|'ext_autor'|'ext_editora', val: number) {
+              const complement = Math.max(0, 100 - val)
               setSplitsDireitos(prev => {
                 if (!prev) return prev
                 const next = { ...prev }
                 DIREITOS_CONFIG.forEach(({ key, soBr }) => {
                   if ((field === 'ext_autor' || field === 'ext_editora') && soBr) return
-                  next[key] = { ...next[key], [field]: val }
+                  const p: Partial<SplitDireito> = { [field]: val }
+                  if (field === 'br_autor')    p.br_editora  = complement
+                  if (field === 'br_editora')  p.br_autor    = complement
+                  if (field === 'ext_autor')   p.ext_editora = complement
+                  if (field === 'ext_editora') p.ext_autor   = complement
+                  next[key] = { ...next[key], ...p }
                 })
                 return next
               })
+              // Aplicar a todos zera os "tocados" (fresh cascade)
+              setSplitsTocados(new Set())
             }
 
             return (
@@ -1533,8 +1575,8 @@ export default function NovaObraPage() {
         </div>
       )}
 
-      {/* ─────────────── Step 1: Fonogramas ─────────────── */}
-      {step === 1 && (
+      {/* ─────────────── Step 2: Fonogramas ─────────────── */}
+      {step === 2 && (
         <div className="space-y-4">
           <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5">
             <div className="flex items-center gap-2 mb-4">
@@ -1569,8 +1611,8 @@ export default function NovaObraPage() {
         </div>
       )}
 
-      {/* ─────────────── Step 2: Letra ─────────────── */}
-      {step === 2 && (
+      {/* ─────────────── Step 1: Texto Poético ─────────────── */}
+      {step === 1 && (
         <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6 space-y-4">
           <div className="flex items-center gap-2 mb-1">
             <AlignLeft className="w-4 h-4 text-amber-400" />
@@ -1650,6 +1692,29 @@ export default function NovaObraPage() {
               <p className="text-xs text-rose-300/80">
                 <span className="font-semibold">Sem o contrato assinado a obra não pode ser validada.</span> Anexe o PDF assinado por todas as partes (autor + responsável da editora + 2 testemunhas). A IA também lerá este arquivo para extrair a letra da obra.
               </p>
+            </div>
+
+            {/* Dados do contrato */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1 col-span-2 sm:col-span-1">
+                <label className="text-xs text-white/40">Nome do Titular do Contrato</label>
+                <input
+                  type="text"
+                  value={nomeContratante}
+                  onChange={e => setNomeContratante(e.target.value)}
+                  placeholder="Nome completo do autor/cedente"
+                  className="w-full h-9 bg-white/5 border border-white/[0.08] rounded-lg px-3 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 transition-colors"
+                />
+              </div>
+              <div className="space-y-1 col-span-2 sm:col-span-1">
+                <label className="text-xs text-white/40">Data do Contrato</label>
+                <input
+                  type="date"
+                  value={dataContrato}
+                  onChange={e => setDataContrato(e.target.value)}
+                  className="w-full h-9 bg-white/5 border border-white/[0.08] rounded-lg px-3 text-sm text-white focus:outline-none focus:border-violet-500/50 transition-colors [color-scheme:dark]"
+                />
+              </div>
             </div>
 
             {/* Zona de upload */}
