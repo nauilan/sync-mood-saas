@@ -18,6 +18,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { calcularConcentracaoLink, type ParticipacaoConcentracao } from '@/lib/backoffice-rules'
 
 function getAdminClient() {
   const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim()
@@ -137,7 +138,7 @@ export async function POST(
     .select(`
       id, funcao_no_link, nome, editora_id, titular_id, contrato_id,
       percentual_exec_publica, percentual_fonomecanico, percentual_sincronizacao,
-      editora_original_id, editora_administradora_id
+      editora_original_id, editora_administradora_id, controlado
     `)
     .eq('obra_link_id', link_id)
     .eq('tenant_id', usuario.tenant_id)
@@ -147,114 +148,83 @@ export async function POST(
   }
 
   const CAs = titulares.filter(t => (t.funcao_no_link ?? '').toUpperCase() === 'CA')
-  const Es  = titulares.filter(t => ['E','SE'].includes((t.funcao_no_link ?? '').toUpperCase()))
-  const AMs = titulares.filter(t => ['AM','SA'].includes((t.funcao_no_link ?? '').toUpperCase()))
-  const hasAM = AMs.length > 0
-
   if (CAs.length === 0) {
     return NextResponse.json({ error: 'Nenhum CA encontrado neste link' }, { status: 422 })
   }
 
-  // linkBase: usa MR se preenchido, senão PR
-  const linkTotalMR = titulares.reduce((s, t) => s + (t.percentual_fonomecanico ?? 0), 0)
+  // Verificar que há algum percentual base
   const linkTotalPR = titulares.reduce((s, t) => s + (t.percentual_exec_publica ?? 0), 0)
-  const linkBase = linkTotalMR > 0 ? linkTotalMR : linkTotalPR
-
-  if (linkBase <= 0) {
-    return NextResponse.json({ error: 'Link sem percentual (PR/MR = 0)' }, { status: 422 })
+  if (linkTotalPR <= 0) {
+    return NextResponse.json({ error: 'Link sem percentual (exec_publica = 0)' }, { status: 422 })
   }
 
-  // 2. Buscar contrato do primeiro CA (se houver múltiplos CAs com contratos diferentes,
-  //    cada um teria suas próprias regras; para o modelo atual (1 CA por link) é suficiente)
-  const caContrato = CAs[0]?.contrato_id
-    ? (await sb.from('contratos').select('percentual_autor, percentual_editora, splits_direitos')
-        .eq('id', CAs[0].contrato_id).single()).data
-    : null
+  // ── Concentração sintética via calcularConcentracaoLink() ─────────────────
+  // Mesma função do /integrar (CWR). pct_* = CONTROLE, não split de negócio.
+  // Participantes concentráveis: CA, E, SE, AM, SA. OWR: pct_* = 0 (não atualiza).
+  const participantes = titulares.filter(t => {
+    const fn = (t.funcao_no_link ?? '').toUpperCase()
+    return fn === 'CA' || fn === 'E' || fn === 'SE' || fn === 'AM' || fn === 'SA'
+  })
 
-  // 3. Buscar negócio editorial entre E e AM
-  let negocio: any = null
-  if (hasAM && Es.length > 0) {
-    const editoraId = Es[0].editora_id
-    const amId      = AMs[0].editora_id
-    if (editoraId && amId) {
-      const { data: neg } = await sb
-        .from('negocios_editoriais')
-        .select('percentual_administrada, percentual_administradora, percentuais_por_receita')
-        .eq('tenant_id', usuario.tenant_id)
-        .eq('editora_administrada_id', editoraId)
-        .eq('editora_administradora_id', amId)
-        .eq('status', 'ativo')
-        .limit(1)
-        .single()
-      negocio = neg ?? null
-    }
-  }
+  const partics_conc: ParticipacaoConcentracao[] = participantes.map(t => ({
+    link_number: 1,   // chamado por link — todos no mesmo link
+    papel:       t.funcao_no_link ?? '',
+    pr_pct:      t.percentual_exec_publica ?? 0,
+    controlled:  (t as any).controlado ?? false,
+  }))
 
-  // 4. Calcular pct_* para cada titular
-  type UpdatePayload = Record<string, number>
+  const concResults = calcularConcentracaoLink(partics_conc)
+
+  // ── Montar payloads ───────────────────────────────────────────────────────
+  type UpdatePayload = Record<string, number | string | null>
   const updates: { id: string; payload: UpdatePayload }[] = []
 
-  for (const t of titulares) {
-    const fn = (t.funcao_no_link ?? '').toUpperCase()
-    const isCA  = fn === 'CA'
-    const isE   = fn === 'E' || fn === 'SE'
-    const isAM  = fn === 'AM' || fn === 'SA'
-    const isOWR = !isCA && !isE && !isAM
+  type TdcRow = {
+    obra_link_titular_id: string; direito: string; territorio: string
+    controlado: boolean; pct_sintetico: number; origem: string; criado_por: string | null
+  }
+  const tdcRows: TdcRow[] = []
 
-    if (isOWR) continue  // OWR: todos pct_* = 0 (sem direito em outros tipos)
+  for (let i = 0; i < participantes.length; i++) {
+    const t    = participantes[i]
+    const conc = concResults[i]
 
-    const payload: UpdatePayload = {}
-
-    // ── BRASIL ──────────────────────────────────────────────────────────────
-    for (const tipo of BR_TIPOS) {
-      const autorRatio = getContratoAutorRatioForTipo(caContrato, tipo) / 100  // 0–1
-      const edRatio    = 1 - autorRatio
-
-      let val = 0
-      if (isCA) {
-        val = round2(linkBase * autorRatio)
-      } else if (isE) {
-        if (!hasAM) {
-          // E fica com tudo da parte editorial
-          val = round2Up(linkBase * edRatio)
-        } else {
-          const neg = getNegocioRatioForTipo(negocio, tipo)
-          val = round2Up(linkBase * edRatio * neg.pctAdministrada / 100)
-        }
-      } else if (isAM) {
-        const neg = getNegocioRatioForTipo(negocio, tipo)
-        val = round2(linkBase * edRatio * neg.pctAdministradora / 100)
-      }
-      payload[`pct_${tipo}`] = val
-    }
-
-    // ── EXTERIOR (autor sempre 50% do linkBase por lei BR) ────────────────
-    for (const tipo of EXT_TIPOS) {
-      const brTipo = tipo.replace('ext_', '')
-      const autorRatioExt = 0.5  // autor sempre 50% no EXT por lei
-      const edRatioExt    = 0.5
-
-      let val = 0
-      if (isCA) {
-        val = round2(linkBase * autorRatioExt)
-      } else if (isE) {
-        if (!hasAM) {
-          val = round2Up(linkBase * edRatioExt)
-        } else {
-          const neg = getNegocioRatioForTipo(negocio, tipo)
-          val = round2Up(linkBase * edRatioExt * neg.pctAdministrada / 100)
-        }
-      } else if (isAM) {
-        const neg = getNegocioRatioForTipo(negocio, tipo)
-        val = round2(linkBase * edRatioExt * neg.pctAdministradora / 100)
-      }
-      payload[`pct_${tipo}`] = val
+    const payload: UpdatePayload = {
+      // ── CWR-derivados concentráveis ──────────────────────────────────────
+      pct_repr_fonomecanica:         conc.mr_gravado,
+      pct_inclusao_audiovisual:      conc.sr_gravado,
+      pct_inclusao_publicitaria:     0,           // D via contrato (Etapa 3B)
+      // ── Execução pública: individual diluído, NÃO concentra, NÃO split ──
+      pct_comunicacao_publico:       t.percentual_exec_publica ?? 0,
+      // ── Demais BR: 0 até negociação via contrato (Etapa 3B) ──────────────
+      pct_repr_grafica:              0,
+      pct_distribuicao_meios:        0,
+      pct_inclusao_base_dados:       0,
+      pct_autorizacoes_onus:         0,
+      // ── EXT: 0 até território EXT habilitado ─────────────────────────────
+      pct_ext_repr_grafica:          0,
+      pct_ext_repr_fonomecanica:     0,
+      pct_ext_inclusao_audiovisual:  0,
+      pct_ext_inclusao_publicitaria: 0,
+      pct_ext_distribuicao_meios:    0,
+      pct_ext_inclusao_base_dados:   0,
+      pct_ext_comunicacao_publico:   0,
+      // ── Rastreabilidade ───────────────────────────────────────────────────
+      origem:     'manual',
+      criado_por: user.id,
     }
 
     updates.push({ id: t.id, payload })
+
+    // ── titular_direito_controle: 4 direitos CWR-derivados ───────────────
+    const tdcBase = { obra_link_titular_id: t.id, territorio: 'BR', origem: 'manual', criado_por: user.id }
+    tdcRows.push({ ...tdcBase, direito: 'repr_fonomecanica',     controlado: conc.ehConcentrador,         pct_sintetico: conc.mr_gravado })
+    tdcRows.push({ ...tdcBase, direito: 'inclusao_audiovisual',  controlado: conc.ehConcentrador,         pct_sintetico: conc.sr_gravado })
+    tdcRows.push({ ...tdcBase, direito: 'inclusao_publicitaria', controlado: conc.ehConcentrador,         pct_sintetico: 0 })
+    tdcRows.push({ ...tdcBase, direito: 'comunicacao_publico',   controlado: (t as any).controlado ?? false, pct_sintetico: 0 })
   }
 
-  // 5. Salvar via PATCH individual (Supabase JS client não tem bulk update nativo)
+  // ── PATCH obras_links_titulares ───────────────────────────────────────────
   const errors: string[] = []
   for (const upd of updates) {
     const { error: updErr } = await sb
@@ -269,12 +239,22 @@ export async function POST(
     return NextResponse.json({ error: 'Erros ao salvar', details: errors }, { status: 500 })
   }
 
-  // 6. Retornar dados atualizados do link
+  // ── Upsert titular_direito_controle ───────────────────────────────────────
+  if (tdcRows.length > 0) {
+    const { error: tdcErr } = await sb
+      .from('titular_direito_controle')
+      .upsert(tdcRows, { onConflict: 'obra_link_titular_id,direito,territorio' })
+    if (tdcErr) {
+      console.error('[calcular-pct] TDC upsert error:', tdcErr.message)
+      // Não aborta: TDC é aditivo; erro aqui não invalida os dados principais
+    }
+  }
+
+  // ── Retornar resultado ────────────────────────────────────────────────────
   return NextResponse.json({
-    ok: true,
+    ok:          true,
     link_id,
     atualizados: updates.length,
-    negocio_encontrado: negocio != null,
-    contrato_encontrado: caContrato != null,
+    tdc_rows:    tdcRows.length,
   })
 }

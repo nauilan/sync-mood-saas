@@ -56,14 +56,14 @@ function getToken(req: NextRequest): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function autenticar(req: NextRequest, sb: any): Promise<{ tenant_id: string; role: string } | null> {
+async function autenticar(req: NextRequest, sb: any): Promise<{ tenant_id: string; role: string; auth_user_id: string } | null> {
   const token = getToken(req)
   if (!token) return null
   const { data: { user }, error } = await sb.auth.getUser(token)
   if (error || !user) return null
   const { data } = await sb.from('usuarios').select('tenant_id, role').eq('auth_user_id', user.id).single()
   const u = data as { tenant_id: string; role: string } | null
-  return u
+  return u ? { ...u, auth_user_id: user.id } : null
 }
 
 // ── GET /api/obras — listar obras do tenant ───────────────────────────────────
@@ -299,6 +299,8 @@ export async function POST(req: NextRequest) {
           editora_original_id: t.editora_original_id ?? t.editora_id ?? null,
           editora_administradora_id: t.editora_administradora_id ?? null,
           status_controle: t.controlado ? 'controlado' : 'nao_controlado',
+          origem: 'manual',
+          criado_por: usuario.auth_user_id,
         }))
         const { error: titularesErr } = await sb.from('obras_links_titulares').insert(titRows)
         if (titularesErr) {
