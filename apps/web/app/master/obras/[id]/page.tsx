@@ -1063,7 +1063,14 @@ export default function ObraDetailPage() {
             <span className="text-xs text-white/40">
               {links.length} link{links.length !== 1 ? 's' : ''} · {links.filter((l: any) => l.controlado).length} controlado{links.filter((l: any) =>l.controlado).length!==1?'s':''}
             </span>
-            <span className="text-xs text-violet-400 font-semibold ml-auto">{pcControlado.toFixed(2)}% controlado</span>
+            <span className="text-xs text-violet-400 font-semibold">{pcControlado.toFixed(2)}% controlado</span>
+            <Link
+              href={`/master/obras/${obraId}/execucao-publica`}
+              className="ml-auto flex items-center gap-1 text-xs text-white/40 hover:text-violet-400 transition-colors border border-white/[0.08] hover:border-violet-500/30 rounded-lg px-2.5 py-1"
+            >
+              <Activity className="w-3 h-3" />
+              Execução Pública
+            </Link>
           </div>
 
           <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl overflow-hidden">

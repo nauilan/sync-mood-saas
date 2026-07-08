@@ -566,7 +566,10 @@ export default function NovaObraPage() {
 
   // ── Criar titular + montar link com autor e editora ────────────────────────
   async function criarTitularEMontarLink(
-    dadosObra: { percentual_autor_na_obra?: number },
+    dadosObra: {
+      percentual_autor_na_obra?: number
+      coautores?: { nome?: string; pseudonimo?: string; percentual?: number }[]
+    },
     dados: {
       autor_nome?: string
       autor_pseudonimo?: string
@@ -642,6 +645,37 @@ export default function NovaObraPage() {
         percentual: pctEditora, controlado: true, sociedade: '',
         titular_id: editoraTitularId || undefined,
       })
+
+      // 5. Co-autores (não controlados) — criar titular para cada um
+      for (const coautor of (dadosObra.coautores ?? [])) {
+        const nomeCA = coautor.nome || coautor.pseudonimo || ''
+        const pseudCA = coautor.pseudonimo || coautor.nome || ''
+        if (!nomeCA || !coautor.percentual) continue
+        let coAutorTitularId: string | undefined
+        try {
+          const resCA = await authFetch('/api/titulares', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              nome_completo: nomeCA,
+              nome_artistico: pseudCA,
+              cpf_cnpj: '',
+              tipo: 'autor',
+              tipo_pessoa: 'PF',
+            }),
+          })
+          const jCA = await resCA.json()
+          if (resCA.ok && jCA.data?.id) coAutorTitularId = jCA.data.id
+        } catch { /* ignora */ }
+        titulares.push({
+          tempId: uid(), nome: nomeCA, ipi: '',
+          papel: 'compositor' as PapelTitularLink,
+          percentual: coautor.percentual,
+          controlado: false, sociedade: '',
+          titular_id: coAutorTitularId,
+        })
+      }
+
       if (titulares.length > 0) {
         setLinks(prev => prev.map((l, i) => i !== 0 ? l : {
           ...l,
