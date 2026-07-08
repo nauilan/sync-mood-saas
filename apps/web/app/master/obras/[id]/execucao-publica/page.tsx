@@ -265,13 +265,6 @@ export default function ExecucaoPublicaPage() {
         </div>
       </div>
 
-      {/* CSS de impressão */}
-      <style jsx global>{`
-        @media print {
-          body { background: white !important; color: black !important; }
-          .print\\:hidden { display: none !important; }
-        }
-      `}</style>
     </div>
   )
 }
