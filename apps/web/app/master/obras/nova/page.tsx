@@ -510,12 +510,16 @@ export default function NovaObraPage() {
     ))
   }
   function updateTitular(linkId: string, tId: string, field: string, val: string | number | boolean) {
-    setLinks(prev => prev.map(l =>
-      l.tempId !== linkId ? l : {
-        ...l,
-        titulares: l.titulares.map(t => t.tempId !== tId ? t : { ...t, [field]: val })
+    setLinks(prev => prev.map(l => {
+      if (l.tempId !== linkId) return l
+      let titulares = l.titulares.map(t => t.tempId !== tId ? t : { ...t, [field]: val })
+      // Auto-balance: com exatamente 2 participantes, altera um → ajusta o outro para fechar 100%
+      if (field === 'percentual' && titulares.length === 2) {
+        const meuVal = typeof val === 'number' ? val : 0
+        titulares = titulares.map(t => t.tempId !== tId ? { ...t, percentual: Math.max(0, parseFloat((100 - meuVal).toFixed(2))) } : t)
       }
-    ))
+      return { ...l, titulares }
+    }))
   }
   function removeTitular(linkId: string, tId: string) {
     setLinks(prev => prev.map(l =>
