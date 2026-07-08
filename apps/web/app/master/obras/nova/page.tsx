@@ -1352,35 +1352,40 @@ export default function NovaObraPage() {
               if ('ext_autor' in patch)   balancedPatch.ext_editora = Math.max(0, 100 - (patch.ext_autor   ?? 0))
               if ('ext_editora' in patch) balancedPatch.ext_autor   = Math.max(0, 100 - (patch.ext_editora ?? 0))
 
-              // Cascade: se este direito ainda não foi tocado, marca como tocado e propaga a todos os não-tocados
-              const jaTocado = splitsTocados.has(key)
-              if (!jaTocado && !('contratado' in patch)) {
-                setSplitsTocados(prev => new Set([...prev, key]))
-                // Propaga o mesmo balancedPatch para todos os direitos ainda não tocados (exceto o atual)
-                setSplitsDireitos(prev => {
-                  if (!prev) return prev
-                  const next = { ...prev, [key]: { ...prev[key], ...balancedPatch } }
-                  DIREITOS_CONFIG.forEach(({ key: k, soBr }) => {
-                    if (k === key) return
-                    if (splitsTocados.has(k)) return
-                    const p: Partial<SplitDireito> = {}
-                    if ('br_autor'    in balancedPatch) p.br_autor    = balancedPatch.br_autor
-                    if ('br_editora'  in balancedPatch) p.br_editora  = balancedPatch.br_editora
-                    if (!soBr) {
-                      if ('ext_autor'   in balancedPatch) p.ext_autor   = balancedPatch.ext_autor
-                      if ('ext_editora' in balancedPatch) p.ext_editora = balancedPatch.ext_editora
-                    }
-                    next[k] = { ...next[k], ...p }
-                  })
-                  return next
-                })
-              } else {
-                setSplitsDireitos(prev => prev ? { ...prev, [key]: { ...prev[key], ...balancedPatch } } : prev)
-                if (!jaTocado && 'contratado' in patch) {
-                  // don't mark as touched for checkbox-only changes
-                } else if (!('contratado' in patch)) {
-                  setSplitsTocados(prev => new Set([...prev, key]))
-                }
+              // Atualiza apenas este direito (cascade removido — use "Aplicar a todos" para propagar)
+              setSplitsDireitos(prev => prev ? { ...prev, [key]: { ...prev[key], ...balancedPatch } } : prev)
+
+              // Sync comunicacao_publico → participantes controlados no link acima
+              if (key === 'comunicacao_publico' && !('contratado' in patch)) {
+                const brAutor   = balancedPatch.br_autor   ?? 75
+                const brEditora = balancedPatch.br_editora ?? 25
+                const papeisA = new Set(['autor', 'compositor', 'versionista', 'adaptador'])
+                const papeisE = new Set(['editora_original', 'administradora', 'subeditora'])
+                setLinks(prev => prev.map(link => {
+                  const ctrlA  = link.titulares.filter(t => t.controlado && papeisA.has(t.papel))
+                  const ctrlE  = link.titulares.filter(t => t.controlado && papeisE.has(t.papel))
+                  if (ctrlA.length === 0 && ctrlE.length === 0) return link
+                  const somaNC      = link.titulares.filter(t => !t.controlado).reduce((s, t) => s + (t.percentual || 0), 0)
+                  const disponivel  = Math.max(0, 100 - somaNC)
+                  const novoTotalA  = parseFloat((disponivel * brAutor   / 100).toFixed(4))
+                  const novoTotalE  = parseFloat((disponivel * brEditora / 100).toFixed(4))
+                  const somaCtrlA   = ctrlA.reduce((s, t) => s + (t.percentual || 0), 0)
+                  const somaCtrlE   = ctrlE.reduce((s, t) => s + (t.percentual || 0), 0)
+                  return {
+                    ...link,
+                    titulares: link.titulares.map(t => {
+                      if (t.controlado && papeisA.has(t.papel)) {
+                        const fator = somaCtrlA > 0 ? (t.percentual || 0) / somaCtrlA : 1 / Math.max(1, ctrlA.length)
+                        return { ...t, percentual: parseFloat((novoTotalA * fator).toFixed(2)) }
+                      }
+                      if (t.controlado && papeisE.has(t.papel)) {
+                        const fator = somaCtrlE > 0 ? (t.percentual || 0) / somaCtrlE : 1 / Math.max(1, ctrlE.length)
+                        return { ...t, percentual: parseFloat((novoTotalE * fator).toFixed(2)) }
+                      }
+                      return t
+                    })
+                  }
+                }))
               }
             }
 
