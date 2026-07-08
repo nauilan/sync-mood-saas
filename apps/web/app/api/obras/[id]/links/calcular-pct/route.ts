@@ -125,7 +125,7 @@ export async function POST(
   if (authErr || !user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   const { data: usuario } = await sb
-    .from('usuarios').select('tenant_id').eq('auth_user_id', user.id).single()
+    .from('usuarios').select('id, tenant_id').eq('auth_user_id', user.id).single()
   if (!usuario) return NextResponse.json({ error: 'Tenant não encontrado' }, { status: 403 })
 
   const body = await req.json().catch(() => ({}))
@@ -211,13 +211,13 @@ export async function POST(
       pct_ext_comunicacao_publico:   0,
       // ── Rastreabilidade ───────────────────────────────────────────────────
       origem:     'manual',
-      criado_por: user.id,
+      criado_por: usuario.id,
     }
 
     updates.push({ id: t.id, payload })
 
     // ── titular_direito_controle: 4 direitos CWR-derivados ───────────────
-    const tdcBase = { obra_link_titular_id: t.id, territorio: 'BR', origem: 'manual', criado_por: user.id }
+    const tdcBase = { obra_link_titular_id: t.id, territorio: 'BR', origem: 'manual', criado_por: usuario.id }
     tdcRows.push({ ...tdcBase, direito: 'repr_fonomecanica',     controlado: conc.ehConcentrador,         pct_sintetico: conc.mr_gravado })
     tdcRows.push({ ...tdcBase, direito: 'inclusao_audiovisual',  controlado: conc.ehConcentrador,         pct_sintetico: conc.sr_gravado })
     tdcRows.push({ ...tdcBase, direito: 'inclusao_publicitaria', controlado: conc.ehConcentrador,         pct_sintetico: 0 })
