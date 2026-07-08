@@ -11,16 +11,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
-const MODEL = 'claude-haiku-4-5-20251001'
+const MODEL = 'claude-sonnet-4-6'
 
 const SYSTEM_PROMPT =
   'Você é um assistente especializado em contratos de cessão de direitos autorais musicais brasileiros. ' +
   'Leia o contrato e extraia as informações em JSON. ' +
   'Responda APENAS com o JSON, sem texto adicional, sem markdown, sem backticks. ' +
-  'Leia atentamente a Cláusula Sexta (ou cláusula de percentuais) do contrato, que detalha os percentuais por tipo de direito separadamente para Brasil e Exterior. ' +
-  'Cada linha (a, b, c, d, e, f, g, h) representa um tipo de direito diferente. ' +
-  'Não generalize um único percentual — extraia cada tipo individualmente, mesmo que vários tenham o mesmo valor. ' +
-  'É CRÍTICO preservar a estrutura de versos da letra musical — cada quebra de linha do documento original deve ser mantida como \\n no campo texto_poetico. Letras de música perdem o sentido quando convertidas em texto corrido.'
+  'ATENÇÃO AOS PERCENTUAIS: procure a cláusula que detalha os percentuais por tipo de direito (geralmente chamada Cláusula Sexta, Cláusula de Percentuais, ou similar). ' +
+  'Ela lista os tipos a, b, c, d, e, f, g, h com percentuais SEPARADOS para autor e editora (ex: "Autor: 75% / Editora: 25%"). ' +
+  'NUNCA retorne autor=100 e editora=0 se o contrato tiver uma cláusula de percentuais — isso significaria que a editora não recebe nada, o que não faz sentido num contrato de cessão. ' +
+  'Se não encontrar valores explícitos para um tipo, mantenha autor=0 e editora=0 (NÃO invente 100/0). ' +
+  'É CRÍTICO preservar a estrutura de versos da letra musical — cada quebra de linha deve ser mantida como \\n no campo texto_poetico.'
 
 const USER_PROMPT = `Extraia do contrato as seguintes informações e retorne APENAS um JSON válido com esta estrutura exata:
 {
