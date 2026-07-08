@@ -73,10 +73,10 @@ function initSplitsFromIA(dados: any): SplitsDireitos {
 
 const STEPS = [
   { label: 'Titulo & Genero', icon: Music2 },
-  { label: 'Links & Participacao', icon: Link2 },
   { label: 'Fonogramas', icon: Mic2 },
   { label: 'Texto Poético', icon: AlignLeft },
   { label: 'Contrato Assinado', icon: FileCheck2 },
+  { label: 'Links & Participacao', icon: Link2 },
   { label: 'Revisao', icon: CheckCircle2 },
 ]
 
@@ -748,8 +748,8 @@ export default function NovaObraPage() {
   const todosLinksValidos = somasPorLink.every(l => Math.abs(l.soma - 100) < 0.02)
 
   const canStep0 = titulo.trim().length >= 2 && !extracting && !montandoLink
-  const canStep1 = links.length > 0 && links.every(l => l.titulares.length > 0) && todosLinksValidos
-  const canStep4 = contratoFile !== null
+  const canStep3 = contratoFile !== null
+  const canStep4 = links.length > 0 && links.every(l => l.titulares.length > 0) && todosLinksValidos
 
   const pcControlado = links
     .filter(l => l.controlado)
@@ -1176,8 +1176,8 @@ export default function NovaObraPage() {
         </div>
       )}
 
-      {/* ─────────────── Step 1: Links & Participacao ─────────────── */}
-      {step === 1 && (
+      {/* ─────────────── Step 4: Links & Participacao ─────────────── */}
+      {step === 4 && (
         <div className="space-y-4">
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
@@ -1289,6 +1289,150 @@ export default function NovaObraPage() {
             className="flex items-center justify-center gap-2 w-full h-10 rounded-xl border-2 border-dashed border-white/10 text-sm text-white/40 hover:text-white/70 hover:border-white/20 transition-colors">
             <Plus className="w-4 h-4" /> Adicionar Link de Participação
           </button>
+
+          {/* ── Splits por Direito (IA extraiu do contrato) ──────────────── */}
+          {!splitsDireitos && (
+            <button
+              type="button"
+              onClick={() => setSplitsDireitos(initSplitsManual())}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-dashed border-white/10 text-sm text-white/40 hover:text-violet-400 hover:border-violet-500/30 transition-colors"
+            >
+              <BookOpen className="w-4 h-4" />
+              Preencher splits por direito manualmente
+            </button>
+          )}
+          {splitsDireitos && (() => {
+            const todosMarcados = DIREITOS_CONFIG.every(d => splitsDireitos[d.key].contratado)
+
+            function patchSplit(key: DireitoKey, patch: Partial<SplitDireito>) {
+              setSplitsDireitos(prev => prev ? { ...prev, [key]: { ...prev[key], ...patch } } : prev)
+            }
+
+            function aplicarATodos(field: 'br_autor'|'br_editora'|'ext_autor'|'ext_editora', val: number) {
+              setSplitsDireitos(prev => {
+                if (!prev) return prev
+                const next = { ...prev }
+                DIREITOS_CONFIG.forEach(({ key, soBr }) => {
+                  if ((field === 'ext_autor' || field === 'ext_editora') && soBr) return
+                  next[key] = { ...next[key], [field]: val }
+                })
+                return next
+              })
+            }
+
+            return (
+              <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-violet-400" />
+                    <h3 className="text-sm font-semibold text-white">Splits por Direito</h3>
+                    <span className="text-[10px] text-white/30 bg-white/5 px-1.5 py-0.5 rounded">IA extraiu</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-[11px] text-violet-400 hover:text-violet-300 transition-colors"
+                    onClick={() => setSplitsDireitos(prev => {
+                      if (!prev) return prev
+                      const next = { ...prev }
+                      DIREITOS_CONFIG.forEach(({ key }) => { next[key] = { ...next[key], contratado: !todosMarcados } })
+                      return next
+                    })}
+                  >
+                    {todosMarcados ? 'Desmarcar todos' : 'Marcar todos'}
+                  </button>
+                </div>
+
+                {/* Header */}
+                <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-2 text-[10px] text-white/30 font-medium px-1">
+                  <span>Direito</span>
+                  <span className="w-8 text-center">Ctr.</span>
+                  <span className="w-16 text-center">BR Autor %</span>
+                  <span className="w-16 text-center">BR Edit. %</span>
+                  <span className="w-16 text-center">EXT Autor %</span>
+                  <span className="w-16 text-center">EXT Edit. %</span>
+                </div>
+
+                {/* Atalhos aplicar a todos */}
+                <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-2 px-1 items-center">
+                  <span className="text-[10px] text-white/20">Aplicar a todos →</span>
+                  <span className="w-8" />
+                  {(['br_autor','br_editora','ext_autor','ext_editora'] as const).map(field => (
+                    <div key={field} className="w-16 flex gap-1 justify-center">
+                      {[75,50,25].map(v => (
+                        <button key={v} type="button"
+                          onClick={() => aplicarATodos(field, v)}
+                          className="text-[9px] text-violet-400/60 hover:text-violet-300 transition-colors"
+                        >{v}</button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Linhas */}
+                <div className="space-y-1">
+                  {DIREITOS_CONFIG.map(({ key, label, soBr }) => {
+                    const sp = splitsDireitos[key]
+                    const brOk  = !sp.contratado || Math.abs(sp.br_autor + sp.br_editora - 100) < 0.02
+                    const extOk = !sp.contratado || soBr || Math.abs(sp.ext_autor + sp.ext_editora - 100) < 0.02
+
+                    return (
+                      <div key={key}
+                        className={`grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-2 items-center px-2 py-1.5 rounded-lg transition-colors
+                          ${sp.contratado ? 'bg-white/[0.03]' : 'opacity-40'}
+                          ${(!brOk || !extOk) ? 'border border-rose-500/30' : ''}`}
+                      >
+                        <span className={`text-xs truncate ${sp.contratado ? 'text-white/80' : 'text-white/30'}`}>{label}</span>
+
+                        <div className="w-8 flex justify-center">
+                          <input type="checkbox" checked={sp.contratado}
+                            onChange={e => patchSplit(key, { contratado: e.target.checked })}
+                            className="w-3.5 h-3.5 accent-violet-500 cursor-pointer" />
+                        </div>
+
+                        <input type="number" min={0} max={100} step={0.01}
+                          disabled={!sp.contratado}
+                          value={sp.br_autor}
+                          onChange={e => patchSplit(key, { br_autor: parseFloat(e.target.value) || 0 })}
+                          className={`w-16 text-xs text-right bg-white/5 border rounded px-1.5 py-0.5 text-white disabled:opacity-30 focus:outline-none ${!brOk ? 'border-rose-500/60' : 'border-white/10 focus:border-violet-500/50'}`}
+                        />
+                        <input type="number" min={0} max={100} step={0.01}
+                          disabled={!sp.contratado}
+                          value={sp.br_editora}
+                          onChange={e => patchSplit(key, { br_editora: parseFloat(e.target.value) || 0 })}
+                          className={`w-16 text-xs text-right bg-white/5 border rounded px-1.5 py-0.5 text-white disabled:opacity-30 focus:outline-none ${!brOk ? 'border-rose-500/60' : 'border-white/10 focus:border-violet-500/50'}`}
+                        />
+                        <input type="number" min={0} max={100} step={0.01}
+                          disabled={!sp.contratado || soBr}
+                          value={soBr ? 0 : sp.ext_autor}
+                          onChange={e => !soBr && patchSplit(key, { ext_autor: parseFloat(e.target.value) || 0 })}
+                          className={`w-16 text-xs text-right bg-white/5 border rounded px-1.5 py-0.5 text-white disabled:opacity-30 focus:outline-none ${!extOk && !soBr ? 'border-rose-500/60' : 'border-white/10 focus:border-violet-500/50'}`}
+                        />
+                        <input type="number" min={0} max={100} step={0.01}
+                          disabled={!sp.contratado || soBr}
+                          value={soBr ? 0 : sp.ext_editora}
+                          onChange={e => !soBr && patchSplit(key, { ext_editora: parseFloat(e.target.value) || 0 })}
+                          className={`w-16 text-xs text-right bg-white/5 border rounded px-1.5 py-0.5 text-white disabled:opacity-30 focus:outline-none ${!extOk && !soBr ? 'border-rose-500/60' : 'border-white/10 focus:border-violet-500/50'}`}
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Aviso soma inválida */}
+                {DIREITOS_CONFIG.some(({ key, soBr }) => {
+                  const sp = splitsDireitos[key]
+                  if (!sp.contratado) return false
+                  return Math.abs(sp.br_autor + sp.br_editora - 100) >= 0.02
+                    || (!soBr && Math.abs(sp.ext_autor + sp.ext_editora - 100) >= 0.02)
+                }) && (
+                  <div className="flex items-center gap-1.5 text-rose-400 text-[11px] bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    Direitos marcados em vermelho não fecham 100% — corrija antes de salvar.
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </div>
       )}
 
@@ -1389,8 +1533,8 @@ export default function NovaObraPage() {
         </div>
       )}
 
-      {/* ─────────────── Step 2: Fonogramas ─────────────── */}
-      {step === 2 && (
+      {/* ─────────────── Step 1: Fonogramas ─────────────── */}
+      {step === 1 && (
         <div className="space-y-4">
           <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5">
             <div className="flex items-center gap-2 mb-4">
@@ -1425,8 +1569,8 @@ export default function NovaObraPage() {
         </div>
       )}
 
-      {/* ─────────────── Step 3: Letra ─────────────── */}
-      {step === 3 && (
+      {/* ─────────────── Step 2: Letra ─────────────── */}
+      {step === 2 && (
         <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6 space-y-4">
           <div className="flex items-center gap-2 mb-1">
             <AlignLeft className="w-4 h-4 text-amber-400" />
@@ -1491,8 +1635,8 @@ export default function NovaObraPage() {
         </div>
       )}
 
-      {/* ─────────────── Step 4: Contrato Assinado ─────────────── */}
-      {step === 4 && (
+      {/* ─────────────── Step 3: Contrato Assinado ─────────────── */}
+      {step === 3 && (
         <div className="space-y-4">
           <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-6 space-y-5">
             <div className="flex items-center gap-2">
@@ -1556,151 +1700,7 @@ export default function NovaObraPage() {
               </div>
             )}
 
-            {/* ── Preencher splits manualmente (sem PDF) ──────────────────── */}
-            {!splitsDireitos && (
-              <button
-                type="button"
-                onClick={() => setSplitsDireitos(initSplitsManual())}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-dashed border-white/10 text-sm text-white/40 hover:text-violet-400 hover:border-violet-500/30 transition-colors"
-              >
-                <BookOpen className="w-4 h-4" />
-                Preencher splits por direito manualmente
-              </button>
-            )}
 
-            {/* ── Tabela de splits por direito (3B-1a) ─────────────────────── */}
-            {splitsDireitos && (() => {
-              const todosMarcados = DIREITOS_CONFIG.every(d => splitsDireitos[d.key].contratado)
-
-              function patchSplit(key: DireitoKey, patch: Partial<SplitDireito>) {
-                setSplitsDireitos(prev => prev ? { ...prev, [key]: { ...prev[key], ...patch } } : prev)
-              }
-
-              function aplicarATodos(field: 'br_autor'|'br_editora'|'ext_autor'|'ext_editora', val: number) {
-                setSplitsDireitos(prev => {
-                  if (!prev) return prev
-                  const next = { ...prev }
-                  DIREITOS_CONFIG.forEach(({ key, soBr }) => {
-                    if ((field === 'ext_autor' || field === 'ext_editora') && soBr) return
-                    next[key] = { ...next[key], [field]: val }
-                  })
-                  return next
-                })
-              }
-
-              return (
-                <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 text-violet-400" />
-                      <h3 className="text-sm font-semibold text-white">Splits por Direito</h3>
-                      <span className="text-[10px] text-white/30 bg-white/5 px-1.5 py-0.5 rounded">IA extraiu</span>
-                    </div>
-                    <button
-                      type="button"
-                      className="text-[11px] text-violet-400 hover:text-violet-300 transition-colors"
-                      onClick={() => setSplitsDireitos(prev => {
-                        if (!prev) return prev
-                        const next = { ...prev }
-                        DIREITOS_CONFIG.forEach(({ key }) => { next[key] = { ...next[key], contratado: !todosMarcados } })
-                        return next
-                      })}
-                    >
-                      {todosMarcados ? 'Desmarcar todos' : 'Marcar todos'}
-                    </button>
-                  </div>
-
-                  {/* Header */}
-                  <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-2 text-[10px] text-white/30 font-medium px-1">
-                    <span>Direito</span>
-                    <span className="w-8 text-center">Ctr.</span>
-                    <span className="w-16 text-center">BR Autor %</span>
-                    <span className="w-16 text-center">BR Edit. %</span>
-                    <span className="w-16 text-center">EXT Autor %</span>
-                    <span className="w-16 text-center">EXT Edit. %</span>
-                  </div>
-
-                  {/* Atalhos aplicar a todos */}
-                  <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-2 px-1 items-center">
-                    <span className="text-[10px] text-white/20">Aplicar a todos →</span>
-                    <span className="w-8" />
-                    {(['br_autor','br_editora','ext_autor','ext_editora'] as const).map(field => (
-                      <div key={field} className="w-16 flex gap-1 justify-center">
-                        {[75,50,25].map(v => (
-                          <button key={v} type="button"
-                            onClick={() => aplicarATodos(field, v)}
-                            className="text-[9px] text-violet-400/60 hover:text-violet-300 transition-colors"
-                          >{v}</button>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Linhas */}
-                  <div className="space-y-1">
-                    {DIREITOS_CONFIG.map(({ key, label, soBr }) => {
-                      const sp = splitsDireitos[key]
-                      const brOk  = !sp.contratado || Math.abs(sp.br_autor + sp.br_editora - 100) < 0.02
-                      const extOk = !sp.contratado || soBr || Math.abs(sp.ext_autor + sp.ext_editora - 100) < 0.02
-
-                      return (
-                        <div key={key}
-                          className={`grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-x-2 items-center px-2 py-1.5 rounded-lg transition-colors
-                            ${sp.contratado ? 'bg-white/[0.03]' : 'opacity-40'}
-                            ${(!brOk || !extOk) ? 'border border-rose-500/30' : ''}`}
-                        >
-                          <span className={`text-xs truncate ${sp.contratado ? 'text-white/80' : 'text-white/30'}`}>{label}</span>
-
-                          <div className="w-8 flex justify-center">
-                            <input type="checkbox" checked={sp.contratado}
-                              onChange={e => patchSplit(key, { contratado: e.target.checked })}
-                              className="w-3.5 h-3.5 accent-violet-500 cursor-pointer" />
-                          </div>
-
-                          <input type="number" min={0} max={100} step={0.01}
-                            disabled={!sp.contratado}
-                            value={sp.br_autor}
-                            onChange={e => patchSplit(key, { br_autor: parseFloat(e.target.value) || 0 })}
-                            className={`w-16 text-xs text-right bg-white/5 border rounded px-1.5 py-0.5 text-white disabled:opacity-30 focus:outline-none ${!brOk ? 'border-rose-500/60' : 'border-white/10 focus:border-violet-500/50'}`}
-                          />
-                          <input type="number" min={0} max={100} step={0.01}
-                            disabled={!sp.contratado}
-                            value={sp.br_editora}
-                            onChange={e => patchSplit(key, { br_editora: parseFloat(e.target.value) || 0 })}
-                            className={`w-16 text-xs text-right bg-white/5 border rounded px-1.5 py-0.5 text-white disabled:opacity-30 focus:outline-none ${!brOk ? 'border-rose-500/60' : 'border-white/10 focus:border-violet-500/50'}`}
-                          />
-                          <input type="number" min={0} max={100} step={0.01}
-                            disabled={!sp.contratado || soBr}
-                            value={soBr ? 0 : sp.ext_autor}
-                            onChange={e => !soBr && patchSplit(key, { ext_autor: parseFloat(e.target.value) || 0 })}
-                            className={`w-16 text-xs text-right bg-white/5 border rounded px-1.5 py-0.5 text-white disabled:opacity-30 focus:outline-none ${!extOk && !soBr ? 'border-rose-500/60' : 'border-white/10 focus:border-violet-500/50'}`}
-                          />
-                          <input type="number" min={0} max={100} step={0.01}
-                            disabled={!sp.contratado || soBr}
-                            value={soBr ? 0 : sp.ext_editora}
-                            onChange={e => !soBr && patchSplit(key, { ext_editora: parseFloat(e.target.value) || 0 })}
-                            className={`w-16 text-xs text-right bg-white/5 border rounded px-1.5 py-0.5 text-white disabled:opacity-30 focus:outline-none ${!extOk && !soBr ? 'border-rose-500/60' : 'border-white/10 focus:border-violet-500/50'}`}
-                          />
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  {/* Aviso soma inválida */}
-                  {DIREITOS_CONFIG.some(({ key, soBr }) => {
-                    const sp = splitsDireitos[key]
-                    if (!sp.contratado) return false
-                    return Math.abs(sp.br_autor + sp.br_editora - 100) >= 0.02
-                      || (!soBr && Math.abs(sp.ext_autor + sp.ext_editora - 100) >= 0.02)
-                  }) && (
-                    <div className="flex items-center gap-1.5 text-rose-400 text-[11px] bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                      Direitos marcados em vermelho não fecham 100% — corrija antes de salvar.
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
 
             {/* Múltiplas obras no mesmo contrato */}
             <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-4 space-y-3">
@@ -1746,14 +1746,14 @@ export default function NovaObraPage() {
       {/* ─────────────── Step 5: Revisao ─────────────── */}
       {step === 5 && (
         <div className="space-y-4">
-          <div className={`border rounded-xl p-5 ${canStep1 ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20'}`}>
+          <div className={`border rounded-xl p-5 ${canStep4 ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20'}`}>
             <div className="flex items-center gap-2 mb-3">
-              {canStep1
+              {canStep4
                 ? <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                 : <AlertCircle className="w-5 h-5 text-rose-400" />
               }
-              <span className={`text-sm font-semibold ${canStep1 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {canStep1 ? 'Obra válida — pronta para salvar' : 'Corrija os percentuais antes de salvar'}
+              <span className={`text-sm font-semibold ${canStep4 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {canStep4 ? 'Obra válida — pronta para salvar' : 'Corrija os percentuais antes de salvar'}
               </span>
             </div>
             <div className="grid grid-cols-3 gap-3 text-center">
@@ -1833,14 +1833,14 @@ export default function NovaObraPage() {
                 setStep(next)
                 setHighestStep(h => Math.max(h, next))
               }}
-              disabled={step === 0 ? !canStep0 : (step === 1 ? !canStep1 : (step === 4 ? !canStep4 : false))}
+              disabled={step === 0 ? !canStep0 : (step === 3 ? !canStep3 : (step === 4 ? !canStep4 : false))}
               className="flex items-center gap-1.5 h-9 px-5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-30 disabled:pointer-events-none text-sm text-white font-semibold transition-colors">
               Próximo <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
             <button
               onClick={salvarObra}
-              disabled={saving || !canStep1 || !titulo || !canStep4}
+              disabled={saving || !canStep4 || !titulo || !canStep3}
               className="flex items-center gap-1.5 h-9 px-6 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-30 disabled:pointer-events-none text-sm text-white font-semibold transition-colors">
               <CheckCircle2 className="w-4 h-4" /> {saving ? 'Salvando...' : 'Salvar e Incluir no Catálogo'}
             </button>
