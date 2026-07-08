@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { logAudit } from '@/lib/audit'
+import { calcularConcentracaoLink, type ParticipacaoConcentracao } from '@/lib/backoffice-rules'
 
 function mapPapelToFuncaoLink(papel: unknown): string {
   const normalized = String(papel ?? '').trim().toLowerCase()
@@ -280,30 +281,84 @@ export async function POST(req: NextRequest) {
 
       const titulares = Array.isArray(link.titulares) ? link.titulares : []
       if (titulares.length > 0) {
-        const titRows = titulares.map((t: Record<string, unknown>) => ({
-          obra_link_id: linkRow.id,
-          obra_id: obra.id,
-          tenant_id: usuario.tenant_id,
-          titular_id: t.titular_id || null,
-          nome: t.nome ?? '',
-          papel: t.papel ?? 'compositor',
-          funcao_no_link: mapPapelToFuncaoLink(t.papel),
-          percentual_exec_publica: t.percentual_exec_publica ?? t.percentual ?? 0,
-          percentual_fonomecanico: t.percentual_fonomecanico ?? t.percentual ?? 0,
-          percentual_sincronizacao: t.percentual_sincronizacao ?? t.percentual ?? 0,
-          controlado: t.controlado ?? false,
-          ipi: t.ipi || null,
-          cae: t.ipi || null,
-          editora_id: t.editora_id ?? null,
-          editora_original_id: t.editora_original_id ?? t.editora_id ?? null,
-          editora_administradora_id: t.editora_administradora_id ?? null,
-          status_controle: t.controlado ? 'controlado' : 'nao_controlado',
-          origem: 'manual',
-          criado_por: usuario.id,
+        // ── Calcular concentração sintética ANTES do insert ──────────────────
+        const partics: ParticipacaoConcentracao[] = titulares.map((t: Record<string, unknown>) => ({
+          link_number: 1,
+          papel:       mapPapelToFuncaoLink(t.papel),
+          pr_pct:      Number(t.percentual_exec_publica ?? t.percentual ?? 0),
+          controlled:  Boolean(t.controlado ?? false),
         }))
-        const { error: titularesErr } = await sb.from('obras_links_titulares').insert(titRows)
+        const concResults = calcularConcentracaoLink(partics)
+
+        const titRows = titulares.map((t: Record<string, unknown>, idx: number) => {
+          const conc = concResults[idx]
+          const execPublica = Number(t.percentual_exec_publica ?? t.percentual ?? 0)
+          return {
+            obra_link_id: linkRow.id,
+            obra_id: obra!.id,
+            tenant_id: usuario.tenant_id,
+            titular_id: t.titular_id || null,
+            nome: t.nome ?? '',
+            papel: t.papel ?? 'compositor',
+            funcao_no_link: mapPapelToFuncaoLink(t.papel),
+            percentual_exec_publica:   execPublica,
+            percentual_fonomecanico:   Number(t.percentual_fonomecanico ?? t.percentual ?? 0),
+            percentual_sincronizacao:  Number(t.percentual_sincronizacao ?? t.percentual ?? 0),
+            controlado: Boolean(t.controlado ?? false),
+            ipi: t.ipi || null,
+            cae: t.ipi || null,
+            editora_id: t.editora_id ?? null,
+            editora_original_id: t.editora_original_id ?? t.editora_id ?? null,
+            editora_administradora_id: t.editora_administradora_id ?? null,
+            status_controle: t.controlado ? 'controlado' : 'nao_controlado',
+            origem:    'manual',
+            criado_por: usuario.id,
+            // ── pct_* sintéticos (concentração) ────────────────────────────
+            pct_repr_fonomecanica:         conc.mr_gravado,
+            pct_inclusao_audiovisual:      conc.sr_gravado,
+            pct_inclusao_publicitaria:     0,        // D via contrato (Etapa 3B)
+            pct_comunicacao_publico:       execPublica, // individual diluído, NÃO concentra
+            pct_repr_grafica:              0,
+            pct_distribuicao_meios:        0,
+            pct_inclusao_base_dados:       0,
+            pct_autorizacoes_onus:         0,
+            pct_ext_repr_grafica:          0,
+            pct_ext_repr_fonomecanica:     0,
+            pct_ext_inclusao_audiovisual:  0,
+            pct_ext_inclusao_publicitaria: 0,
+            pct_ext_distribuicao_meios:    0,
+            pct_ext_inclusao_base_dados:   0,
+            pct_ext_comunicacao_publico:   0,
+          }
+        })
+
+        const { data: insertedTits, error: titularesErr } = await sb
+          .from('obras_links_titulares')
+          .insert(titRows)
+          .select('id')
         if (titularesErr) {
           return NextResponse.json({ error: titularesErr.message }, { status: 500 })
+        }
+
+        // ── Upsert titular_direito_controle (4 direitos por titular) ────────
+        if (insertedTits && insertedTits.length > 0) {
+          type TdcRow = {
+            obra_link_titular_id: string; direito: string; territorio: string
+            controlado: boolean; pct_sintetico: number; origem: string; criado_por: string
+          }
+          const tdcRows: TdcRow[] = []
+          for (let j = 0; j < insertedTits.length; j++) {
+            const tId   = (insertedTits[j] as { id: string }).id
+            const conc  = concResults[j]
+            const tCtrl = Boolean(titulares[j].controlado ?? false)
+            const base  = { obra_link_titular_id: tId, territorio: 'BR', origem: 'manual', criado_por: usuario.id }
+            tdcRows.push({ ...base, direito: 'repr_fonomecanica',     controlado: conc.ehConcentrador, pct_sintetico: conc.mr_gravado })
+            tdcRows.push({ ...base, direito: 'inclusao_audiovisual',  controlado: conc.ehConcentrador, pct_sintetico: conc.sr_gravado })
+            tdcRows.push({ ...base, direito: 'inclusao_publicitaria', controlado: conc.ehConcentrador, pct_sintetico: 0 })
+            tdcRows.push({ ...base, direito: 'comunicacao_publico',   controlado: tCtrl,               pct_sintetico: 0 })
+          }
+          await sb.from('titular_direito_controle')
+            .upsert(tdcRows, { onConflict: 'obra_link_titular_id,direito,territorio' })
         }
       }
     }
