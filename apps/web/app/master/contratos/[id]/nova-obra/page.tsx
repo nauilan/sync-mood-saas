@@ -161,13 +161,12 @@ export default function NovaObraPage() {
   }
 
   // ── Submit ───────────────────────────────────────────────────────────────────
-  async function confirmar(forcar = false) {
+  async function confirmar() {
     setSalvando(true)
     setErro('')
     setAviso(null)
     try {
       const body = {
-        forcar,
         iswc: iswc.trim() || undefined,
         interpretes: interpretes.map(({ _key: _k, ...rest }) => rest),
         fonogramas: fonogramas.map(({ _key: _k, duracao_segundos: ds, ...rest }) => ({
@@ -419,7 +418,7 @@ export default function NovaObraPage() {
             {aviso.tipo === 'homonima' && (
               <div className="flex gap-2 pt-1">
                 <button
-                  onClick={() => confirmar(true)}
+                  onClick={() => confirmar()}
                   disabled={salvando}
                   className="h-8 px-4 text-xs bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 rounded-lg transition-colors disabled:opacity-50"
                 >
@@ -456,7 +455,7 @@ export default function NovaObraPage() {
         {!aviso && (
           <div className="flex items-center gap-3 pt-2">
             <button
-              onClick={() => confirmar(false)}
+              onClick={() => confirmar()}
               disabled={salvando}
               className="flex items-center gap-2 h-10 px-6 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
             >

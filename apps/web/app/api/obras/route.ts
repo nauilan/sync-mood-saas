@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { logAudit } from '@/lib/audit'
 import { calcularConcentracaoLink, type ParticipacaoConcentracao } from '@/lib/backoffice-rules'
+import {
+  classificarAutoresDedup,
+  isPapelAutorDedup,
+  normalizarTextoDedup,
+  type AutorDedup,
+  type MatchTipoDedup,
+} from '@/lib/obra-dedup'
 
 function mapPapelToFuncaoLink(papel: unknown): string {
   const normalized = String(papel ?? '').trim().toLowerCase()
@@ -64,6 +71,101 @@ async function autenticar(req: NextRequest, sb: any): Promise<{ id: string; tena
   if (error || !user) return null
   const { data } = await sb.from('usuarios').select('id, tenant_id, role').eq('auth_user_id', user.id).single()
   return data as { id: string; tenant_id: string; role: string } | null
+}
+
+async function enriquecerAutores(sb: any, tenantId: string, autores: AutorDedup[]): Promise<AutorDedup[]> {
+  const ids = Array.from(new Set(autores.map(a => a.titular_id).filter(Boolean))) as string[]
+  if (ids.length === 0) return autores
+
+  const { data: titulares } = await sb
+    .from('titulares')
+    .select('id, nome_completo, nome_artistico, pseudonimos')
+    .eq('tenant_id', tenantId)
+    .in('id', ids)
+
+  const byId = new Map<string, any>((titulares ?? []).map((t: any) => [t.id, t]))
+  return autores.map(a => {
+    const tit: any = a.titular_id ? byId.get(a.titular_id) : null
+    const pseudonimos = Array.isArray(tit?.pseudonimos)
+      ? tit.pseudonimos.map((p: any) => p?.nome).filter(Boolean)
+      : []
+    return {
+      ...a,
+      nomes: [
+        ...a.nomes,
+        tit?.nome_completo,
+        tit?.nome_artistico,
+        ...pseudonimos,
+      ].filter(Boolean),
+    }
+  })
+}
+
+async function classificarObraDuplicada(
+  sb: any,
+  tenantId: string,
+  obraId: string,
+  novosAutores: AutorDedup[]
+): Promise<MatchTipoDedup> {
+  const { data: existentesRaw } = await sb
+    .from('obras_links_titulares')
+    .select('titular_id, nome, papel, funcao_no_link')
+    .eq('obra_id', obraId)
+
+  const existentesBase = (existentesRaw ?? [])
+    .filter((t: Record<string, unknown>) => isPapelAutorDedup(t))
+    .map((t: Record<string, unknown>) => ({
+      titular_id: t.titular_id as string | null,
+      nomes: [String(t.nome ?? '')],
+    }))
+
+  const existentes = await enriquecerAutores(sb, tenantId, existentesBase)
+  const novos = await enriquecerAutores(sb, tenantId, novosAutores)
+  return classificarAutoresDedup(novos, existentes)
+}
+
+async function verificarDedupObra(
+  sb: any,
+  tenantId: string,
+  titulo: string,
+  iswc: string | null | undefined,
+  autores: AutorDedup[]
+): Promise<{ match: boolean; match_type: MatchTipoDedup; existentes: unknown[] }> {
+  const iswcNorm = String(iswc ?? '').trim()
+  if (iswcNorm) {
+    const { data: porIswc } = await sb
+      .from('obras')
+      .select('id, codigo_obra, titulo, iswc')
+      .eq('tenant_id', tenantId)
+      .eq('iswc', iswcNorm)
+      .is('deleted_at', null)
+      .limit(10)
+
+    if ((porIswc ?? []).length > 0) {
+      return { match: true, match_type: 'duplicata_exata', existentes: porIswc ?? [] }
+    }
+  }
+
+  const tituloNorm = normalizarTextoDedup(titulo)
+  const { data: candidatas } = await sb
+    .from('obras')
+    .select('id, codigo_obra, titulo, iswc')
+    .eq('tenant_id', tenantId)
+    .is('deleted_at', null)
+
+  const mesmoTitulo = (candidatas ?? []).filter((o: any) => normalizarTextoDedup(o.titulo) === tituloNorm)
+  const existentes: Array<Record<string, unknown> & { match_type: MatchTipoDedup }> = []
+  let pior: MatchTipoDedup = 'nenhum'
+
+  for (const obra of mesmoTitulo) {
+    const tipo = await classificarObraDuplicada(sb, tenantId, obra.id, autores)
+    if (tipo === 'nenhum') continue
+    existentes.push({ ...obra, match_type: tipo })
+    if (tipo === 'duplicata_exata') pior = 'duplicata_exata'
+    else if (pior === 'nenhum') pior = 'homonima'
+  }
+
+  return { match: existentes.length > 0, match_type: pior, existentes }
 }
 
 // ── GET /api/obras — listar obras do tenant ───────────────────────────────────
@@ -215,6 +317,41 @@ export async function POST(req: NextRequest) {
   if (!obraPayload.status_catalogo) {
     obraPayload.status_catalogo = contratoOrigemId ? 'pre_cadastro' : 'catalogo_ativo'
   }
+
+  const autoresPayload: AutorDedup[] = Array.isArray(links)
+    ? links
+        .flatMap((l: any) => Array.isArray(l.titulares) ? l.titulares : [])
+        .filter((t: Record<string, unknown>) => isPapelAutorDedup(t))
+        .map((t: Record<string, unknown>) => ({
+          titular_id: (t.titular_id as string | null) ?? null,
+          nomes: [String(t.nome ?? '')],
+        }))
+    : []
+
+  const dedup = await verificarDedupObra(
+    sb,
+    usuario.tenant_id,
+    String(titulo),
+    rest.iswc as string | null | undefined,
+    autoresPayload
+  )
+
+  if (dedup.match && dedup.match_type === 'duplicata_exata') {
+    return NextResponse.json({
+      match: true,
+      match_type: 'duplicata_exata',
+      error: 'Obra duplicada: mesmo ISWC ou mesmo título e exatamente os mesmos autores já existem no catálogo.',
+      existentes: dedup.existentes,
+    }, { status: 409 })
+  }
+
+  if (dedup.match && dedup.match_type === 'homonima') {
+    const obsAtual = typeof obraPayload.observacoes === 'string' ? obraPayload.observacoes : ''
+    obraPayload.observacoes = [obsAtual, 'Obra homônima: mesmo título com autor em comum e coautores diferentes.']
+      .filter(Boolean)
+      .join('\n')
+  }
+
   // Auto-gerar codigo_obra robusto: Math.max sobre todos OBR-% do tenant + retry anti-colisão
   let obra: Record<string, unknown> | null = null
   let obraErr: { code?: string; message: string } | null = null

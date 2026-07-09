@@ -173,7 +173,7 @@ export default function ContratoDetailPage() {
   }
 
   // ── Criar obras no catálogo a partir do obras_json do contrato ──────────────
-  async function handleCriarObra(forcar = false) {
+  async function handleCriarObra() {
     if (!id || obraLoading) return
     setObraLoading(true)
     setObraResult(null)
@@ -182,7 +182,7 @@ export default function ContratoDetailPage() {
       const res = await authFetch(`/api/contratos/${id}/criar-obra`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ forcar }),
+        body: JSON.stringify({}),
       })
       const json = await res.json()
       if (res.status === 409 && json.match) {
@@ -1106,7 +1106,7 @@ export default function ContratoDetailPage() {
               <div className="flex gap-2 mt-1">
                 {obraMatch.match_type !== 'duplicata_exata' && (
                   <button
-                    onClick={() => handleCriarObra(true)}
+                    onClick={() => handleCriarObra()}
                     disabled={obraLoading}
                     className="h-7 px-2 text-[11px] bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 rounded-lg transition-colors disabled:opacity-50"
                   >
@@ -1210,7 +1210,7 @@ export default function ContratoDetailPage() {
               <div className="flex gap-2 mt-1">
                 {obraMatch.match_type !== 'duplicata_exata' && (
                   <button
-                    onClick={() => handleCriarObra(true)}
+                    onClick={() => handleCriarObra()}
                     disabled={obraLoading}
                     className="h-7 px-2 text-[11px] bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 rounded-lg transition-colors disabled:opacity-50"
                   >
