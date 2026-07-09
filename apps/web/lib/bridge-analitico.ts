@@ -83,11 +83,16 @@ export interface ObraLinkInput {
 export interface ContratoEditorialInput {
   id: string
   titular_id: string            // autor
-  editora_id: string            // editora administrada
+  editora_id: string | null     // editora administrada
   percentual_editora: number    // % cedido pelo autor à editora
   percentual_autor: number      // % que o autor retém
   /** Splits específicos por tipo de direito. Chave = tipo_direito_codigo */
-  splits_direitos: Record<string, { percentual_editora: number; percentual_autor: number }>
+  splits_direitos: Record<string, {
+    percentual_editora: number
+    percentual_autor: number
+    percentual_ed_original?: number
+    percentual_ed_adm?: number
+  }>
   data_inicio: string
   data_fim: string | null
   status: string
@@ -305,22 +310,40 @@ function resolverNegocio(
 function resolverPercentualEditorial(
   contrato: ContratoEditorialInput | null,
   tipoDireitoCodigo: string,
+  territorio: string,
   percentualCwrTotal: number  // percentual_editora + percentual_autor conforme CWR
-): { percentual_editora: number; percentual_autor: number; fonte: 'contrato' | 'cwr' } {
+): {
+  percentual_editora: number
+  percentual_autor: number
+  percentual_ed_original: number
+  percentual_ed_adm: number
+  fonte: 'contrato' | 'cwr'
+} {
   if (!contrato) {
     // Sem contrato: usa CWR diretamente
     // percentualCwrTotal é o total do link do autor (CA%)
     // Sem contrato registrado, não sabemos a divisão → usa como 0% editorial
     // O CWR mostra CA% já deduzido da parte editorial — usamos como está
-    return { percentual_editora: 0, percentual_autor: percentualCwrTotal, fonte: 'cwr' }
+    return {
+      percentual_editora: 0,
+      percentual_autor: percentualCwrTotal,
+      percentual_ed_original: 0,
+      percentual_ed_adm: 0,
+      fonte: 'cwr',
+    }
   }
 
   // Verifica split específico por tipo de direito
-  const split = contrato.splits_direitos?.[tipoDireitoCodigo]
+  const split = contrato.splits_direitos?.[`${tipoDireitoCodigo}:${territorio}`]
+    ?? contrato.splits_direitos?.[tipoDireitoCodigo]
   if (split) {
+    const percentualEdOriginal = split.percentual_ed_original ?? split.percentual_editora
+    const percentualEdAdm = split.percentual_ed_adm ?? 0
     return {
-      percentual_editora: split.percentual_editora,
+      percentual_editora: percentualEdOriginal + percentualEdAdm,
       percentual_autor: split.percentual_autor,
+      percentual_ed_original: percentualEdOriginal,
+      percentual_ed_adm: percentualEdAdm,
       fonte: 'contrato',
     }
   }
@@ -329,6 +352,8 @@ function resolverPercentualEditorial(
   return {
     percentual_editora: contrato.percentual_editora,
     percentual_autor: contrato.percentual_autor,
+    percentual_ed_original: contrato.percentual_editora,
+    percentual_ed_adm: 0,
     fonte: 'contrato',
   }
 }
@@ -347,6 +372,18 @@ function repartirBrutoAutorEditora(bruto: number, pctAutor: number): { autor: nu
   const autor   = Math.round((bruto * pctAutor) / 100 * 100) / 100
   const editora = Math.round((bruto - autor) * 100) / 100
   return { autor, editora }
+}
+
+function repartirBrutoContrato(
+  bruto: number,
+  pctAutor: number,
+  pctEdOriginal: number,
+  pctEdAdm: number
+): { autor: number; editoraOriginal: number; editoraAdm: number } {
+  const autor = Math.round((bruto * pctAutor / 100) * 100) / 100
+  const editoraAdm = pctEdAdm > 0 ? Math.round((bruto * pctEdAdm / 100) * 100) / 100 : 0
+  const editoraOriginal = Math.round((bruto - autor - editoraAdm) * 100) / 100
+  return { autor, editoraOriginal, editoraAdm }
 }
 
 // ── Função principal ─────────────────────────────────────────────────────────
@@ -377,6 +414,8 @@ export function executarBridge(ctx: BridgeContexto): BridgeResultado {
         )
         const editoras = link.titulares.filter(t => t.funcao_no_link === 'E')
         const admins   = link.titulares.filter(t => t.funcao_no_link === 'AM' || t.funcao_no_link === 'SE')
+        const editorasConsumidasNoContrato = new Set<string>()
+        const adminsConsumidasNoContrato = new Set<string>()
 
         // ── AUTORES (CA) ─────────────────────────────────────────────────────
         for (const autor of autores) {
@@ -391,7 +430,7 @@ export function executarBridge(ctx: BridgeContexto): BridgeResultado {
 
           const contrato = ctx.contratos_editoriais.find(c =>
             c.titular_id === autor.titular_id &&
-            (editora ? c.editora_id === editora.editora_id : true) &&
+            (editora ? !c.editora_id || c.editora_id === editora.editora_id : true) &&
             isContratoVigente(c, referencia) &&
             (c.territorio === null || c.territorio === territorio)
           ) ?? null
@@ -400,13 +439,31 @@ export function executarBridge(ctx: BridgeContexto): BridgeResultado {
           // controlado = false não significa pular: verificamos contratos aplicáveis
           let percentualAutoral: number
           let percentualEditorial: number
+          let percentualEditorialAdm = 0
+          let editoraAdmDoContrato: LinkTitularInput | null = null
           let fonteContrato: 'contrato' | 'cwr'
 
-          if (contrato) {
-            const res = resolverPercentualEditorial(contrato, tipoDireito.codigo, pctCwrAutor)
-            const rep = repartirBrutoAutorEditora(pctCwrAutor, res.percentual_autor)
+          if (contrato && tipoDireito.codigo !== 'comunicacao_publico') {
+            const res = resolverPercentualEditorial(contrato, tipoDireito.codigo, territorio, pctCwrAutor)
+            const adminVinculadaAoAutor = editora ? (admins.find(am =>
+              am.editora_original_id === editora.editora_id ||
+              editora.editora_administradora_id === am.editora_id
+            ) ?? null) : null
+            const pctCwrEditora = editora ? obterPercentualCwr(editora, tipoDireito.codigo) : 0
+            const pctCwrAdmin = adminVinculadaAoAutor ? obterPercentualCwr(adminVinculadaAoAutor, tipoDireito.codigo) : 0
+            const brutoAutor = round4(pctCwrAutor + pctCwrEditora + pctCwrAdmin)
+            const rep = repartirBrutoContrato(
+              brutoAutor,
+              res.percentual_autor,
+              res.percentual_ed_original,
+              res.percentual_ed_adm
+            )
             percentualAutoral   = rep.autor
-            percentualEditorial = rep.editora
+            percentualEditorial = rep.editoraOriginal
+            percentualEditorialAdm = rep.editoraAdm
+            editoraAdmDoContrato = adminVinculadaAoAutor
+            if (editora) editorasConsumidasNoContrato.add(editora.id)
+            if (adminVinculadaAoAutor && rep.editoraAdm > 0) adminsConsumidasNoContrato.add(adminVinculadaAoAutor.id)
             fonteContrato = 'contrato'
           } else {
             // Sem contrato: usa CWR diretamente
@@ -460,7 +517,7 @@ export function executarBridge(ctx: BridgeContexto): BridgeResultado {
               nome_participante: editora.nome,
               tipo_participante_codigo: 'editora_administrada',
               percentual_sobre_obra: round4(percentualEditorial),
-              percentual_sobre_origem: contrato ? (contrato.splits_direitos?.[tipoDireito.codigo]?.percentual_editora ?? contrato.percentual_editora) : null,
+              percentual_sobre_origem: contrato ? (contrato.splits_direitos?.[tipoDireito.codigo]?.percentual_ed_original ?? contrato.splits_direitos?.[tipoDireito.codigo]?.percentual_editora ?? contrato.percentual_editora) : null,
               origem_participante_id: null,
               _tempKey: `editora_derivada|${editora.id}|${autor.id}|${tipoDireito.codigo}|${territorio}`,
               _tempOrigemKey: tempKey,
@@ -477,6 +534,37 @@ export function executarBridge(ctx: BridgeContexto): BridgeResultado {
               calculado_por: 'bridge_v1',
             })
             somaPercentuais[chave] = round4((somaPercentuais[chave] ?? 0) + percentualEditorial)
+          }
+
+          // ── EDITORA ADMINISTRADORA derivada do split analítico ─────────────
+          if (contrato && editoraAdmDoContrato && percentualEditorialAdm > 0) {
+            linhas.push({
+              tenant_id: ctx.tenant_id,
+              obra_id: ctx.obra_id,
+              obra_link_id: link.id,
+              obra_link_origem_id: link.id,
+              titular_id: editoraAdmDoContrato.titular_id,
+              editora_id: editoraAdmDoContrato.editora_id,
+              nome_participante: editoraAdmDoContrato.nome,
+              tipo_participante_codigo: 'editora_administradora',
+              percentual_sobre_obra: round4(percentualEditorialAdm),
+              percentual_sobre_origem: contrato.splits_direitos?.[tipoDireito.codigo]?.percentual_ed_adm ?? 0,
+              origem_participante_id: null,
+              _tempKey: `editora_adm_derivada|${editoraAdmDoContrato.id}|${autor.id}|${tipoDireito.codigo}|${territorio}`,
+              _tempOrigemKey: tempKey,
+              nivel_distribuicao: 1,
+              tipo_direito_id: tipoDireito.id,
+              territorio,
+              competencia_inicio: ctx.competencia_inicio,
+              competencia_fim: ctx.competencia_fim,
+              contrato_id: contrato.id,
+              negocio_editorial_id: null,
+              status_calculo: 'calculado',
+              pendencia: null,
+              versao_calculo: ctx.versao_calculo,
+              calculado_por: 'bridge_v1',
+            })
+            somaPercentuais[chave] = round4((somaPercentuais[chave] ?? 0) + percentualEditorialAdm)
           }
 
           // ── CESSÕES sobre a parte autoral ──────────────────────────────────
@@ -538,6 +626,7 @@ export function executarBridge(ctx: BridgeContexto): BridgeResultado {
 
         // ── EDITORAS ADMINISTRADAS (E) ────────────────────────────────────────
         for (const editora of editoras) {
+          if (editorasConsumidasNoContrato.has(editora.id)) continue
           const pctCwrEditora = obterPercentualCwr(editora, tipoDireito.codigo)
 
           // Identifica se há AM vinculada a esta E (pela CWR ou pelo campo editora_administradora_id)
@@ -735,6 +824,7 @@ export function executarBridge(ctx: BridgeContexto): BridgeResultado {
         // ── AM DO CWR SEM E IDENTIFICADA (AM orphan) ──────────────────────────
         // Casos onde o AM aparece no CWR mas não há E correspondente no link
         const amsOrfas = admins.filter(am =>
+          !adminsConsumidasNoContrato.has(am.id) &&
           !editoras.some(e =>
             e.editora_id === am.editora_original_id ||
             am.editora_original_id === null
@@ -818,12 +908,21 @@ function obterPercentualCwr(titular: LinkTitularInput, tipoDireitoCodigo: string
 
   // Fallback para colunas legadas
   switch (tipoDireitoCodigo) {
-    case 'exec_publica':  return titular.percentual_exec_publica
-    case 'digital':       return titular.percentual_fonomecanico
-    case 'mecanico':      return titular.percentual_fonomecanico
-    case 'sincronizacao': return titular.percentual_sincronizacao
-    case 'audiovisual':   return titular.percentual_sincronizacao
-    case 'publicidade':   return titular.percentual_sincronizacao
+    case 'comunicacao_publico':
+    case 'exec_publica':
+      return titular.percentual_exec_publica
+    case 'repr_fonomecanica':
+    case 'distribuicao_meios':
+    case 'inclusao_base_dados':
+    case 'digital':
+    case 'mecanico':
+      return titular.percentual_fonomecanico
+    case 'inclusao_audiovisual':
+    case 'inclusao_publicitaria':
+    case 'sincronizacao':
+    case 'audiovisual':
+    case 'publicidade':
+      return titular.percentual_sincronizacao
     default:
       // Para tipos sem equivalência legada, retorna 0
       // O sistema marcará como pendente se não houver direito flexível cadastrado

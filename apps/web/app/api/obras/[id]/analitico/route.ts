@@ -131,16 +131,70 @@ export async function POST(
         .select('id, titular_id, editora_id, percentual_editora, percentual_autor, splits_direitos, data_inicio, data_fim, status, territorio')
         .eq('tenant_id', tenant_id)
         .in('titular_id', titularIds)
-        .in('status', ['vigente', 'assinado'])
+        .in('status', ['vigente', 'assinado', 'ativo'])
     : { data: [] }
+
+  const contratoIds = (contratosDb ?? []).map((c: any) => c.id).filter(Boolean)
+  const { data: contratoDireitosDb } = contratoIds.length > 0
+    ? await sb
+        .from('contrato_titular_direito')
+        .select('contrato_id, titular_id, direito, territorio, pct_autor, pct_ed_original, pct_ed_adm, ativo')
+        .eq('tenant_id', tenant_id)
+        .eq('ativo', true)
+        .in('contrato_id', contratoIds)
+    : { data: [] }
+
+  function normalizarSplitsDireitos(c: any) {
+    const splits: Record<string, any> = {}
+
+    for (const row of (contratoDireitosDb ?? []).filter((r: any) => r.contrato_id === c.id)) {
+      const split = {
+        percentual_autor:       Number(row.pct_autor ?? 100),
+        percentual_editora:     Number(row.pct_ed_original ?? 0) + Number(row.pct_ed_adm ?? 0),
+        percentual_ed_original: Number(row.pct_ed_original ?? 0),
+        percentual_ed_adm:      Number(row.pct_ed_adm ?? 0),
+      }
+      splits[`${row.direito}:${row.territorio ?? 'BR'}`] = split
+      if ((row.territorio ?? 'BR') === 'BR') splits[row.direito] = split
+    }
+
+    if (Object.keys(splits).length > 0) return splits
+
+    const raw = c.splits_direitos ?? {}
+    for (const [direito, sp] of Object.entries(raw) as [string, any][]) {
+      if (!sp) continue
+      if ('percentual_autor' in sp || 'percentual_editora' in sp) {
+        splits[direito] = sp
+        continue
+      }
+      if (sp.br_autor != null || sp.br_editora != null) {
+        splits[`${direito}:BR`] = {
+          percentual_autor:       Number(sp.br_autor ?? 100),
+          percentual_editora:     Number(sp.br_editora ?? 0),
+          percentual_ed_original: Number(sp.br_editora ?? 0),
+          percentual_ed_adm:      0,
+        }
+        splits[direito] = splits[`${direito}:BR`]
+      }
+      if (sp.ext_autor != null || sp.ext_editora != null) {
+        splits[`${direito}:EXT`] = {
+          percentual_autor:       Number(sp.ext_autor ?? 100),
+          percentual_editora:     Number(sp.ext_editora ?? 0),
+          percentual_ed_original: Number(sp.ext_editora ?? 0),
+          percentual_ed_adm:      0,
+        }
+      }
+    }
+    return splits
+  }
 
   const contratos: ContratoEditorialInput[] = (contratosDb ?? []).map((c: any) => ({
     id:                 c.id,
     titular_id:         c.titular_id,
-    editora_id:         c.editora_id,
+    editora_id:         c.editora_id ?? null,
     percentual_editora: c.percentual_editora ?? 0,
-    percentual_autor:   c.percentual_autor ?? 0,
-    splits_direitos:    c.splits_direitos ?? {},
+    percentual_autor:   c.percentual_autor ?? 100,
+    splits_direitos:    normalizarSplitsDireitos(c),
     data_inicio:        c.data_inicio,
     data_fim:           c.data_fim,
     status:             c.status,
@@ -324,7 +378,7 @@ export async function GET(
   const { data, error } = await sb
     .from('obras_analitico')
     .select(`
-      id, nome_participante, tipo_participante_codigo,
+      id, titular_id, editora_id, nome_participante, tipo_participante_codigo,
       percentual_sobre_obra, percentual_sobre_origem,
       nivel_distribuicao, territorio, status_calculo, pendencia,
       versao_calculo, calculado_em,

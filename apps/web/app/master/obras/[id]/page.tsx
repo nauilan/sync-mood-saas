@@ -356,6 +356,9 @@ export default function ObraDetailPage() {
 
   // ── Modo Analítico/Sintético (aba Integrantes) ───────────────────────────────
   const [modoAnalitico, setModoAnalitico] = useState(false)
+  const [analiticoRows, setAnaliticoRows] = useState<any[]>([])
+  const [analiticoLoading, setAnaliticoLoading] = useState(false)
+  const [analiticoErro, setAnaliticoErro] = useState('')
   const [negocios, setNegocios] = useState<any[]>([])
   const [calcPctLoading, setCalcPctLoading] = useState<Record<string, boolean>>({})
 
@@ -494,6 +497,32 @@ export default function ObraDetailPage() {
       alert('Erro inesperado ao calcular tipos de direito')
     } finally {
       setCalcPctLoading(prev => ({ ...prev, [linkId]: false }))
+    }
+  }
+
+  async function loadAnalitico(recalcular = false) {
+    if (analiticoLoading) return
+    setAnaliticoLoading(true)
+    setAnaliticoErro('')
+    try {
+      if (recalcular) {
+        const calc = await authFetch(`/api/obras/${obraId}/analitico`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ territorios: ['BR', 'EXT'] }),
+        })
+        const calcJson = await calc.json().catch(() => ({}))
+        if (!calc.ok) throw new Error(calcJson.error ?? 'Erro ao calcular Analítico')
+      }
+
+      const res = await authFetch(`/api/obras/${obraId}/analitico`)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error ?? 'Erro ao carregar Analítico')
+      setAnaliticoRows(data.data ?? [])
+    } catch (e) {
+      setAnaliticoErro(String(e))
+    } finally {
+      setAnaliticoLoading(false)
     }
   }
 
@@ -679,6 +708,35 @@ export default function ObraDetailPage() {
       }, 0).toFixed(2)
     )
   }, [links])
+
+  const getAnaliticoPct = (t: any, linkId: string, codigoDireito: string, territorio = 'BR'): number | null => {
+    const fn = (t.funcao_no_link ?? '').toUpperCase()
+    const papel = (t.papel ?? '').toLowerCase()
+    const tipoEsperado =
+      ['CA', 'A', 'C', 'PA', 'ES'].includes(fn) || ['autor', 'compositor', 'versionista', 'adaptador'].includes(papel)
+        ? 'autor'
+        : (['AM', 'SA'].includes(fn) || papel === 'administradora')
+          ? 'editora_administradora'
+          : (['E', 'SE'].includes(fn) || papel === 'editora_original' || papel === 'subeditora')
+            ? 'editora_administrada'
+            : null
+
+    if (!tipoEsperado) return null
+
+    const row = analiticoRows.find((r: any) =>
+      r.obra_link_id === linkId &&
+      r.territorio === territorio &&
+      r.tipos_direito?.codigo === codigoDireito &&
+      r.tipo_participante_codigo === tipoEsperado &&
+      (
+        (t.titular_id && r.titular_id === t.titular_id) ||
+        (t.editora_id && r.editora_id === t.editora_id) ||
+        r.nome_participante === t.nome
+      )
+    )
+
+    return row ? Number(row.percentual_sobre_obra ?? 0) : null
+  }
 
   if (loading) {
     return (
@@ -1082,7 +1140,7 @@ export default function ObraDetailPage() {
                   className={`px-3 py-1 text-[11px] font-semibold rounded-md transition-colors ${!modoAnalitico ? 'bg-violet-600 text-white shadow' : 'text-white/40 hover:text-white/70'}`}
                 >Sintético</button>
                 <button
-                  onClick={() => setModoAnalitico(true)}
+                  onClick={() => { setModoAnalitico(true); loadAnalitico(true) }}
                   className={`px-3 py-1 text-[11px] font-semibold rounded-md transition-colors ${modoAnalitico ? 'bg-violet-600 text-white shadow' : 'text-white/40 hover:text-white/70'}`}
                 >Analítico</button>
               </div>
@@ -1148,14 +1206,8 @@ export default function ObraDetailPage() {
                         let sr_display: number | null = null
 
                         if (modoAnalitico) {
-                          // Analítico: ratio deste participante dentro do link
-                          // Derivado diretamente do CWR (que já reflete o negócio firmado)
-                          if (!isOWR && linkTotalPR > 0) {
-                            const ratio = (t.percentual_exec_publica ?? 0) / linkTotalPR * 100
-                            mr_display = ratio
-                            sr_display = ratio
-                          }
-                          // OWR: fica null — não participa da distribuição editorial
+                          mr_display = !isOWR ? getAnaliticoPct(t, link.id, 'repr_fonomecanica', 'BR') : null
+                          sr_display = !isOWR ? getAnaliticoPct(t, link.id, 'inclusao_audiovisual', 'BR') : null
                         } else {
                           // Sintético outros direitos: total do link na linha do AM ou E
                           if (isAM) {
@@ -1219,6 +1271,20 @@ export default function ObraDetailPage() {
                     <tr>
                       <td colSpan={8} className="px-4 py-8 text-center text-xs text-white/30">
                         Nenhum integrante vinculado.
+                      </td>
+                    </tr>
+                  )}
+                  {modoAnalitico && analiticoLoading && (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-4 text-center text-xs text-violet-300">
+                        Calculando Analítico...
+                      </td>
+                    </tr>
+                  )}
+                  {modoAnalitico && analiticoErro && (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-4 text-center text-xs text-red-300">
+                        {analiticoErro}
                       </td>
                     </tr>
                   )}
@@ -1317,7 +1383,8 @@ export default function ObraDetailPage() {
                                 if (modoAnalitico) {
                                   const base = ct > 0 ? ct : lPR
                                   const raw  = ct > 0 ? (t[c.key] ?? 0) : (t.percentual_exec_publica ?? 0)
-                                  v = base > 0 ? raw / base * 100 : null
+                                  const direito = c.key.replace(/^pct_/, '')
+                                  v = getAnaliticoPct(t, link.id, direito, 'BR')
                                 } else {
                                   if (isAM || (isE && !hasAM)) v = ct > 0 ? ct : mrFall
                                 }
@@ -1387,7 +1454,8 @@ export default function ObraDetailPage() {
                                 if (modoAnalitico) {
                                   const base = ct > 0 ? ct : lPR
                                   const raw  = ct > 0 ? (t[c.key] ?? 0) : (t.percentual_exec_publica ?? 0)
-                                  v = base > 0 ? raw / base * 100 : null
+                                  const direito = c.key.replace(/^pct_ext_/, '')
+                                  v = getAnaliticoPct(t, link.id, direito, 'EXT')
                                 } else {
                                   if (isAM || (isE && !hasAM)) v = ct > 0 ? ct : srFall
                                 }
