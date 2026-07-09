@@ -9,6 +9,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+
+export const runtime = 'nodejs'
+export const maxDuration = 60
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
 const MODEL = 'claude-sonnet-4-6'
@@ -64,27 +68,86 @@ const USER_PROMPT = `Extraia do contrato as seguintes informações e retorne AP
   ]
 }`
 
-export async function POST(req: NextRequest) {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    return NextResponse.json({ error: 'ANTHROPIC_API_KEY não configurada' }, { status: 500 })
+function sb() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  )
+}
+
+async function autenticar(req: NextRequest) {
+  const token = req.headers.get('authorization')?.replace('Bearer ', '')
+  if (!token) return null
+  const client = sb()
+  const { data: { user }, error } = await client.auth.getUser(token)
+  if (error || !user) return null
+  const { data: usuario } = await client
+    .from('usuarios')
+    .select('id, tenant_id, role')
+    .eq('auth_user_id', user.id)
+    .single()
+  return usuario as { id: string; tenant_id: string; role: string } | null
+}
+
+async function obterPdf(req: NextRequest): Promise<{ file: Blob; nome: string } | { error: NextResponse }> {
+  const contentType = req.headers.get('content-type') ?? ''
+
+  if (contentType.includes('application/json')) {
+    const usuario = await autenticar(req)
+    if (!usuario) return { error: NextResponse.json({ error: 'Não autorizado' }, { status: 401 }) }
+
+    const body = await req.json().catch(() => null)
+    const storagePath = String(body?.storagePath ?? '')
+    if (!storagePath || !storagePath.startsWith(`${usuario.tenant_id}/extrair/`)) {
+      return { error: NextResponse.json({ error: 'storagePath inválido para este tenant' }, { status: 400 }) }
+    }
+
+    const { data, error } = await sb()
+      .storage
+      .from('contratos-manuais')
+      .download(storagePath)
+
+    if (error || !data) {
+      return { error: NextResponse.json({ error: 'Falha ao baixar o PDF do Storage: ' + (error?.message ?? 'arquivo não encontrado') }, { status: 500 }) }
+    }
+
+    return { file: data, nome: storagePath.split('/').pop() ?? 'contrato.pdf' }
   }
 
   let formData: FormData
   try {
     formData = await req.formData()
   } catch {
-    return NextResponse.json({ error: 'Falha ao ler o formulário multipart' }, { status: 400 })
+    return { error: NextResponse.json({ error: 'Falha ao ler o formulário multipart. Se o arquivo for grande, envie pelo fluxo de upload via Storage.' }, { status: 400 }) }
   }
 
   const file = formData.get('file')
   if (!file || !(file instanceof Blob)) {
-    return NextResponse.json({ error: 'Campo "file" ausente ou inválido' }, { status: 400 })
+    return { error: NextResponse.json({ error: 'Campo "file" ausente ou inválido' }, { status: 400 }) }
   }
+
+  return { file, nome: (file as File).name ?? 'contrato.pdf' }
+}
+
+export async function POST(req: NextRequest) {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    return NextResponse.json({ error: 'ANTHROPIC_API_KEY não configurada' }, { status: 500 })
+  }
+
+  const pdfResult = await obterPdf(req)
+  if ('error' in pdfResult) return pdfResult.error
+  const { file } = pdfResult
 
   const mimeType = (file as File).type || 'application/pdf'
   if (!mimeType.includes('pdf')) {
     return NextResponse.json({ error: 'O arquivo deve ser um PDF' }, { status: 400 })
+  }
+
+  const maxBytes = 25 * 1024 * 1024
+  if (file.size > maxBytes) {
+    return NextResponse.json({ error: 'Arquivo excede o limite de 25 MB para extração por IA' }, { status: 413 })
   }
 
   let base64Data: string

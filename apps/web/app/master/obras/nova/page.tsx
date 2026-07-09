@@ -12,7 +12,7 @@ import {
 import type { PapelTitularLink } from '@/lib/types-obras'
 import { PAPEL_TITULAR_LABELS, PAPEL_TITULAR_COLORS, GENEROS_MUSICAIS } from '@/lib/types-obras'
 import { formatarPercentual, normalizarPercentual } from '@/lib/percentual'
-import { authFetch } from '@/lib/supabase/client'
+import { authFetch, createClient } from '@/lib/supabase/client'
 
 // ── Direitos por contrato ─────────────────────────────────────────────────────
 const DIREITOS_CONFIG = [
@@ -488,6 +488,20 @@ export default function NovaObraPage() {
 
   const inputCls = 'w-full h-9 bg-white/5 border border-white/[0.08] rounded-lg px-3 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 focus:bg-violet-500/5 transition-colors'
 
+  async function lerRespostaJson(res: Response) {
+    const text = await res.text()
+    if (!text) return {}
+    try {
+      return JSON.parse(text)
+    } catch {
+      return {
+        error: res.status === 413
+          ? 'Arquivo muito grande para envio direto. Tente compactar o PDF ou reduzir o contrato.'
+          : text,
+      }
+    }
+  }
+
   // ── Link helpers ─────────────────────────────────────────────────────────────
 
   function addLink() {
@@ -732,14 +746,36 @@ export default function NovaObraPage() {
     setObraSelecionadaIdx(null)
     setObrasProcessadasIdx([])
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const res = await authFetch('/api/contratos/extrair', { method: 'POST', body: formData })
-      const json = await res.json()
+      if (file.size > 25 * 1024 * 1024) {
+        throw new Error('Arquivo muito grande. O limite atual para leitura por IA é 25 MB.')
+      }
+
+      const uploadRes = await authFetch('/api/contratos/extrair/upload-url', {
+        method: 'POST',
+        body: JSON.stringify({
+          fileName: file.name,
+          contentType: file.type || 'application/pdf',
+          size: file.size,
+        }),
+      })
+      const uploadJson = await lerRespostaJson(uploadRes)
+      if (!uploadRes.ok) throw new Error(uploadJson.error || 'Falha ao preparar upload do contrato')
+
+      const supabase = createClient()
+      const { error: uploadError } = await supabase
+        .storage
+        .from(uploadJson.bucket || 'contratos-manuais')
+        .uploadToSignedUrl(uploadJson.path, uploadJson.token, file)
+
+      if (uploadError) throw new Error('Falha ao enviar PDF para processamento: ' + uploadError.message)
+
+      const res = await authFetch('/api/contratos/extrair', {
+        method: 'POST',
+        body: JSON.stringify({ storagePath: uploadJson.path }),
+      })
+      const json = await lerRespostaJson(res)
       if (!res.ok) {
-        setExtracting(false)
-        console.error('Erro ao extrair contrato:', json.error)
-        return
+        throw new Error(json.error || `Erro ao extrair contrato (${res.status})`)
       }
       const dados = json.data
 
@@ -791,8 +827,10 @@ export default function NovaObraPage() {
       }
     } catch (err) {
       console.error('Erro ao processar contrato:', err)
+      alert(`Erro ao processar contrato: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setExtracting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
