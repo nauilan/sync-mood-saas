@@ -338,6 +338,17 @@ function round4(n: number): number {
   return Math.round(n * 10000) / 10000
 }
 
+/**
+ * Reparte bruto entre autor e editora original com arredondamento para 2 casas
+ * favorecendo o autor. 3o decimal >= 5 sobe no autor; editora fica com o resto
+ * para garantir fechamento exato do bruto.
+ */
+function repartirBrutoAutorEditora(bruto: number, pctAutor: number): { autor: number; editora: number } {
+  const autor   = Math.round((bruto * pctAutor) / 100 * 100) / 100
+  const editora = Math.round((bruto - autor) * 100) / 100
+  return { autor, editora }
+}
+
 // ── Função principal ─────────────────────────────────────────────────────────
 
 /**
@@ -393,10 +404,9 @@ export function executarBridge(ctx: BridgeContexto): BridgeResultado {
 
           if (contrato) {
             const res = resolverPercentualEditorial(contrato, tipoDireito.codigo, pctCwrAutor)
-            // Percentuais do contrato são relativos à parte total do link do autor
-            const parteTotal = pctCwrAutor  // total do link = CA% no CWR
-            percentualEditorial = round4((parteTotal * res.percentual_editora) / 100)
-            percentualAutoral   = round4(parteTotal - percentualEditorial)
+            const rep = repartirBrutoAutorEditora(pctCwrAutor, res.percentual_autor)
+            percentualAutoral   = rep.autor
+            percentualEditorial = rep.editora
             fonteContrato = 'contrato'
           } else {
             // Sem contrato: usa CWR diretamente
@@ -437,6 +447,37 @@ export function executarBridge(ctx: BridgeContexto): BridgeResultado {
           }
           linhas.push(linhaAutor)
           somaPercentuais[chave] = round4((somaPercentuais[chave] ?? 0) + percentualAutoral)
+
+          // ── EDITORA ORIGINAL derivada do contrato editorial ──────────────────
+          if (contrato && editora && percentualEditorial > 0) {
+            linhas.push({
+              tenant_id: ctx.tenant_id,
+              obra_id: ctx.obra_id,
+              obra_link_id: link.id,
+              obra_link_origem_id: link.id,
+              titular_id: editora.titular_id,
+              editora_id: editora.editora_id,
+              nome_participante: editora.nome,
+              tipo_participante_codigo: 'editora_administrada',
+              percentual_sobre_obra: round4(percentualEditorial),
+              percentual_sobre_origem: contrato ? (contrato.splits_direitos?.[tipoDireito.codigo]?.percentual_editora ?? contrato.percentual_editora) : null,
+              origem_participante_id: null,
+              _tempKey: `editora_derivada|${editora.id}|${autor.id}|${tipoDireito.codigo}|${territorio}`,
+              _tempOrigemKey: tempKey,
+              nivel_distribuicao: 1,
+              tipo_direito_id: tipoDireito.id,
+              territorio,
+              competencia_inicio: ctx.competencia_inicio,
+              competencia_fim: ctx.competencia_fim,
+              contrato_id: contrato.id,
+              negocio_editorial_id: null,
+              status_calculo: 'calculado',
+              pendencia: null,
+              versao_calculo: ctx.versao_calculo,
+              calculado_por: 'bridge_v1',
+            })
+            somaPercentuais[chave] = round4((somaPercentuais[chave] ?? 0) + percentualEditorial)
+          }
 
           // ── CESSÕES sobre a parte autoral ──────────────────────────────────
           if (autor.titular_id) {
