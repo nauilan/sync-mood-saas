@@ -458,6 +458,7 @@ export default function NovaObraPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [obrasExtraidas, setObrasExtraidas] = useState<any[]>([])
   const [obraSelecionadaIdx, setObraSelecionadaIdx] = useState<number | null>(null)
+  const [obrasProcessadasIdx, setObrasProcessadasIdx] = useState<number[]>([])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [dadosExtraidos, setDadosExtraidos] = useState<any>(null)
   const [titularPendente, setTitularPendente] = useState<{ id: string; nome: string } | null>(null)
@@ -565,6 +566,36 @@ export default function NovaObraPage() {
   function handleFileSelect(file: File) {
     if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
       processarContratoUpload(file)
+    }
+  }
+
+  function limparObraAtualMantendoContrato() {
+    setTitulo('')
+    setSubtitulo('')
+    setTituloAlternativo('')
+    setLetra('')
+    setFonogramas([])
+    setLinks([{ tempId: uid(), ordem: 1, descricao: '', controlado: false, percentual_controlado: 0, titulares: [] }])
+    setSavedCodigo('')
+    setSavedId('')
+  }
+
+  async function selecionarObraExtraida(idx: number) {
+    if (obrasProcessadasIdx.includes(idx)) return
+    const obra = obrasExtraidas[idx]
+    if (!obra) return
+
+    limparObraAtualMantendoContrato()
+    setObraSelecionadaIdx(idx)
+    setTitulo(obra.titulo || '')
+    setSubtitulo(obra.subtitulo || '')
+    setTituloAlternativo(obra.titulo_alternativo || '')
+    setLetra(obra.texto_poetico || '')
+    setStep(0)
+    setHighestStep(0)
+
+    if (dadosExtraidos) {
+      await criarTitularEMontarLink(obra, dadosExtraidos, titularPendente ?? undefined)
     }
   }
 
@@ -699,6 +730,7 @@ export default function NovaObraPage() {
     setExtractDone(false)
     setObrasExtraidas([])
     setObraSelecionadaIdx(null)
+    setObrasProcessadasIdx([])
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -876,6 +908,21 @@ export default function NovaObraPage() {
       if (!res.ok) throw new Error(data.error || 'Erro ao salvar obra')
       setSavedCodigo(data.codigo_obra || '')
       setSavedId(data.id || '')
+
+      if (obrasExtraidas.length > 1 && obraSelecionadaIdx !== null) {
+        const concluidas = Array.from(new Set([...obrasProcessadasIdx, obraSelecionadaIdx])).sort((a, b) => a - b)
+        setObrasProcessadasIdx(concluidas)
+
+        if (concluidas.length < obrasExtraidas.length) {
+          alert(`Obra ${data.codigo_obra || ''} salva. Selecione a próxima obra do contrato.`)
+          limparObraAtualMantendoContrato()
+          setObraSelecionadaIdx(null)
+          setStep(0)
+          setHighestStep(0)
+          return
+        }
+      }
+
       setSaved(true)
     } catch (err) {
       console.error('[salvarObra]', err)
@@ -1137,32 +1184,35 @@ export default function NovaObraPage() {
             {obrasExtraidas.length > 1 && obraSelecionadaIdx === null && (
               <div className="mt-3 bg-violet-500/10 border border-violet-500/20 rounded-xl p-4 space-y-2">
                 <p className="text-xs font-semibold text-white">
-                  Este contrato tem {obrasExtraidas.length} obras. Selecione qual cadastrar agora:
+                  Este contrato tem {obrasExtraidas.length} obras. Processadas: {obrasProcessadasIdx.length}/{obrasExtraidas.length}. Selecione a próxima:
                 </p>
                 <div className="space-y-1.5">
-                  {obrasExtraidas.map((obra, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        setObraSelecionadaIdx(idx)
-                        setTitulo(obra.titulo || '')
-                        setSubtitulo(obra.subtitulo || '')
-                        setTituloAlternativo(obra.titulo_alternativo || '')
-                        setLetra(obra.texto_poetico || '')
-                        if (dadosExtraidos) {
-                          criarTitularEMontarLink(obra, dadosExtraidos, titularPendente ?? undefined)
-                            .catch(console.error)
-                        }
-                      }}
-                      className="flex items-center justify-between w-full px-3 py-2 rounded-lg bg-white/5 hover:bg-violet-500/20 border border-white/10 transition-colors text-left"
-                    >
-                      <span className="text-xs text-white/80">{obra.titulo}</span>
-                      <span className="text-[10px] text-white/40">{obra.percentual_autor_na_obra}% autor</span>
-                    </button>
-                  ))}
+                  {obrasExtraidas.map((obra, idx) => {
+                    const processada = obrasProcessadasIdx.includes(idx)
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => selecionarObraExtraida(idx).catch(console.error)}
+                        disabled={processada}
+                        className={`flex items-center justify-between w-full px-3 py-2 rounded-lg border transition-colors text-left ${
+                          processada
+                            ? 'bg-emerald-500/10 border-emerald-500/20 opacity-80 cursor-default'
+                            : 'bg-white/5 hover:bg-violet-500/20 border-white/10'
+                        }`}
+                      >
+                        <span className="text-xs text-white/80 flex items-center gap-2">
+                          {processada && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
+                          {obra.titulo}
+                        </span>
+                        <span className={`text-[10px] ${processada ? 'text-emerald-300' : 'text-white/40'}`}>
+                          {processada ? 'Concluída' : `${obra.percentual_autor_na_obra}% autor`}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
                 <p className="text-[11px] text-white/40">
-                  As demais obras ficarão disponíveis para cadastro posterior usando o mesmo contrato.
+                  Após salvar uma obra, o sistema volta para esta lista sem perder as demais obras da sessão.
                 </p>
               </div>
             )}
