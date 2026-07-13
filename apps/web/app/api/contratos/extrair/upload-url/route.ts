@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { autenticar } from '@/lib/api-auth'
+import { autenticar, getToken } from '@/lib/api-auth'
 
 function sb() {
   return createClient(
@@ -21,7 +21,24 @@ function sanitizarNome(nome: string): string {
 
 export async function POST(req: NextRequest) {
   const client = sb()
+  const cookieNames = req.cookies.getAll().map(cookie => cookie.name)
+  const authHeader = req.headers.get('authorization')
+  const token = getToken(req)
+  console.info('[auth-debug][contratos.extrair.upload-url][before]', {
+    hasAuthorizationHeader: Boolean(authHeader),
+    authorizationScheme: authHeader?.split(' ')[0] ?? null,
+    cookieCount: cookieNames.length,
+    cookieNames,
+    hasResolvedToken: Boolean(token),
+    resolvedTokenLength: token.length,
+  })
   const usuario = await autenticar(req, client)
+  console.info('[auth-debug][contratos.extrair.upload-url][after]', {
+    authenticated: Boolean(usuario),
+    usuarioId: usuario?.id ?? null,
+    tenantId: usuario?.tenant_id ?? null,
+    role: usuario?.role ?? null,
+  })
   if (!usuario) return NextResponse.json({ error: 'Não autorizado na etapa upload-url: sessão expirada ou token ausente' }, { status: 401 })
 
   const body = await req.json().catch(() => null)
