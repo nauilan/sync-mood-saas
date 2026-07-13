@@ -6,9 +6,13 @@ export type UsuarioAutenticado = {
   role: string
 }
 
+function cleanToken(token: string): string {
+  return token.replace(/[\uFEFF\u200B\u200C\u200D\u00AD]/g, '').trim()
+}
+
 export function getToken(req: NextRequest): string {
   const auth = req.headers.get('authorization')
-  if (auth?.startsWith('Bearer ')) return auth.slice(7)
+  if (auth?.startsWith('Bearer ')) return cleanToken(auth.slice(7))
   const chunks: string[] = []
   for (const c of req.cookies.getAll()) {
     const m = c.name.match(/auth-token\.(\d+)$/)
@@ -17,8 +21,8 @@ export function getToken(req: NextRequest): string {
   }
   const joined = chunks.filter(Boolean).join('')
   if (joined) {
-    try { const p = JSON.parse(decodeURIComponent(joined)); if (p?.access_token) return p.access_token } catch { /* */ }
-    try { const p = JSON.parse(joined); if (p?.access_token) return p.access_token } catch { /* */ }
+    try { const p = JSON.parse(decodeURIComponent(joined)); if (p?.access_token) return cleanToken(p.access_token) } catch { /* */ }
+    try { const p = JSON.parse(joined); if (p?.access_token) return cleanToken(p.access_token) } catch { /* */ }
   }
   return ''
 }

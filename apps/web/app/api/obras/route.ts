@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { logAudit } from '@/lib/audit'
-import { autenticar, getToken } from '@/lib/api-auth'
+import { autenticar } from '@/lib/api-auth'
 import { calcularConcentracaoLink, type ParticipacaoConcentracao } from '@/lib/backoffice-rules'
 import {
   classificarAutoresDedup,
@@ -236,24 +236,7 @@ export async function POST(req: NextRequest) {
   const sb = getAdminClient()
   if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
 
-  const cookieNames = req.cookies.getAll().map(cookie => cookie.name)
-  const authHeader = req.headers.get('authorization')
-  const token = getToken(req)
-  console.info('[auth-debug][obras.post][before]', {
-    hasAuthorizationHeader: Boolean(authHeader),
-    authorizationScheme: authHeader?.split(' ')[0] ?? null,
-    cookieCount: cookieNames.length,
-    cookieNames,
-    hasResolvedToken: Boolean(token),
-    resolvedTokenLength: token.length,
-  })
   const usuario = await autenticar(req, sb)
-  console.info('[auth-debug][obras.post][after]', {
-    authenticated: Boolean(usuario),
-    usuarioId: usuario?.id ?? null,
-    tenantId: usuario?.tenant_id ?? null,
-    role: usuario?.role ?? null,
-  })
   if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   let body: Record<string, unknown>
