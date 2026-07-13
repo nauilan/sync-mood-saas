@@ -759,7 +759,7 @@ export default function NovaObraPage() {
         }),
       })
       const uploadJson = await lerRespostaJson(uploadRes)
-      if (!uploadRes.ok) throw new Error(uploadJson.error || 'Falha ao preparar upload do contrato')
+      if (!uploadRes.ok) throw new Error(uploadJson.error || `Falha na etapa upload-url (${uploadRes.status})`)
 
       const supabase = createClient()
       const { error: uploadError } = await supabase
@@ -767,7 +767,7 @@ export default function NovaObraPage() {
         .from(uploadJson.bucket || 'contratos-manuais')
         .uploadToSignedUrl(uploadJson.path, uploadJson.token, file)
 
-      if (uploadError) throw new Error('Falha ao enviar PDF para processamento: ' + uploadError.message)
+      if (uploadError) throw new Error('Falha na etapa storage-upload: ' + uploadError.message)
 
       const res = await authFetch('/api/contratos/extrair', {
         method: 'POST',
@@ -775,7 +775,7 @@ export default function NovaObraPage() {
       })
       const json = await lerRespostaJson(res)
       if (!res.ok) {
-        throw new Error(json.error || `Erro ao extrair contrato (${res.status})`)
+        throw new Error(json.error || `Falha na etapa extrair (${res.status})`)
       }
       const dados = json.data
 
