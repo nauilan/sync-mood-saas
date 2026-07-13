@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { autenticar } from '@/lib/api-auth'
+import { autenticar, logAuthByteDebug } from '@/lib/api-auth'
 
 function sb() {
   return createClient(
@@ -21,6 +21,7 @@ function sanitizarNome(nome: string): string {
 
 export async function POST(req: NextRequest) {
   const client = sb()
+  await logAuthByteDebug('contratos.extrair.upload-url', req, client)
   const usuario = await autenticar(req, client)
   if (!usuario) return NextResponse.json({ error: 'Não autorizado na etapa upload-url: sessão expirada ou token ausente' }, { status: 401 })
 
