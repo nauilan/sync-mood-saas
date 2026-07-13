@@ -9,8 +9,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { createClient as createServerSupabaseClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+import { autenticar } from '@/lib/api-auth'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -70,46 +70,19 @@ const USER_PROMPT = `Extraia do contrato as seguintes informações e retorne AP
 }`
 
 function sb() {
-  return createAdminClient(
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false } }
   )
 }
 
-async function autenticar(req: NextRequest) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '')
-  const client = sb()
-
-  if (token) {
-    const { data: { user }, error } = await client.auth.getUser(token)
-    if (!error && user) {
-      const { data: usuario } = await client
-        .from('usuarios')
-        .select('id, tenant_id, role')
-        .eq('auth_user_id', user.id)
-        .single()
-      return usuario as { id: string; tenant_id: string; role: string } | null
-    }
-  }
-
-  const serverClient = await createServerSupabaseClient()
-  const { data: { user }, error } = await serverClient.auth.getUser()
-  if (error || !user) return null
-
-  const { data: usuario } = await client
-    .from('usuarios')
-    .select('id, tenant_id, role')
-    .eq('auth_user_id', user.id)
-    .single()
-  return usuario as { id: string; tenant_id: string; role: string } | null
-}
-
 async function obterPdf(req: NextRequest): Promise<{ file: Blob; nome: string } | { error: NextResponse }> {
   const contentType = req.headers.get('content-type') ?? ''
 
   if (contentType.includes('application/json')) {
-    const usuario = await autenticar(req)
+    const client = sb()
+    const usuario = await autenticar(req, client)
     if (!usuario) return { error: NextResponse.json({ error: 'Não autorizado na etapa extrair: sessão expirada ou token ausente' }, { status: 401 }) }
 
     const body = await req.json().catch(() => null)
@@ -118,7 +91,7 @@ async function obterPdf(req: NextRequest): Promise<{ file: Blob; nome: string } 
       return { error: NextResponse.json({ error: 'storagePath inválido para este tenant' }, { status: 400 }) }
     }
 
-    const { data, error } = await sb()
+    const { data, error } = await client
       .storage
       .from('contratos-manuais')
       .download(storagePath)

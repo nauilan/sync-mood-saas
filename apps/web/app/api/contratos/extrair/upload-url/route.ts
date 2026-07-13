@@ -1,41 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { createClient as createServerSupabaseClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
+import { autenticar } from '@/lib/api-auth'
 
 function sb() {
-  return createAdminClient(
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false } }
   )
-}
-
-async function autenticar(req: NextRequest) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '')
-  const client = sb()
-
-  if (token) {
-    const { data: { user }, error } = await client.auth.getUser(token)
-    if (!error && user) {
-      const { data: usuario } = await client
-        .from('usuarios')
-        .select('id, tenant_id, role')
-        .eq('auth_user_id', user.id)
-        .single()
-      return usuario as { id: string; tenant_id: string; role: string } | null
-    }
-  }
-
-  const serverClient = await createServerSupabaseClient()
-  const { data: { user }, error } = await serverClient.auth.getUser()
-  if (error || !user) return null
-
-  const { data: usuario } = await client
-    .from('usuarios')
-    .select('id, tenant_id, role')
-    .eq('auth_user_id', user.id)
-    .single()
-  return usuario as { id: string; tenant_id: string; role: string } | null
 }
 
 function sanitizarNome(nome: string): string {
@@ -48,7 +20,8 @@ function sanitizarNome(nome: string): string {
 }
 
 export async function POST(req: NextRequest) {
-  const usuario = await autenticar(req)
+  const client = sb()
+  const usuario = await autenticar(req, client)
   if (!usuario) return NextResponse.json({ error: 'Não autorizado na etapa upload-url: sessão expirada ou token ausente' }, { status: 401 })
 
   const body = await req.json().catch(() => null)
@@ -66,7 +39,7 @@ export async function POST(req: NextRequest) {
   }
 
   const path = `${usuario.tenant_id}/extrair/${Date.now()}-${crypto.randomUUID()}-${sanitizarNome(fileName)}`
-  const { data, error } = await sb()
+  const { data, error } = await client
     .storage
     .from('contratos-manuais')
     .createSignedUploadUrl(path)
