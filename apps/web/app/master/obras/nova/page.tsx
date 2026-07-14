@@ -16,7 +16,7 @@ import { authFetch, createClient } from '@/lib/supabase/client'
 
 // ── Direitos por contrato ─────────────────────────────────────────────────────
 const DIREITOS_CONFIG = [
-  { key: 'repr_grafica',          label: 'Reprodução Gráfica',         soBr: true  },
+  { key: 'repr_grafica',          label: 'Reprodução Gráfica',         soBr: false },
   { key: 'repr_fonomecanica',     label: 'Reprodução Fonomecânica',    soBr: false },
   { key: 'inclusao_audiovisual',  label: 'Inclusão Audiovisual',       soBr: false },
   { key: 'inclusao_publicitaria', label: 'Inclusão Publicitária',      soBr: false },
