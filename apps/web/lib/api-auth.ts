@@ -15,6 +15,26 @@ function charCodes(value: string, limit: number, fromEnd = false): number[] {
   return Array.from(chars).map(char => char.charCodeAt(0))
 }
 
+function envCharDebug(name: string) {
+  const value = process.env[name] ?? ''
+  return {
+    present: value.length > 0,
+    length: value.length,
+    firstCharCode: value.length > 0 ? value.charCodeAt(0) : null,
+  }
+}
+
+export function logEnvByteDebug(label: string): void {
+  console.info(`[env-byte-debug][${label}]`, {
+    NEXT_PUBLIC_SUPABASE_URL: envCharDebug('NEXT_PUBLIC_SUPABASE_URL'),
+    SUPABASE_URL: envCharDebug('SUPABASE_URL'),
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: envCharDebug('NEXT_PUBLIC_SUPABASE_ANON_KEY'),
+    SUPABASE_ANON_KEY: envCharDebug('SUPABASE_ANON_KEY'),
+    SUPABASE_SERVICE_ROLE_KEY: envCharDebug('SUPABASE_SERVICE_ROLE_KEY'),
+    ANTHROPIC_API_KEY: envCharDebug('ANTHROPIC_API_KEY'),
+  })
+}
+
 function getRawToken(req: NextRequest): { source: 'authorization' | 'cookie' | 'none'; token: string } {
   const auth = req.headers.get('authorization')
   if (auth?.startsWith('Bearer ')) return { source: 'authorization', token: auth.slice(7) }
