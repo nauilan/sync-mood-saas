@@ -13,22 +13,34 @@ import { createClient } from '@supabase/supabase-js'
 import { autenticar } from '@/lib/api-auth'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
+export const maxDuration = 300
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages'
 const MODEL = 'claude-sonnet-4-6'
 
-const SYSTEM_PROMPT =
+const SYSTEM_PROMPT_BASE =
   'Você é um assistente especializado em contratos de cessão de direitos autorais musicais brasileiros. ' +
   'Leia o contrato e extraia as informações em JSON. ' +
   'Responda APENAS com o JSON, sem texto adicional, sem markdown, sem backticks. ' +
   'ATENÇÃO AOS PERCENTUAIS: procure a cláusula que detalha os percentuais por tipo de direito (geralmente chamada Cláusula Sexta, Cláusula de Percentuais, ou similar). ' +
   'Ela lista os tipos a, b, c, d, e, f, g, h com percentuais SEPARADOS para autor e editora (ex: "Autor: 75% / Editora: 25%"). ' +
   'NUNCA retorne autor=100 e editora=0 se o contrato tiver uma cláusula de percentuais — isso significaria que a editora não recebe nada, o que não faz sentido num contrato de cessão. ' +
-  'Se não encontrar valores explícitos para um tipo, mantenha autor=0 e editora=0 (NÃO invente 100/0). ' +
+  'Se não encontrar valores explícitos para um tipo, mantenha autor=0 e editora=0 (NÃO invente 100/0). '
+
+const SYSTEM_PROMPT_COMPLETO =
+  SYSTEM_PROMPT_BASE +
   'É CRÍTICO preservar a estrutura de versos da letra musical — cada quebra de linha deve ser mantida como \\n no campo texto_poetico.'
 
-const USER_PROMPT = `Extraia do contrato as seguintes informações e retorne APENAS um JSON válido com esta estrutura exata:
+const SYSTEM_PROMPT_LEVE =
+  SYSTEM_PROMPT_BASE +
+  'Para PDFs grandes ou contratos com muitas obras, priorize títulos, coautores, percentuais, dados do contrato e direitos. NÃO extraia letras completas; retorne texto_poetico como string vazia.'
+
+function montarUserPrompt(extracaoLeve: boolean) {
+  const instrucaoTextoPoetico = extracaoLeve
+    ? 'texto_poetico deve ser string vazia (""). NÃO copie letras completas nesta etapa.'
+    : 'texto_poetico deve conter a letra completa da obra, preservando EXATAMENTE as quebras de linha originais do contrato usando \\n entre cada verso. NUNCA junte versos em um parágrafo corrido. Cada linha do PDF deve corresponder a uma linha separada por \\n no JSON, respeitando estrofes e repetições (como "2X") exatamente como aparecem no documento.'
+
+  return `Extraia do contrato as seguintes informações e retorne APENAS um JSON válido com esta estrutura exata:
 {
   "autor_nome": "nome completo do autor",
   "autor_pseudonimo": "pseudônimo ou nome artístico",
@@ -60,7 +72,7 @@ const USER_PROMPT = `Extraia do contrato as seguintes informações e retorne AP
       "titulo": "título da obra",
       "subtitulo": "subtítulo se houver",
       "titulo_alternativo": "título alternativo se houver",
-      "texto_poetico": "letra completa da obra, preservando EXATAMENTE as quebras de linha originais do contrato usando \\n entre cada verso. NUNCA junte versos em um parágrafo corrido. Cada linha do PDF deve corresponder a uma linha separada por \\n no JSON, respeitando estrofes e repetições (como '2X') exatamente como aparecem no documento.",
+      "texto_poetico": "${instrucaoTextoPoetico}",
       "percentual_autor_na_obra": 100,
       "coautores": [
         {"nome": "nome do coautor", "pseudonimo": "pseudônimo", "percentual": 0}
@@ -68,6 +80,7 @@ const USER_PROMPT = `Extraia do contrato as seguintes informações e retorne AP
     }
   ]
 }`
+}
 
 function sb() {
   return createClient(
@@ -119,6 +132,7 @@ async function obterPdf(req: NextRequest): Promise<{ file: Blob; nome: string } 
 }
 
 export async function POST(req: NextRequest) {
+  const startedAt = Date.now()
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
     return NextResponse.json({ error: 'ANTHROPIC_API_KEY não configurada' }, { status: 500 })
@@ -141,15 +155,18 @@ export async function POST(req: NextRequest) {
   let base64Data: string
   try {
     const arrayBuffer = await file.arrayBuffer()
-    const bytes = new Uint8Array(arrayBuffer)
-    let binary = ''
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i])
-    }
-    base64Data = btoa(binary)
+    base64Data = Buffer.from(arrayBuffer).toString('base64')
   } catch {
     return NextResponse.json({ error: 'Falha ao converter o PDF para base64' }, { status: 500 })
   }
+
+  const extracaoLeve = file.size >= 2 * 1024 * 1024
+  console.info('[contratos.extrair][inicio]', {
+    fileSizeBytes: file.size,
+    fileSizeMb: Number((file.size / 1024 / 1024).toFixed(2)),
+    extracaoLeve,
+    maxDuration,
+  })
 
   let anthropicResponse: Response
   try {
@@ -163,7 +180,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 4096,
-        system: SYSTEM_PROMPT,
+        system: extracaoLeve ? SYSTEM_PROMPT_LEVE : SYSTEM_PROMPT_COMPLETO,
         messages: [
           {
             role: 'user',
@@ -178,16 +195,17 @@ export async function POST(req: NextRequest) {
               },
               {
                 type: 'text',
-                text: USER_PROMPT,
+                text: montarUserPrompt(extracaoLeve),
               },
             ],
           },
         ],
       }),
+      signal: AbortSignal.timeout(285_000),
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Erro desconhecido'
-    return NextResponse.json({ error: `Falha ao chamar a API da Anthropic: ${msg}` }, { status: 500 })
+    return NextResponse.json({ error: `Falha ao chamar a API da Anthropic após ${Date.now() - startedAt}ms: ${msg}` }, { status: 500 })
   }
 
   if (!anthropicResponse.ok) {
@@ -221,6 +239,12 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
+
+  console.info('[contratos.extrair][fim]', {
+    fileSizeBytes: file.size,
+    extracaoLeve,
+    elapsedMs: Date.now() - startedAt,
+  })
 
   return NextResponse.json({ data: resultado })
 }

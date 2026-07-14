@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { logAudit } from '@/lib/audit'
-import { autenticar, logAuthByteDebug } from '@/lib/api-auth'
+import { autenticar } from '@/lib/api-auth'
 import { calcularConcentracaoLink, type ParticipacaoConcentracao } from '@/lib/backoffice-rules'
 import {
   classificarAutoresDedup,
@@ -236,7 +236,6 @@ export async function POST(req: NextRequest) {
   const sb = getAdminClient()
   if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
 
-  await logAuthByteDebug('obras.post', req, sb)
   const usuario = await autenticar(req, sb)
   if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
