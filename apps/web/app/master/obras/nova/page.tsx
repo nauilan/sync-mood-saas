@@ -462,6 +462,7 @@ export default function NovaObraPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [dadosExtraidos, setDadosExtraidos] = useState<any>(null)
   const [titularPendente, setTitularPendente] = useState<{ id: string; nome: string } | null>(null)
+  const [contratoStoragePath, setContratoStoragePath] = useState('')
 
   // Step 4 — contrato assinado
   const [contratoFile, setContratoFile] = useState<File | null>(null)
@@ -608,6 +609,34 @@ export default function NovaObraPage() {
     setStep(0)
     setHighestStep(0)
 
+    if (!obra.texto_poetico && contratoStoragePath && obra.titulo) {
+      setExtracting(true)
+      try {
+        const res = await authFetch('/api/contratos/extrair', {
+          method: 'POST',
+          body: JSON.stringify({
+            storagePath: contratoStoragePath,
+            textoPoeticoTitulo: obra.titulo,
+          }),
+        })
+        const json = await lerRespostaJson(res)
+        if (res.ok && json.data?.texto_poetico) {
+          setLetra(json.data.texto_poetico)
+          setExtractDone(true)
+          setObrasExtraidas(prev => prev.map((item, itemIdx) =>
+            itemIdx === idx ? { ...item, texto_poetico: json.data.texto_poetico } : item
+          ))
+        } else if (!res.ok) {
+          throw new Error(json.error || `Falha ao extrair texto poético (${res.status})`)
+        }
+      } catch (err) {
+        console.error('Erro ao extrair texto poético:', err)
+        alert(`Não foi possível extrair o texto poético automaticamente: ${err instanceof Error ? err.message : String(err)}`)
+      } finally {
+        setExtracting(false)
+      }
+    }
+
     if (dadosExtraidos) {
       await criarTitularEMontarLink(obra, dadosExtraidos, titularPendente ?? undefined)
     }
@@ -745,6 +774,7 @@ export default function NovaObraPage() {
     setObrasExtraidas([])
     setObraSelecionadaIdx(null)
     setObrasProcessadasIdx([])
+    setContratoStoragePath('')
     try {
       if (file.size > 25 * 1024 * 1024) {
         throw new Error('Arquivo muito grande. O limite atual para leitura por IA é 25 MB.')
@@ -760,6 +790,7 @@ export default function NovaObraPage() {
       })
       const uploadJson = await lerRespostaJson(uploadRes)
       if (!uploadRes.ok) throw new Error(uploadJson.error || `Falha na etapa upload-url (${uploadRes.status})`)
+      setContratoStoragePath(uploadJson.path || '')
 
       const supabase = createClient()
       const { error: uploadError } = await supabase
@@ -816,6 +847,22 @@ export default function NovaObraPage() {
         setSubtitulo(primeira.subtitulo || '')
         setTituloAlternativo(primeira.titulo_alternativo || '')
         setLetra(primeira.texto_poetico || '')
+        if (!primeira.texto_poetico && primeira.titulo && uploadJson.path) {
+          const textoRes = await authFetch('/api/contratos/extrair', {
+            method: 'POST',
+            body: JSON.stringify({
+              storagePath: uploadJson.path,
+              textoPoeticoTitulo: primeira.titulo,
+            }),
+          })
+          const textoJson = await lerRespostaJson(textoRes)
+          if (textoRes.ok && textoJson.data?.texto_poetico) {
+            primeira.texto_poetico = textoJson.data.texto_poetico
+            setLetra(textoJson.data.texto_poetico)
+          } else if (!textoRes.ok) {
+            throw new Error(textoJson.error || `Falha ao extrair texto poético (${textoRes.status})`)
+          }
+        }
         setSplitsDireitos(initSplitsFromIA(dados))
         setSplitsTocados(new Set())
         if (dados.autor_nome || dados.autor_pseudonimo) {

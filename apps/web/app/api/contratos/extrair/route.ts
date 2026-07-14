@@ -35,6 +35,11 @@ const SYSTEM_PROMPT_LEVE =
   SYSTEM_PROMPT_BASE +
   'Para PDFs grandes ou contratos com muitas obras, priorize títulos, coautores, percentuais, dados do contrato e direitos. NÃO extraia letras completas; retorne texto_poetico como string vazia.'
 
+const SYSTEM_PROMPT_TEXTO_POETICO =
+  'Você é um assistente especializado em localizar texto poético/letra musical dentro de contratos de cessão de direitos autorais musicais brasileiros. ' +
+  'Extraia somente a letra da obra solicitada, preservando EXATAMENTE as quebras de linha originais. ' +
+  'Responda APENAS com JSON válido, sem markdown, sem comentários e sem texto adicional.'
+
 function montarUserPrompt(extracaoLeve: boolean) {
   const instrucaoTextoPoetico = extracaoLeve
     ? 'texto_poetico deve ser string vazia (""). NÃO copie letras completas nesta etapa.'
@@ -82,6 +87,21 @@ function montarUserPrompt(extracaoLeve: boolean) {
 }`
 }
 
+function montarTextoPoeticoPrompt(titulo: string) {
+  return `Localize no contrato a obra com o título "${titulo}" e extraia somente o texto poético/letra dessa obra.
+
+Retorne APENAS este JSON:
+{
+  "texto_poetico": "letra completa preservando quebras de linha com \\n"
+}
+
+Regras:
+- Preserve versos e estrofes exatamente como aparecem no PDF.
+- Não junte versos em parágrafo corrido.
+- Se houver repetições, marcações como "2X", refrão ou estrofes, preserve como no contrato.
+- Se não encontrar a letra dessa obra, retorne {"texto_poetico": ""}.`
+}
+
 function sb() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -90,7 +110,7 @@ function sb() {
   )
 }
 
-async function obterPdf(req: NextRequest): Promise<{ file: Blob; nome: string } | { error: NextResponse }> {
+async function obterPdf(req: NextRequest): Promise<{ file: Blob; nome: string; textoPoeticoTitulo?: string } | { error: NextResponse }> {
   const contentType = req.headers.get('content-type') ?? ''
 
   if (contentType.includes('application/json')) {
@@ -100,6 +120,7 @@ async function obterPdf(req: NextRequest): Promise<{ file: Blob; nome: string } 
 
     const body = await req.json().catch(() => null)
     const storagePath = String(body?.storagePath ?? '')
+    const textoPoeticoTitulo = String(body?.textoPoeticoTitulo ?? '').trim()
     if (!storagePath || !storagePath.startsWith(`${usuario.tenant_id}/extrair/`)) {
       return { error: NextResponse.json({ error: 'storagePath inválido para este tenant' }, { status: 400 }) }
     }
@@ -113,7 +134,7 @@ async function obterPdf(req: NextRequest): Promise<{ file: Blob; nome: string } 
       return { error: NextResponse.json({ error: 'Falha ao baixar o PDF do Storage: ' + (error?.message ?? 'arquivo não encontrado') }, { status: 500 }) }
     }
 
-    return { file: data, nome: storagePath.split('/').pop() ?? 'contrato.pdf' }
+    return { file: data, nome: storagePath.split('/').pop() ?? 'contrato.pdf', textoPoeticoTitulo }
   }
 
   let formData: FormData
@@ -140,7 +161,7 @@ export async function POST(req: NextRequest) {
 
   const pdfResult = await obterPdf(req)
   if ('error' in pdfResult) return pdfResult.error
-  const { file } = pdfResult
+  const { file, textoPoeticoTitulo } = pdfResult
 
   const mimeType = (file as File).type || 'application/pdf'
   if (!mimeType.includes('pdf')) {
@@ -160,11 +181,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Falha ao converter o PDF para base64' }, { status: 500 })
   }
 
-  const extracaoLeve = file.size >= 2 * 1024 * 1024
+  const extracaoTextoPoetico = Boolean(textoPoeticoTitulo)
+  const extracaoLeve = file.size >= 2 * 1024 * 1024 && !extracaoTextoPoetico
   console.info('[contratos.extrair][inicio]', {
     fileSizeBytes: file.size,
     fileSizeMb: Number((file.size / 1024 / 1024).toFixed(2)),
     extracaoLeve,
+    extracaoTextoPoetico,
     maxDuration,
   })
 
@@ -179,8 +202,10 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 4096,
-        system: extracaoLeve ? SYSTEM_PROMPT_LEVE : SYSTEM_PROMPT_COMPLETO,
+        max_tokens: extracaoTextoPoetico ? 8192 : 4096,
+        system: extracaoTextoPoetico
+          ? SYSTEM_PROMPT_TEXTO_POETICO
+          : (extracaoLeve ? SYSTEM_PROMPT_LEVE : SYSTEM_PROMPT_COMPLETO),
         messages: [
           {
             role: 'user',
@@ -195,7 +220,9 @@ export async function POST(req: NextRequest) {
               },
               {
                 type: 'text',
-                text: montarUserPrompt(extracaoLeve),
+                text: extracaoTextoPoetico
+                  ? montarTextoPoeticoPrompt(textoPoeticoTitulo ?? '')
+                  : montarUserPrompt(extracaoLeve),
               },
             ],
           },
@@ -243,6 +270,7 @@ export async function POST(req: NextRequest) {
   console.info('[contratos.extrair][fim]', {
     fileSizeBytes: file.size,
     extracaoLeve,
+    extracaoTextoPoetico,
     elapsedMs: Date.now() - startedAt,
   })
 
