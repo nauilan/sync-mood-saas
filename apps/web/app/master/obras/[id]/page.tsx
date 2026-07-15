@@ -612,28 +612,13 @@ export default function ObraDetailPage() {
     if (resumoSaving) return
     setResumoSaving(true)
     try {
-      console.info('[obra-patch-debug][frontend][before]', {
-        obraId,
-        draftKeys: Object.keys(resumoDraft),
-        subtitulo: resumoDraft.subtitulo ?? null,
-        titulo: resumoDraft.titulo ?? null,
-        titulo_alternativo: resumoDraft.titulo_alternativo ?? null,
-      })
       const res = await authFetch(`/api/obras/${obraId}`, {
         method: 'PATCH',
         body: JSON.stringify(resumoDraft),
       })
       const d = await res.json()
-      console.info('[obra-patch-debug][frontend][after]', {
-        obraId,
-        ok: res.ok,
-        status: res.status,
-        error: d.error ?? null,
-        responseSubtitulo: d.data?.subtitulo ?? null,
-        responseUpdatedAt: d.data?.updated_at ?? null,
-      })
       if (!res.ok) { alert(d.error ?? 'Erro ao salvar'); return }
-      setObra((prev: any) => ({ ...prev, ...resumoDraft }))
+      setObra((prev: any) => ({ ...prev, ...(d.data ?? resumoDraft) }))
       setEditResumo(false)
       setResumoDraft({})
       if (d.recontratacao_exigida) {
@@ -954,7 +939,9 @@ export default function ObraDetailPage() {
             <h3 className="text-sm font-semibold text-white">Dados da Obra</h3>
             {[
               { label: 'Titulo',           value: obra.titulo },
+              { label: 'Subtitulo',        value: obra.subtitulo ?? '—' },
               { label: 'Titulo Original',  value: obra.titulo_original ?? '—' },
+              { label: 'Titulo Alternativo', value: obra.titulo_alternativo ?? '—' },
               { label: 'Codigo Sync Mood', value: obra.codigo ?? obra.codigo_obra ?? '—' },
               { label: 'Codigo Legado',    value: obra.codigo_interno_legado ?? '—', mono: true },
               { label: 'Codigo CWR Orig.', value: obra.codigo_obra_cwr_original ?? '—', mono: true },
@@ -997,7 +984,7 @@ export default function ObraDetailPage() {
               <h3 className="text-sm font-semibold text-white">Dados Editoriais</h3>
               {!editResumo ? (
                 <button
-                  onClick={() => { setEditResumo(true); setResumoDraft({ iswc: obra.iswc ?? '', iswc_anterior: obra.iswc_anterior ?? '', iswc_alternativo: obra.iswc_alternativo ?? '', status_iswc: obra.status_iswc ?? 'pendente', territorio: obra.territorio ?? '', direitos_administrados: obra.direitos_administrados ?? {} }) }}
+                  onClick={() => { setEditResumo(true); setResumoDraft({ titulo: obra.titulo ?? '', subtitulo: obra.subtitulo ?? '', titulo_alternativo: obra.titulo_alternativo ?? '', iswc: obra.iswc ?? '', iswc_anterior: obra.iswc_anterior ?? '', iswc_alternativo: obra.iswc_alternativo ?? '', status_iswc: obra.status_iswc ?? 'pendente', territorio: obra.territorio ?? '', direitos_administrados: obra.direitos_administrados ?? {} }) }}
                   className="inline-flex items-center gap-1.5 h-7 px-3 text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white/70 rounded-lg transition-colors"
                 >
                   <Edit className="w-3 h-3" /> Editar
@@ -1024,6 +1011,32 @@ export default function ObraDetailPage() {
             <div className="p-5">
               {editResumo ? (
                 <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-1">Título</label>
+                      <input
+                        className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                        value={resumoDraft.titulo ?? ''}
+                        onChange={e => setResumoDraft(p => ({ ...p, titulo: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-1">Subtítulo</label>
+                      <input
+                        className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                        value={resumoDraft.subtitulo ?? ''}
+                        onChange={e => setResumoDraft(p => ({ ...p, subtitulo: e.target.value || null }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-1">Título Alternativo</label>
+                      <input
+                        className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                        value={resumoDraft.titulo_alternativo ?? ''}
+                        onChange={e => setResumoDraft(p => ({ ...p, titulo_alternativo: e.target.value || null }))}
+                      />
+                    </div>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <label className="block text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-1">ISWC Principal</label>
