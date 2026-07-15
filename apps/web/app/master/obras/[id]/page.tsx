@@ -612,11 +612,26 @@ export default function ObraDetailPage() {
     if (resumoSaving) return
     setResumoSaving(true)
     try {
+      console.info('[obra-patch-debug][frontend][before]', {
+        obraId,
+        draftKeys: Object.keys(resumoDraft),
+        subtitulo: resumoDraft.subtitulo ?? null,
+        titulo: resumoDraft.titulo ?? null,
+        titulo_alternativo: resumoDraft.titulo_alternativo ?? null,
+      })
       const res = await authFetch(`/api/obras/${obraId}`, {
         method: 'PATCH',
         body: JSON.stringify(resumoDraft),
       })
       const d = await res.json()
+      console.info('[obra-patch-debug][frontend][after]', {
+        obraId,
+        ok: res.ok,
+        status: res.status,
+        error: d.error ?? null,
+        responseSubtitulo: d.data?.subtitulo ?? null,
+        responseUpdatedAt: d.data?.updated_at ?? null,
+      })
       if (!res.ok) { alert(d.error ?? 'Erro ao salvar'); return }
       setObra((prev: any) => ({ ...prev, ...resumoDraft }))
       setEditResumo(false)

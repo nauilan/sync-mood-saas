@@ -41,6 +41,26 @@ async function autenticar(req: NextRequest, sb: any): Promise<{ id: string; tena
   return data as { id: string; tenant_id: string; role: string } | null
 }
 
+function tokenSource(req: NextRequest): 'authorization' | 'cookie' | 'none' {
+  const auth = req.headers.get('authorization')
+  if (auth?.startsWith('Bearer ')) return 'authorization'
+  return getToken(req) ? 'cookie' : 'none'
+}
+
+function serializeError(error: unknown) {
+  if (!error || typeof error !== 'object') return error
+  const err = error as Record<string, unknown>
+  return {
+    name: err.name,
+    message: err.message,
+    status: err.status,
+    code: err.code,
+    details: err.details,
+    hint: err.hint,
+    raw: JSON.stringify(err),
+  }
+}
+
 // Mapa CWR funcao_no_link → papel normalizado (espelhado em /links)
 const CWR_ROLE_MAP: Record<string, string> = {
   E:  'editora_original',
@@ -156,19 +176,45 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const sb = getAdminClient()
-  if (!sb) return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
+  const { id } = await params
+  console.info('[obra-patch-debug][backend][received]', {
+    id,
+    method: req.method,
+    path: new URL(req.url).pathname,
+    hasAuthorizationHeader: Boolean(req.headers.get('authorization')),
+    tokenSource: tokenSource(req),
+    cookieNames: req.cookies.getAll().map(cookie => cookie.name),
+  })
+
+  if (!sb) {
+    console.info('[obra-patch-debug][backend][admin-client]', { id, ok: false, reason: 'Supabase não configurado' })
+    return NextResponse.json({ error: 'Supabase não configurado' }, { status: 503 })
+  }
 
   const usuario = await autenticar(req, sb)
+  console.info('[obra-patch-debug][backend][auth]', {
+    id,
+    authenticated: Boolean(usuario),
+    usuarioId: usuario?.id ?? null,
+    tenantId: usuario?.tenant_id ?? null,
+    role: usuario?.role ?? null,
+  })
   if (!usuario) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-
-  const { id } = await params
 
   let body: Record<string, unknown>
   try {
     body = await req.json()
   } catch {
+    console.info('[obra-patch-debug][backend][body]', { id, ok: false, reason: 'JSON inválido' })
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
   }
+  console.info('[obra-patch-debug][backend][body]', {
+    id,
+    keys: Object.keys(body),
+    subtitulo: body.subtitulo ?? null,
+    titulo: body.titulo ?? null,
+    titulo_alternativo: body.titulo_alternativo ?? null,
+  })
 
   const ALLOWED = [
     'titulo', 'titulo_alternativo', 'subtitulo', 'idioma', 'genero_musical',
@@ -201,8 +247,21 @@ export async function PATCH(
   if ('genero' in body && !('genero_musical' in update)) update.genero_musical = body.genero
 
   if (Object.keys(update).length === 0) {
+    console.info('[obra-patch-debug][backend][update-payload]', {
+      id,
+      ok: false,
+      reason: 'Nenhum campo válido para atualizar',
+      bodyKeys: Object.keys(body),
+    })
     return NextResponse.json({ error: 'Nenhum campo válido para atualizar' }, { status: 400 })
   }
+  console.info('[obra-patch-debug][backend][update-payload]', {
+    id,
+    keys: Object.keys(update),
+    subtitulo: update.subtitulo ?? null,
+    titulo: update.titulo ?? null,
+    titulo_alternativo: update.titulo_alternativo ?? null,
+  })
 
   const { data: anterior } = await sb
     .from('obras')
@@ -212,6 +271,13 @@ export async function PATCH(
     .is('deleted_at', null)
     .single()
 
+  console.info('[obra-patch-debug][backend][before-row]', {
+    id,
+    found: Boolean(anterior),
+    subtitulo: (anterior as Record<string, unknown> | null)?.subtitulo ?? null,
+    titulo: (anterior as Record<string, unknown> | null)?.titulo ?? null,
+    updated_at: (anterior as Record<string, unknown> | null)?.updated_at ?? null,
+  })
   if (!anterior) return NextResponse.json({ error: 'Obra não encontrada' }, { status: 404 })
 
   // ── Interceptor de campos críticos (Migration 060) ────────────────────────
@@ -244,7 +310,31 @@ export async function PATCH(
     .select()
     .single()
 
+  console.info('[obra-patch-debug][backend][supabase-update]', {
+    id,
+    ok: !error,
+    error: serializeError(error),
+    returnedId: data?.id ?? null,
+    returnedSubtitulo: data?.subtitulo ?? null,
+    returnedUpdatedAt: data?.updated_at ?? null,
+  })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const { data: reread, error: rereadError } = await sb
+    .from('obras')
+    .select('id, titulo, subtitulo, titulo_alternativo, updated_at')
+    .eq('id', id)
+    .eq('tenant_id', usuario.tenant_id)
+    .single()
+  console.info('[obra-patch-debug][backend][reread-after-update]', {
+    id,
+    ok: !rereadError,
+    error: serializeError(rereadError),
+    subtitulo: reread?.subtitulo ?? null,
+    titulo: reread?.titulo ?? null,
+    titulo_alternativo: reread?.titulo_alternativo ?? null,
+    updated_at: reread?.updated_at ?? null,
+  })
 
   // ── Auto-registrar alterações em obras_historico ──────────────────────────
   const CAMPOS_RASTREAR = [
@@ -287,6 +377,12 @@ export async function PATCH(
     origem_execucao: 'usuario',
   })
 
+  console.info('[obra-patch-debug][backend][response]', {
+    id,
+    status: 200,
+    recontratacao_exigida: recontratacaoExigida,
+    responseSubtitulo: data?.subtitulo ?? null,
+  })
   return NextResponse.json({ data, recontratacao_exigida: recontratacaoExigida })
 }
 
