@@ -306,21 +306,59 @@ function ObraDrawer({ obra: obraInicial, onClose, editoras = [] }: { obra: any; 
   const cancelEdit = () => { setIsEditing(false); setEditData({}) }
 
   const saveEdit = async () => {
+    console.log('[obra-save-debug][frontend] SALVAR CLICADO', {
+      obraId: obra.id,
+      editDataKeys: Object.keys(editData ?? {}),
+      subtitulo: editData?.subtitulo ?? null,
+      titulo: editData?.titulo ?? null,
+      titulo_alternativo: editData?.titulo_alternativo ?? null,
+    })
     setSaving(true)
     try {
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL
       const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      console.log('[obra-save-debug][frontend] CHAMADA QUE SERÁ FEITA', {
+        fluxoAtual: 'supabase-js-direto-no-browser',
+        patchEsperadoMasNaoUsado: `/api/obras/${obra.id}`,
+        metodoEsperadoMasNaoUsado: 'PATCH',
+        temSupabaseUrl: Boolean(url),
+        temAnonKey: Boolean(key),
+        urlPlaceholder: Boolean(url?.includes('placeholder')),
+        temObraId: Boolean(obra.id),
+      })
       if (url && key && !url.includes('placeholder') && obra.id) {
         const sb = createClient(url, key)
-        await sb.from('obras').update(editData).eq('id', obra.id)
+        console.log('[obra-save-debug][frontend] ANTES SUPABASE UPDATE', {
+          tabela: 'obras',
+          id: obra.id,
+          payloadKeys: Object.keys(editData ?? {}),
+          payloadSubtitulo: editData?.subtitulo ?? null,
+        })
+        const result = await sb.from('obras').update(editData).eq('id', obra.id)
+        console.log('[obra-save-debug][frontend] RESULTADO SUPABASE UPDATE', {
+          error: result.error,
+          status: result.status,
+          statusText: result.statusText,
+          data: result.data,
+          count: result.count,
+        })
+      } else {
+        console.warn('[obra-save-debug][frontend] SUPABASE UPDATE NÃO EXECUTADO', {
+          motivo: 'url/key ausente, placeholder ou obra.id ausente',
+          temSupabaseUrl: Boolean(url),
+          temAnonKey: Boolean(key),
+          urlPlaceholder: Boolean(url?.includes('placeholder')),
+          temObraId: Boolean(obra.id),
+        })
       }
       setObra((prev: any) => ({ ...prev, ...editData }))
       setIsEditing(false)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
-      console.error('Erro ao salvar:', e)
+      console.error('[obra-save-debug][frontend] CATCH ERRO AO SALVAR', e)
     } finally {
+      console.log('[obra-save-debug][frontend] FINALLY', { obraId: obra.id })
       setSaving(false)
     }
   }
