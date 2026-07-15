@@ -346,6 +346,9 @@ export default function ObraDetailPage() {
   const [editResumo, setEditResumo] = useState(false)
   const [resumoDraft, setResumoDraft] = useState<Record<string, any>>({})
   const [resumoSaving, setResumoSaving] = useState(false)
+  const [editDadosObra, setEditDadosObra] = useState(false)
+  const [dadosObraDraft, setDadosObraDraft] = useState<Record<string, any>>({})
+  const [dadosObraSaving, setDadosObraSaving] = useState(false)
   // BackOffice edit state
   const [boEdit,    setBoEdit]    = useState(false)
   const [boDraft,   setBoDraft]   = useState<Record<string,string>>({})
@@ -626,6 +629,38 @@ export default function ObraDetailPage() {
       }
     } catch (e) { alert('Erro: ' + String(e)) }
     finally { setResumoSaving(false) }
+  }
+
+  async function saveDadosObra() {
+    if (dadosObraSaving) return
+    setDadosObraSaving(true)
+    try {
+      const payload = {
+        titulo: dadosObraDraft.titulo ?? '',
+        subtitulo: dadosObraDraft.subtitulo || null,
+        titulo_alternativo: dadosObraDraft.titulo_alternativo || null,
+      }
+      const res = await authFetch(`/api/obras/${obraId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert(d.error ?? 'Erro ao salvar dados da obra')
+        return
+      }
+      setObra((prev: any) => ({ ...prev, ...(d.data ?? payload) }))
+      setEditDadosObra(false)
+      setDadosObraDraft({})
+      if (d.recontratacao_exigida) {
+        setModalRecontratacao({ campos: d.data?.motivo_recontracao?.split(': ')[1]?.split(', ') ?? [] })
+      }
+      alert('Dados da obra salvos com sucesso.')
+    } catch (e) {
+      alert('Erro ao salvar dados da obra: ' + String(e))
+    } finally {
+      setDadosObraSaving(false)
+    }
   }
 
   // ── Salvar campos BackOffice ─────────────────────────────────────────────────
@@ -936,27 +971,93 @@ export default function ObraDetailPage() {
       {activeTab === 'resumo' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-white">Dados da Obra</h3>
-            {[
-              { label: 'Titulo',           value: obra.titulo },
-              { label: 'Subtitulo',        value: obra.subtitulo ?? '—' },
-              { label: 'Titulo Original',  value: obra.titulo_original ?? '—' },
-              { label: 'Titulo Alternativo', value: obra.titulo_alternativo ?? '—' },
-              { label: 'Codigo Sync Mood', value: obra.codigo ?? obra.codigo_obra ?? '—' },
-              { label: 'Codigo Legado',    value: obra.codigo_interno_legado ?? '—', mono: true },
-              { label: 'Codigo CWR Orig.', value: obra.codigo_obra_cwr_original ?? '—', mono: true },
-              { label: 'ISWC',             value: obra.iswc ?? 'Pendente SOCINPRO' },
-              { label: 'Idioma',           value: obra.idioma ?? '—' },
-              { label: 'Genero',           value: obra.genero ?? '—' },
-              { label: 'Ano de Criacao',   value: obra.ano_criacao?.toString() ?? '—' },
-              { label: 'Duracao',          value: obra.duracao ? `${Math.floor(obra.duracao/60)}:${String(obra.duracao%60).padStart(2,'0')}` : '—' },
-              { label: 'Origem',           value: obra.origem_importacao ?? 'manual' },
-            ].map(f => (
-              <div key={f.label} className="flex items-center justify-between">
-                <span className="text-xs text-white/35">{f.label}</span>
-                <span className={`text-xs text-white/70 font-medium ${(f as {mono?: boolean}).mono ? 'font-mono bg-white/5 px-1.5 py-0.5 rounded' : ''}`}>{f.value}</span>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-white">Dados da Obra</h3>
+              {!editDadosObra ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditDadosObra(true)
+                    setDadosObraDraft({
+                      titulo: obra.titulo ?? '',
+                      subtitulo: obra.subtitulo ?? '',
+                      titulo_alternativo: obra.titulo_alternativo ?? '',
+                    })
+                  }}
+                  className="inline-flex items-center gap-1.5 h-7 px-3 text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white/70 rounded-lg transition-colors"
+                >
+                  <Edit className="w-3 h-3" /> Editar
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={saveDadosObra}
+                    disabled={dadosObraSaving}
+                    className="inline-flex items-center gap-1.5 h-7 px-3 text-xs bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/20 text-emerald-300 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {dadosObraSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                    Salvar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setEditDadosObra(false); setDadosObraDraft({}) }}
+                    className="h-7 px-3 text-xs text-white/40 hover:text-white/60 border border-white/10 rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
+            </div>
+            {editDadosObra ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-1">Título</label>
+                  <input
+                    className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    value={dadosObraDraft.titulo ?? ''}
+                    onChange={e => setDadosObraDraft(p => ({ ...p, titulo: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-1">Subtítulo</label>
+                  <input
+                    className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    value={dadosObraDraft.subtitulo ?? ''}
+                    onChange={e => setDadosObraDraft(p => ({ ...p, subtitulo: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-white/30 uppercase tracking-wider mb-1">Título Alternativo</label>
+                  <input
+                    className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    value={dadosObraDraft.titulo_alternativo ?? ''}
+                    onChange={e => setDadosObraDraft(p => ({ ...p, titulo_alternativo: e.target.value }))}
+                  />
+                </div>
               </div>
-            ))}
+            ) : (
+              [
+                { label: 'Titulo',           value: obra.titulo },
+                { label: 'Subtitulo',        value: obra.subtitulo ?? '—' },
+                { label: 'Titulo Original',  value: obra.titulo_original ?? '—' },
+                { label: 'Titulo Alternativo', value: obra.titulo_alternativo ?? '—' },
+                { label: 'Codigo Sync Mood', value: obra.codigo ?? obra.codigo_obra ?? '—' },
+                { label: 'Codigo Legado',    value: obra.codigo_interno_legado ?? '—', mono: true },
+                { label: 'Codigo CWR Orig.', value: obra.codigo_obra_cwr_original ?? '—', mono: true },
+                { label: 'ISWC',             value: obra.iswc ?? 'Pendente SOCINPRO' },
+                { label: 'Idioma',           value: obra.idioma ?? '—' },
+                { label: 'Genero',           value: obra.genero ?? '—' },
+                { label: 'Ano de Criacao',   value: obra.ano_criacao?.toString() ?? '—' },
+                { label: 'Duracao',          value: obra.duracao ? `${Math.floor(obra.duracao/60)}:${String(obra.duracao%60).padStart(2,'0')}` : '—' },
+                { label: 'Origem',           value: obra.origem_importacao ?? 'manual' },
+              ].map(f => (
+                <div key={f.label} className="flex items-center justify-between">
+                  <span className="text-xs text-white/35">{f.label}</span>
+                  <span className={`text-xs text-white/70 font-medium ${(f as {mono?: boolean}).mono ? 'font-mono bg-white/5 px-1.5 py-0.5 rounded' : ''}`}>{f.value}</span>
+                </div>
+              ))
+            )}
           </div>
           <div className="bg-[#0d1526] border border-white/[0.06] rounded-xl p-5 space-y-4">
             <h3 className="text-sm font-semibold text-white">Controle & BackOffice</h3>
@@ -984,6 +1085,7 @@ export default function ObraDetailPage() {
               <h3 className="text-sm font-semibold text-white">Dados Editoriais</h3>
               {!editResumo ? (
                 <button
+                    type="button"
                   onClick={() => { setEditResumo(true); setResumoDraft({ titulo: obra.titulo ?? '', subtitulo: obra.subtitulo ?? '', titulo_alternativo: obra.titulo_alternativo ?? '', iswc: obra.iswc ?? '', iswc_anterior: obra.iswc_anterior ?? '', iswc_alternativo: obra.iswc_alternativo ?? '', status_iswc: obra.status_iswc ?? 'pendente', territorio: obra.territorio ?? '', direitos_administrados: obra.direitos_administrados ?? {} }) }}
                   className="inline-flex items-center gap-1.5 h-7 px-3 text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-white/50 hover:text-white/70 rounded-lg transition-colors"
                 >
@@ -992,6 +1094,7 @@ export default function ObraDetailPage() {
               ) : (
                 <div className="flex gap-2">
                   <button
+                    type="button"
                     onClick={saveResumo}
                     disabled={resumoSaving}
                     className="inline-flex items-center gap-1.5 h-7 px-3 text-xs bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/20 text-emerald-300 rounded-lg transition-colors disabled:opacity-50"
@@ -1000,6 +1103,7 @@ export default function ObraDetailPage() {
                     Salvar
                   </button>
                   <button
+                    type="button"
                     onClick={() => { setEditResumo(false); setResumoDraft({}) }}
                     className="h-7 px-3 text-xs text-white/40 hover:text-white/60 border border-white/10 rounded-lg transition-colors"
                   >
