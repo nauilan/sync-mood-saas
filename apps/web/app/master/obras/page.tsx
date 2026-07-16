@@ -14,7 +14,6 @@ import {
 import { MOCK_OBRAS, MOCK_OBRAS_LINKS } from '@/lib/mock-obras'
 import { STORE_KEYS } from '@/lib/store'
 import { authFetch } from '@/lib/supabase/client'
-import { createClient } from '@supabase/supabase-js'
 // MOCK_EDITORAS removido — editoras carregadas via /api/editoras
 import { STATUS_OBRA_LABELS, STATUS_OBRA_COLORS, normalizarLinksObra } from '@/lib/types-obras'
 import { DeleteObraModal } from '@/components/ui/delete-obra-modal'
@@ -306,59 +305,39 @@ function ObraDrawer({ obra: obraInicial, onClose, editoras = [] }: { obra: any; 
   const cancelEdit = () => { setIsEditing(false); setEditData({}) }
 
   const saveEdit = async () => {
-    console.log('[obra-save-debug][frontend] SALVAR CLICADO', {
-      obraId: obra.id,
-      editDataKeys: Object.keys(editData ?? {}),
-      subtitulo: editData?.subtitulo ?? null,
-      titulo: editData?.titulo ?? null,
-      titulo_alternativo: editData?.titulo_alternativo ?? null,
-    })
     setSaving(true)
     try {
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      console.log('[obra-save-debug][frontend] CHAMADA QUE SERÁ FEITA', {
-        fluxoAtual: 'supabase-js-direto-no-browser',
-        patchEsperadoMasNaoUsado: `/api/obras/${obra.id}`,
-        metodoEsperadoMasNaoUsado: 'PATCH',
-        temSupabaseUrl: Boolean(url),
-        temAnonKey: Boolean(key),
-        urlPlaceholder: Boolean(url?.includes('placeholder')),
-        temObraId: Boolean(obra.id),
-      })
-      if (url && key && !url.includes('placeholder') && obra.id) {
-        const sb = createClient(url, key)
-        console.log('[obra-save-debug][frontend] ANTES SUPABASE UPDATE', {
-          tabela: 'obras',
-          id: obra.id,
-          payloadKeys: Object.keys(editData ?? {}),
-          payloadSubtitulo: editData?.subtitulo ?? null,
-        })
-        const result = await sb.from('obras').update(editData).eq('id', obra.id)
-        console.log('[obra-save-debug][frontend] RESULTADO SUPABASE UPDATE', {
-          error: result.error,
-          status: result.status,
-          statusText: result.statusText,
-          data: result.data,
-          count: result.count,
-        })
-      } else {
-        console.warn('[obra-save-debug][frontend] SUPABASE UPDATE NÃO EXECUTADO', {
-          motivo: 'url/key ausente, placeholder ou obra.id ausente',
-          temSupabaseUrl: Boolean(url),
-          temAnonKey: Boolean(key),
-          urlPlaceholder: Boolean(url?.includes('placeholder')),
-          temObraId: Boolean(obra.id),
-        })
+      const payload = {
+        titulo: editData.titulo ?? '',
+        titulo_alternativo: editData.titulo_alternativo || null,
+        subtitulo: editData.subtitulo || null,
+        idioma: editData.idioma || null,
+        genero: editData.genero || null,
+        ano_criacao: editData.ano_criacao ? Number(editData.ano_criacao) : null,
+        duracao_segundos: editData.duracao ? Number(editData.duracao) : null,
+        iswc: editData.iswc || null,
+        backoffice_song_id: editData.backoffice_song_id || null,
+        backoffice_work_id: editData.backoffice_work_id || null,
+        letra: editData.letra || null,
       }
-      setObra((prev: any) => ({ ...prev, ...editData }))
+
+      const res = await authFetch(`/api/obras/${obra.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(json.error || `Erro ao salvar obra (${res.status})`)
+      }
+
+      setObra((prev: any) => ({ ...prev, ...(json.data ?? payload) }))
       setIsEditing(false)
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
     } catch (e) {
-      console.error('[obra-save-debug][frontend] CATCH ERRO AO SALVAR', e)
+      console.error('Erro ao salvar obra:', e)
+      alert(e instanceof Error ? e.message : 'Erro ao salvar obra')
     } finally {
-      console.log('[obra-save-debug][frontend] FINALLY', { obraId: obra.id })
       setSaving(false)
     }
   }
@@ -1227,23 +1206,6 @@ export default function ObrasPage() {
       localStorage.removeItem(STORE_KEYS.gravacoes)
       window.dispatchEvent(new Event('storage'))
       // 2. Tentar limpar Supabase também
-      const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-      const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-      if (url && key && !url.includes('placeholder')) {
-        const sb = createClient(url, key)
-        const { data: { user } } = await sb.auth.getUser()
-        if (user) {
-          // Buscar tenant do usuário
-          const { data: tenant } = await sb.from('usuarios').select('tenant_id').eq('auth_user_id', user.id).single()
-          const tenantId = tenant?.tenant_id
-          if (tenantId) {
-            await sb.from('obras_links_titulares').delete().eq('tenant_id', tenantId)
-            await sb.from('obras_links').delete().eq('tenant_id', tenantId)
-            await sb.from('obras').delete().eq('tenant_id', tenantId)
-            await sb.from('titulares').delete().eq('tenant_id', tenantId)
-          }
-        }
-      }
       setCwrInvalidos(0)
       window.location.reload()
     } catch (e) {
