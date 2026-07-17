@@ -486,8 +486,59 @@ export default function NovaObraPage() {
   const [savedCodigo, setSavedCodigo] = useState('')
   const [savedId, setSavedId] = useState('')
   const [saving, setSaving] = useState(false)
+  const [confirmarSaidaMultiObras, setConfirmarSaidaMultiObras] = useState<{ href: string } | null>(null)
+  const permitirSaidaMultiObrasRef = useRef(false)
+
+  const temObrasPendentesContrato =
+    obrasExtraidas.length > 1 && obrasProcessadasIdx.length < obrasExtraidas.length
+  const obrasPendentesContrato = Math.max(0, obrasExtraidas.length - obrasProcessadasIdx.length)
 
   const inputCls = 'w-full h-9 bg-white/5 border border-white/[0.08] rounded-lg px-3 text-sm text-white placeholder:text-white/25 focus:outline-none focus:border-violet-500/50 focus:bg-violet-500/5 transition-colors'
+
+  useEffect(() => {
+    if (!temObrasPendentesContrato) return
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+      return ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [temObrasPendentesContrato])
+
+  useEffect(() => {
+    if (!temObrasPendentesContrato) return
+
+    const handleClick = (event: MouseEvent) => {
+      if (permitirSaidaMultiObrasRef.current) return
+
+      const target = event.target as Element | null
+      const anchor = target?.closest('a[href]') as HTMLAnchorElement | null
+      if (!anchor) return
+      if (anchor.target && anchor.target !== '_self') return
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+
+      const href = anchor.getAttribute('href')
+      if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return
+
+      const nextUrl = new URL(href, window.location.href)
+      if (nextUrl.href === window.location.href) return
+
+      event.preventDefault()
+      setConfirmarSaidaMultiObras({ href: nextUrl.href })
+    }
+
+    document.addEventListener('click', handleClick, true)
+    return () => document.removeEventListener('click', handleClick, true)
+  }, [temObrasPendentesContrato])
+
+  function confirmarSaidaDoFluxoMultiObras() {
+    if (!confirmarSaidaMultiObras) return
+    permitirSaidaMultiObrasRef.current = true
+    window.location.href = confirmarSaidaMultiObras.href
+  }
 
   async function lerRespostaJson(res: Response) {
     const text = await res.text()
@@ -1181,6 +1232,40 @@ export default function NovaObraPage() {
 
   return (
     <div className="max-w-4xl space-y-6">
+      {confirmarSaidaMultiObras && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-[#0d1526] p-5 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-5 h-5 text-amber-300" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-white">Contrato com obras pendentes</h3>
+                <p className="text-sm text-white/60 mt-2 leading-relaxed">
+                  Este contrato ainda tem {obrasPendentesContrato} {obrasPendentesContrato === 1 ? 'obra não cadastrada' : 'obras não cadastradas'}.
+                  Se sair agora, você perde o progresso desta sessão e precisará subir o contrato de novo.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                type="button"
+                onClick={() => setConfirmarSaidaMultiObras(null)}
+                className="h-9 px-4 rounded-lg bg-white/5 border border-white/10 text-sm text-white/70 hover:text-white transition-colors"
+              >
+                Continuar cadastrando
+              </button>
+              <button
+                type="button"
+                onClick={confirmarSaidaDoFluxoMultiObras}
+                className="h-9 px-4 rounded-lg bg-amber-600 hover:bg-amber-500 text-sm font-semibold text-white transition-colors"
+              >
+                Sair mesmo assim
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <PageHeader
         title="Nova Obra"
         description="Cadastro completo — dados, participação, fonogramas, letra, contrato assinado e revisão"
